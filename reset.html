@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://gfwopgoydfqiouratcpc.supabase.co wss://gfwopgoydfqiouratcpc.supabase.co https://data.gov.il https://api.ipify.org; frame-src https://www.youtube.com https://www.youtube-nocookie.com; object-src 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<title>פרי דרייב · איפוס סיסמה</title>
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{--brand:#D9F243;--brand-deep:#111418;--surface:#fff;--surface-2:#f0f1f4;--line:#e5e7eb;--txt:#1c2430;--muted:#7b8494;--danger:#e2555a;--ok:#16a34a}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:"Heebo",Arial,sans-serif;color:var(--txt);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;background:linear-gradient(135deg,#12141a,#1b1e26)}
+  .card{background:var(--surface);border-radius:20px;padding:36px 30px;width:100%;max-width:390px;box-shadow:0 10px 40px rgba(0,0,0,.3)}
+  h1{margin:0 0 4px;font-size:23px}h1 b{color:var(--brand)}
+  p{margin:0 0 22px;color:var(--muted);font-size:14px}
+  label{display:block;font-size:13px;color:var(--muted);margin:0 0 6px}
+  input{width:100%;padding:11px 13px;background:var(--surface-2);border:1px solid var(--line);border-radius:12px;font-size:15px;margin-bottom:14px}
+  input:focus{outline:none;border-color:var(--brand)}
+  .btn{background:var(--brand);color:#fff;border:none;border-radius:12px;padding:12px 18px;font-weight:700;font-size:15px;width:100%;cursor:pointer}
+  .btn:hover{background:var(--brand-deep)}
+  .msg{font-size:13.5px;margin-top:12px;min-height:18px}
+  .msg.err{color:var(--danger)}.msg.ok{color:var(--ok)}
+  a{color:var(--brand)}
+</style>
+</head>
+<body>
+  <form class="card" id="form">
+    <h1>Car<b>2</b>Buy · איפוס סיסמה</h1>
+    <p id="sub">בחרו סיסמה חדשה לחשבון שלכם.</p>
+    <div id="fields">
+      <label for="pw">סיסמה חדשה</label>
+      <input type="password" id="pw" autocomplete="new-password" minlength="6" placeholder="אותיות באנגלית וספרות" required>
+      <label for="pw2">אימות סיסמה (שוב, בדיוק אותו דבר)</label>
+      <input type="password" id="pw2" autocomplete="new-password" minlength="6" placeholder="הקלידו שוב את אותה סיסמה" required>
+      <p style="font-size:12px;color:var(--muted,#8a94a6);margin:2px 0 0">הסיסמה חייבת לכלול <b>אותיות באנגלית וספרות</b>, לפחות 6 תווים.</p>
+      <button type="submit" class="btn" style="margin-top:12px">שמור סיסמה והתחבר</button>
+    </div>
+    <div class="msg" id="msg"></div>
+  </form>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js" integrity="sha384-0w2KAL2YHP6wKOkUDzkCDGgVvfmHnj02DHeQ6XcHOgTfFsGyonKOpShMH1x6nk9o" crossorigin="anonymous"></script>
+<script>
+(function () {
+  var db = window.supabase.createClient(
+    'https://gfwopgoydfqiouratcpc.supabase.co',
+    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdmd29wZ295ZGZxaW91cmF0Y3BjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc2NDg0NTUsImV4cCI6MjEwMzIyNDQ1NX0.ukPDUGS7KjYgD7jAhzSqAEKo_eJ8gQwsHMqTBGXeux8'
+  );
+  var msg = document.getElementById('msg');
+  function show(t, ok) { msg.textContent = t; msg.className = 'msg ' + (ok ? 'ok' : 'err'); }
+
+  // The recovery link puts a session in the URL hash; supabase-js consumes it.
+  db.auth.onAuthStateChange(function (evt) {
+    if (evt === 'PASSWORD_RECOVERY' || evt === 'SIGNED_IN') { /* ready to set a new password */ }
+  });
+
+  document.getElementById('form').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var pw = document.getElementById('pw').value, pw2 = document.getElementById('pw2').value;
+    if (!/^[A-Za-z0-9]+$/.test(pw)) return show('הסיסמה יכולה להכיל רק אותיות באנגלית וספרות (בלי עברית או רווחים).');
+    if (!/[A-Za-z]/.test(pw) || !/[0-9]/.test(pw)) return show('הסיסמה חייבת לכלול גם אותיות באנגלית וגם ספרות.');
+    if (pw.length < 6) return show('הסיסמה חייבת להכיל לפחות 6 תווים.');
+    if (pw !== pw2) return show('הסיסמאות אינן תואמות — הקלידו את אותה סיסמה בשני השדות.');
+    show('שומר…', true);
+    db.auth.updateUser({ password: pw }).then(function (r) {
+      if (r.error) return show('שגיאה: ' + r.error.message + ' — ייתכן שהקישור פג. בקשו איפוס מחדש בעמוד הכניסה.');
+      document.getElementById('fields').style.display = 'none';
+      show('הסיסמה עודכנה! ', true);
+      msg.innerHTML = 'הסיסמה עודכנה בהצלחה ✅ <a href="https://tzahilevi1.github.io/freedrive-crm/admin.html">כניסה למערכת →</a>';
+    });
+  });
+})();
+</script>
+</body>
+</html>
