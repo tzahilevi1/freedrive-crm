@@ -1164,12 +1164,14 @@
     var formCard = '<div class="card"><h3>בחירת טופס</h3>' + grid(G('סוג טופס', 'form_type', defFormType) + statusSel + brandField + ownSel + G('מנהל מכירות / נציג משוייך', 'salesperson', defSalesperson)) + '</div>';
     var carCard = '<div class="card"><h3>🚗 פרטי הרכב המוזמן</h3>' +
       '<div class="ac-box" style="margin-bottom:10px"><input class="inp" id="dl_carSearch" placeholder="🔎 חפש רכב מהקטלוג (עברית/אנגלית) — ימלא אוטומטית" style="width:100%"><div class="ac-res hidden" id="dl_carRes"></div></div>' +
-      grid(G('יצרן', 'car_make', deal.car_make) + G('דגם', 'car_model', deal.car_model) + G('שנת ייצור', 'car_year', deal.car_year || 2026, 'number') + G('רמת גימור', 'car_trim', deal.car_trim) + G('נפח מנוע', 'car_engine', deal.car_engine) + gearboxSel(deal.car_gearbox) + G('צבע מבוקש', 'car_color', deal.car_color) + G('מחיר הרכב ₪', 'car_price', deal.car_price, 'number') + '<div class="field" style="margin:0"><label>עמלת סוכן ₪ (אוטומטי · קריאה בלבד)</label><input class="inp" id="dl_commission" type="number" value="' + esc(deal.commission == null ? '' : deal.commission) + '" readonly tabindex="-1" style="width:100%;background:var(--surface-2);cursor:not-allowed;color:var(--muted)"></div>') + '</div>';
+      grid(G('יצרן', 'car_make', deal.car_make) + G('דגם', 'car_model', deal.car_model) + G('שנת ייצור', 'car_year', deal.car_year || 2026, 'number') + G('רמת גימור', 'car_trim', deal.car_trim) + G('נפח מנוע', 'car_engine', deal.car_engine) + gearboxSel(deal.car_gearbox) + G('צבע מבוקש', 'car_color', deal.car_color) + G('מחיר הרכב ₪', 'car_price', deal.car_price, 'number') + G('החזר חודשי משוער ₪', 'monthly', deal.monthly, 'number') + '<div class="field" style="margin:0"><label>עמלת סוכן ₪ (אוטומטי · קריאה בלבד)</label><input class="inp" id="dl_commission" type="number" value="' + esc(deal.commission == null ? '' : deal.commission) + '" readonly tabindex="-1" style="width:100%;background:var(--surface-2);cursor:not-allowed;color:var(--muted)"></div>') + '</div>';
     var specCard = '<div class="card"><h3>מפרט / הערות</h3><textarea class="inp" id="dl_spec" rows="5" style="width:100%" placeholder="מפרט / הערות לחוזה…">' + esc(deal.spec || '') + '</textarea></div>';
-    var pricingCard = '<div class="card"><h3>תמחור ומקדמה</h3>' + grid(G('סכום מקדמה כולל ₪', 'down_total', deal.down_total, 'number') + G('מקדמה ראשונית ₪', 'down_initial', deal.down_initial, 'number') + G('החזר חודשי משוער ₪', 'monthly', deal.monthly, 'number') + G('זמן אספקה (ימים)', 'delivery_days', deal.delivery_days, 'number')) + '</div>';
-    var addonsCard = '<div class="card"><h3>תוספות</h3><label style="display:flex;gap:8px;align-items:center;padding:5px 0"><input type="checkbox" id="dl_charging"' + (ad.charging ? ' checked' : '') + '> עמדת טעינה</label>' +
-      '<label style="display:flex;gap:8px;align-items:center;padding:5px 0"><input type="checkbox" id="dl_armor"' + (ad.armor ? ' checked' : '') + '> מיגון לפי דרישת ביטוח</label>' +
-      '<label style="display:flex;gap:8px;align-items:center;padding:5px 0"><input type="checkbox" id="dl_accessories"' + (ad.accessories ? ' checked' : '') + '> אביזרים נלווים</label>' + '<label style="display:flex;gap:8px;align-items:center;padding:5px 0"><input type="checkbox" id="dl_insurance"' + (ad.insurance ? ' checked' : '') + '> 40% הנחה על ביטוח חובה (חברת הכשרה)</label>' +
+    var pricingCard = '<div class="card"><h3>תמחור ומקדמה</h3>' + grid(G('סכום מקדמה כולל ₪', 'down_total', deal.down_total, 'number') + G('מקדמה ראשונית ₪', 'down_initial', deal.down_initial, 'number') + G('זמן אספקה (ימים)', 'delivery_days', deal.delivery_days, 'number')) + '</div>';
+    var addonsCard = '<div class="card"><h3>תוספות</h3>' +
+      '<label style="display:flex;gap:8px;align-items:center;padding:5px 0"><input type="checkbox" id="dl_armor"' + (ad.armor !== false ? ' checked' : '') + '> מיגון לפי דרישת ביטוח</label>' +
+      '<label style="display:flex;gap:8px;align-items:center;padding:5px 0"><input type="checkbox" id="dl_accessories"' + (ad.accessories !== false ? ' checked' : '') + '> אביזרים נלווים</label>' +
+      '<label style="display:flex;gap:8px;align-items:center;padding:5px 0"><input type="checkbox" id="dl_charging"' + (ad.charging ? ' checked' : '') + '> עמדת טעינה</label>' +
+      '<label style="display:flex;gap:8px;align-items:center;padding:5px 0"><input type="checkbox" id="dl_insurance"' + (ad.insurance ? ' checked' : '') + '> 40% הנחה על ביטוח חובה (חברת הכשרה)</label>' +
       '<div class="field" style="margin-top:6px"><label>סכום תוספות ₪</label><input class="inp" id="dl_addons_amount" type="number" value="' + esc(ad.addons_amount == null ? '' : ad.addons_amount) + '" style="width:100%"></div></div>';
     var summaryCard = '<div class="card"><h3>סיכום הזמנה ורווחיות</h3>' + grid(G('הנחה (%)', 'discount_pct', deal.discount_pct, 'number') + G('הנחה (סכום) ₪', 'discount_amt', deal.discount_amt, 'number') + G('שולם ₪', 'paid', deal.paid, 'number')) +
       '<label style="display:flex;gap:8px;align-items:center;padding:8px 0"><input type="checkbox" id="dl_vat"' + (deal.vat_included !== false ? ' checked' : '') + '> כולל מע"מ</label><div id="dlSummary" style="margin-top:8px"></div></div>';
@@ -1197,7 +1199,7 @@
     function dPanel(k, active, inner) { return '<div class="dl-panel' + (active ? '' : ' hidden') + '" data-dpanel="' + k + '">' + inner + '</div>'; }
     view(
       '<div class="lead-top"><div style="display:flex;align-items:center;gap:8px"><button class="btn btn-ghost btn-sm" id="dlBack">' + ((C.role || '') === 'files' ? '→ לרשימת התיקים' : '→ לכרטיס') + '</button><h3 style="margin:0">' + (deal.id ? 'עסקה #' + esc(deal.order_no) : 'עסקה חדשה') + '</h3></div>' +
-        '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><button class="btn btn-sm" id="dlContract">✍ יצירת הסכם לחתימה</button><span id="dlSaveState" style="display:none"></span></div></div>' +
+        '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><button class="btn btn-sm" id="dlContract">' + (deal.signature ? '📄 צפה בהסכם החתום' : (deal.contract_html ? '📤 שלח לחתימה' : '✍ יצירת הסכם לחתימה')) + '</button><span id="dlSaveState" style="display:none"></span></div></div>' +
       (fileMode ? '<div class="card" style="padding:12px"><h3 style="margin:0 0 8px;font-size:13px">שלב התיק (מנהלת תיקי לקוחות)</h3><div class="flow" id="dlStageBar">' + stageBar(curStage) + '</div></div>' : '') +
       '<nav class="tabs" id="dlTabs" style="margin-bottom:14px;flex-wrap:wrap">' +
         dTab('client', '👤 פרטי הלקוח', true) + dTab('deal', '📋 פרטי העסקה') + dTab('car', '🚗 פרטי הרכב המוזמן') + dTab('fin', '🏦 מקטע מימון') + dTab('trade', '🔁 מקטע טרייד-אין') + dTab('record', '🗂️ פרטי רשומה') +
@@ -1254,15 +1256,30 @@
         db.from('lead_documents').select('*').eq('lead_id', lead.id).order('created_at', { ascending: false }).then(function (dr) {
           var docs = (dr && dr.data) || [];
           if (!$('dlDocs')) return;
-          if (!docs.length) { $('dlDocs').innerHTML = '<p class="muted">אין מסמכים עדיין — לחצו "העלה מסמכים".</p>'; return; }
+          var cRow = '';
+          if (deal && deal.contract_html) {
+            cRow = '<div style="display:flex;align-items:center;gap:8px;padding:9px 0;border-bottom:1px solid var(--line)">' +
+              '<div style="flex:1;min-width:0">✍️ <b>הסכם' + (deal.order_no ? ' #' + esc(deal.order_no) : '') + '</b>' +
+                (deal.signature ? ' <span style="color:var(--ok);font-size:12px">✅ נחתם</span>'
+                                : ' <span class="muted" style="font-size:12px">לא נחתם</span>') + '</div>' +
+              '<button class="btn btn-ghost btn-sm" id="docOpenContract">👁️ פתח</button>' +
+              (deal.signature ? '' : '<button class="btn btn-sm" id="docSendContract">📤 שלח ללקוח</button>') +
+            '</div>';
+          }
+          function wireContractRow() {
+            if ($('docOpenContract')) $('docOpenContract').addEventListener('click', function () { contractView(lead, deal); });
+            if ($('docSendContract')) $('docSendContract').addEventListener('click', function () { contractView(lead, deal); });
+          }
+          if (!docs.length) { $('dlDocs').innerHTML = cRow || '<p class="muted">אין מסמכים עדיין — לחצו "העלה מסמכים".</p>'; wireContractRow(); return; }
           var paths = docs.map(function (x) { return x.storage_path; }), sf = db.storage.from('lead-docs');
           (sf.createSignedUrls ? sf.createSignedUrls(paths, 3600) : Promise.resolve({ data: [] })).then(function (sr) {
             var urls = {}; ((sr && sr.data) || []).forEach(function (s) { if (s && s.signedUrl) urls[s.path] = s.signedUrl; });
             if (!$('dlDocs')) return;
-            $('dlDocs').innerHTML = docs.map(function (x) {
+            $('dlDocs').innerHTML = cRow + docs.map(function (x) {
               var u = urls[x.storage_path], ic = /\.pdf$/i.test(x.name || '') ? '📄' : (/\.(png|jpe?g|gif|webp)$/i.test(x.name || '') ? '🖼️' : '📎');
               return '<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--line)"><div style="flex:1;min-width:0">' + ic + ' <a href="#" data-opendoc="' + esc(x.storage_path) + '" data-docname="' + esc(x.name || '') + '" style="cursor:pointer">' + esc(x.name) + '</a> <span class="muted" style="font-size:11px">· ' + fmt(x.created_at) + '</span></div><button class="btn btn-ghost btn-sm" data-opendoc="' + esc(x.storage_path) + '" data-docname="' + esc(x.name || '') + '" title="פתח לצפייה בלי להוריד">👁 פתח</button><button class="btn btn-ghost btn-sm" data-deldoc="' + x.id + '" data-delpath="' + esc(x.storage_path) + '" title="מחק">🗑️</button></div>';
             }).join('');
+            wireContractRow();
             $('dlDocs').querySelectorAll('[data-opendoc]').forEach(function (b) { b.addEventListener('click', function (e) { e.preventDefault(); C.viewDoc(b.dataset.opendoc, b.dataset.docname); }); });
             $('dlDocs').querySelectorAll('[data-deldoc]').forEach(function (b) {
               b.addEventListener('click', function () {
