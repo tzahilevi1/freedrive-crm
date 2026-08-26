@@ -199,7 +199,7 @@
     var el = e.target.closest && e.target.closest('[data-call]');
     if (el) { e.preventDefault(); e.stopPropagation(); window.C2B.dial(el.getAttribute('data-call'), el.getAttribute('data-lead') || null); }
   });
-  var ROLE_LABELS = { admin: 'מנהל מערכת', sales: 'סוכן מכירות', files: 'מנהלת תיקי לקוחות', accounting: 'מנהלת חשבונות' };
+  var ROLE_LABELS = { admin: 'מנהל מערכת', sales: 'סוכן מכירות', files: 'מנהלת תיקי לקוחות', accounting: 'מנהלת חשבונות', branch: 'מנהל סניף' };
   function roleLabel(r) { return ROLE_LABELS[r] || r; }
   // views a user MAY open. Admin sees all; others see dashboard+activity always,
   // plus whatever the admin granted (profiles.views). These are the defaults.
@@ -212,7 +212,9 @@
     // מנהלת תיקי לקוחות: דשבורד, תיקי לקוחות, רכבים, יומן, משימות, הצעות מחיר, מסמכים והסכמים
     files: ['dashboard', 'files', 'cars', 'appointments', 'tasks', 'quotes', 'documents'],
     // מנהלת חשבונות: דשבורד, הנהלת חשבונות, רכבים, יומן, משימות, דוחות, עוזר AI, הצעות מחיר, מסמכים והסכמים
-    accounting: ['dashboard', 'accounting', 'cars', 'appointments', 'tasks', 'reports', 'ai', 'quotes', 'documents']
+    accounting: ['dashboard', 'accounting', 'cars', 'appointments', 'tasks', 'reports', 'ai', 'quotes', 'documents'],
+    // מנהל סניף: כל התפעול של הסניף — בלי הנהלת חשבונות, משתמשים והגדרות
+    branch: ['dashboard', 'leads', 'files', 'cars', 'appointments', 'tasks', 'analytics', 'reports', 'quotes', 'documents', 'whatsapp', 'emails', 'sms']
   };
   // screens the admin can grant when creating a user (label + key)
   var GRANTABLE_VIEWS = [
@@ -972,7 +974,7 @@
   var repTab = 'manager', salesSub = 'overview';
 
   // ---------- USERS & ROLES (admin only) ----------
-  var ROLES = [['admin', 'מנהל מערכת'], ['sales', 'סוכן מכירות'], ['files', 'מנהלת תיקי לקוחות'], ['accounting', 'מנהלת חשבונות']];
+  var ROLES = [['admin', 'מנהל מערכת'], ['sales', 'סוכן מכירות'], ['files', 'מנהלת תיקי לקוחות'], ['accounting', 'מנהלת חשבונות'], ['branch', 'מנהל סניף']];
   function roleName(k) { var x = ROLES.filter(function (r) { return r[0] === k; })[0]; return x ? x[1] : k; }
   function viewsLabel(v, role) {
     var isDefault = !(v && v.length);
