@@ -1804,7 +1804,7 @@
         ) +
       '</div></div>';
   }
-  function contractView(lead, deal) {
+  function contractView(lead, deal, justSaved) {
     // pull the latest signature (esp. after a remote sign) so we can show it
     if (deal.id && !deal._sigLoaded) {
       db.from('deals').select('signature,signed_at').eq('id', deal.id).single().then(function (r) {
@@ -1823,6 +1823,7 @@
           '' +   /* בורר סוג הסכם הוסר — לחברה הסכם אחד */
           (signed ? '' : '<label style="font-size:12.5px;color:var(--muted)">בעלות:</label><select class="inp" id="cOwnership" style="width:auto;padding:5px 8px"><option value="01"' + (curOwn === '01' ? ' selected' : '') + '>בעלים 01</option><option value="00"' + (curOwn === '00' ? ' selected' : '') + '>בעלים 00</option></select>') +
           '<button class="btn btn-sm" id="cPrint">📄 הורד PDF</button>' + (signed ? '' : '<button class="btn btn-ghost btn-sm" id="cSend">💾 שמור הסכם</button>') + '</div></div>' +
+      (justSaved && !signed ? '<div class="card" style="border:2px solid var(--ok);background:rgba(22,163,74,.07);text-align:center;padding:22px">' +'<div style="font-size:40px;line-height:1">✅</div>' +'<h2 style="margin:10px 0 4px;font-size:22px">ההסכם נוצר בהצלחה' + (deal.order_no ? ' #' + esc(deal.order_no) : '') + '</h2>' +'<p class="muted" style="margin:0;font-size:14px">השלב הבא: שלחו אותו ללקוח לחתימה באחת הדרכים שלמטה.</p></div>' : '') +
       (signed ? '<div class="card" style="border:1px solid var(--ok);background:rgba(22,163,74,.06)"><b style="color:var(--ok)">✅ ההסכם נחתם על ידי הלקוח' + (deal.signed_at ? ' בתאריך ' + fmt(deal.signed_at) : '') + '</b><span class="muted"> — למטה ההסכם המלא עם חתימת הלקוח.</span></div>' : '') +
       // תצוגה כ"דף A4" ממורכז — בדיוק כפי שהלקוח והמסמך המודפס נראים; overflow-x מונע גלישת טקסט מחוץ למסמך
       '<div class="card" style="background:var(--surface-2);padding:22px;overflow-x:auto"><div id="cDoc" style="max-width:820px;margin:0 auto;background:#fff;color:#111;padding:34px 44px;box-shadow:0 2px 14px rgba(16,24,40,.14);border-radius:5px">' + contractHTML(deal, deal.signature || null) + '</div></div>' +
@@ -1913,8 +1914,8 @@
         logActivity(lead.id, 'contract', (wasNew ? 'נוצר' : 'עודכן') + ' הסכם לחתימה' + (saved.order_no ? ' #' + saved.order_no : ''));
         // יצירת/שמירת הסכם לחתימה → סטטוס הליד "הצעת מחיר" (אלא אם כבר שם או בשלב מתקדם יותר)
         var lst = lead.status;
-        if (lst !== 'quote_sent' && lst !== 'won' && lst !== 'lost') changeStatus(lead.id, 'quote_sent', lead, function () { contractView(lead, saved); });
-        else contractView(lead, saved);
+        if (lst !== 'quote_sent' && lst !== 'won' && lst !== 'lost') changeStatus(lead.id, 'quote_sent', lead, function () { contractView(lead, saved, true); });
+        else contractView(lead, saved, true);
       });
     });
   }
