@@ -204,6 +204,9 @@
   // views a user MAY open. Admin sees all; others see dashboard+activity always,
   // plus whatever the admin granted (profiles.views). These are the defaults.
   var DEFAULT_VIEWS = {
+    // מנהל מערכת רואה הכל — בלי זה C2B.views של אדמין מחושב כ-['dashboard'] בלבד
+    admin: ['dashboard','leads','files','accounting','cars','appointments','tasks','analytics',
+            'reports','ai','quotes','documents','whatsapp','emails','sms','automations','users','branches','settings'],
     // סוכן מכירות: דשבורד, לידים, תיקי לקוחות, רכבים, יומן, משימות
     sales: ['dashboard', 'leads', 'files', 'cars', 'appointments', 'tasks'],
     // מנהלת תיקי לקוחות: דשבורד, תיקי לקוחות, רכבים, יומן, משימות, הצעות מחיר, מסמכים והסכמים

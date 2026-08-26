@@ -10,7 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
 <style>
   :root{
-    --brand:#D9F243; --brand-deep:#111418; --brand-soft:rgba(245,105,30,.12);
+    --brand:#6E8B10; --brand-deep:#4F6608; --brand-soft:rgba(110,139,16,.12);--brand-hi:#D9F243;--brand-ink:#14180A;
     --bg:#f4f5f7; --surface:#ffffff; --surface-2:#f0f1f4; --line:#e5e7eb;
     --txt:#1c2430; --muted:#7b8494; --shadow:0 1px 2px rgba(16,24,40,.06),0 4px 16px rgba(16,24,40,.06);
     --ok:#16a34a; --warn:#f59e0b; --danger:#e2555a; --radius:16px;
@@ -257,6 +257,22 @@
   @media(max-width:420px){
     .topbar .btn-sm{padding:8px 10px;font-size:12.5px}
     .search input::placeholder{font-size:13px}
+  }
+</style>
+
+<style id="fd-brand">
+  /* פרי דרייב — הניאון (#D9F243) הוא צבע רקע בלבד, תמיד עם טקסט כהה (כמו בלוגו).
+     הליים הקריא (--brand) משמש לטקסט על רקע בהיר. */
+  .btn, .tabs button.active, .nav-item.active {
+    background: var(--brand-hi) !important;
+    color: var(--brand-ink) !important;
+    border-color: var(--brand-hi) !important;
+  }
+  .btn:hover, .tabs button.active:hover { filter: brightness(.94); }
+  .btn.btn-ghost, .btn-ghost {
+    background: transparent !important;
+    color: var(--brand) !important;
+    border: 1px solid rgba(110,139,16,.35) !important;
   }
 </style>
 </head>

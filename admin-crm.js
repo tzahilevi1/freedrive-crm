@@ -16,7 +16,7 @@
     { k: 'new', label: 'חדש', icon: '🆕', color: '#3b82f6', flow: true },
     { k: 'in_progress', label: 'בטיפול', icon: '📞', color: '#6366f1', flow: true },
     { k: 'meeting_set', label: 'פגישה נקבעה', icon: '📅', color: '#8b5cf6', flow: true },
-    { k: 'quote_sent', label: 'הצעת מחיר', icon: '💰', color: '#D9F243', flow: true },
+    { k: 'quote_sent', label: 'הצעת מחיר', icon: '💰', color: '#6E8B10', flow: true },
     { k: 'underwriting', label: 'בתהליך חיתום', icon: '📝', color: '#eab308', flow: true },
     { k: 'won', label: 'עסקה נסגרה', icon: '✅', color: '#16a34a', flow: true, terminal: true },
     { k: 'lost', label: 'לא רלוונטי', icon: '❌', color: '#e2555a', terminal: true },
@@ -235,6 +235,33 @@
   // admin-managed dropdown options for a field (or null → free-text filter)
   function listOpts(field) { var vs = (C.lists && C.lists[field]) || []; return vs.length ? [{ v: '', l: '— הכל —' }].concat(vs.map(function (v) { return { v: v, l: v }; })) : null; }
 
+  // ---- שם תצוגה נקי לרכב ----
+  // המלאי בעברית מגיע מבולגן מהגיליון ("ב.י.ד סיל יו", "ב.י.ד סיליון"), אבל לכל שורה
+  // יש שם אנגלי תקין ב-extra.name_en ("BYD Seal U"). מעדיפים אותו ומנרמלים אותיות.
+  var CAR_ACR = { byd:'BYD', bmw:'BMW', mg:'MG', kia:'KIA', gac:'GAC', gwm:'GWM', ev:'EV', dm:'DM',
+                  suv:'SUV', gt:'GT', phev:'PHEV', hev:'HEV', bev:'BEV', fl:'FL', vw:'VW', ds:'DS' };
+  function prettyCarWord(w) {
+    var core = String(w).replace(/[^A-Za-z0-9]/g, '').toLowerCase();
+    if (!core) return w;
+    if (CAR_ACR[core]) return w.replace(/[A-Za-z]+/, CAR_ACR[core]);
+    if (/\d/.test(w)) return w.toUpperCase();                       // 4x4, DM-i, 320i
+    if (core.length <= 3) return w.toUpperCase();                   // ZS, HS, X3
+    return w.charAt(0).toUpperCase() + w.slice(1).toLowerCase();
+  }
+  function prettyCarText(t) {
+    return String(t || '').trim().split(/\s+/).map(prettyCarWord).join(' ');
+  }
+  function carName(c) {
+    var en = (c && c.extra && (c.extra.name_en || c.extra.nameEn)) || '';
+    return en ? prettyCarText(en) : (((c && c.brand) || '') + ' ' + ((c && c.name) || '')).trim();
+  }
+  function carLabel(c) {
+    if (!c) return '';
+    var en = (c.extra && (c.extra.name_en || c.extra.nameEn)) || '';
+    var base = en ? prettyCarText(en) : ((c.brand || '') + ' ' + (c.name || '')).trim();
+    var t = (c.trim || '').trim();
+    return (base + (t ? ' · ' + prettyCarText(t) : '')).trim();
+  }
   // ---- car catalog cache (for the deal / car picker) ----
   var carsCache = null;
   // פיקרים לבחירת רכב — רק רכבים חדשים (יד 2 מוצג רק בתצוגת הרכבים, לא בבחירת "באיזה רכב התעניין")
@@ -796,11 +823,11 @@
       inp.addEventListener('input', function () {
         var q = this.value.trim().toLowerCase(); if (!q) { res.classList.add('hidden'); return; }
         var m = cars.filter(function (c) { return carMatch(c, q); }).slice(0, 12);
-        res.innerHTML = m.map(function (c) { return '<div class="ai" data-i="' + cars.indexOf(c) + '">' + (c.img ? '<img src="' + esc(c.img) + '" style="width:40px;height:26px;object-fit:cover;border-radius:5px">' : '') + '<span><b>' + esc(c.brand) + ' ' + esc(c.name) + '</b> ' + esc(c.trim || '') + '</span></div>'; }).join('') || '<div class="ai muted">אין תוצאות</div>';
+        res.innerHTML = m.map(function (c) { return '<div class="ai" data-i="' + cars.indexOf(c) + '">' + (c.img ? '<img src="' + esc(c.img) + '" style="width:40px;height:26px;object-fit:cover;border-radius:5px">' : '') + '<span><b>' + esc(carName(c)) + '</b>' + (c.trim ? ' <span style="color:var(--muted)">' + esc(prettyCarText(c.trim)) + '</span>' : '') + (c.monthly ? ' <span style="color:var(--brand);font-weight:600">₪' + Number(c.monthly).toLocaleString('he-IL') + '/חודש</span>' : '') + '</span></div>'; }).join('') || '<div class="ai muted">אין תוצאות</div>';
         res.classList.remove('hidden');
         res.querySelectorAll('.ai[data-i]').forEach(function (el) {
           el.addEventListener('mousedown', function () {   // mousedown fires before blur
-            var c = cars[+el.dataset.i], label = (c.brand + ' ' + c.name + (c.trim ? ' ' + c.trim : '')).trim();
+            var c = cars[+el.dataset.i], label = carLabel(c);
             inp.value = label; res.classList.add('hidden');
             var bf = C.$('view').querySelector('[data-field="brand"]'); if (bf) bf.value = c.brand || '';
             db.from('leads').update({ car: label, brand: c.brand || null }).eq('id', lead.id).then(function (r) { if (r.error) { alert('שגיאה: ' + r.error.message); return; } lead.car = label; lead.brand = c.brand; logActivity(lead.id, 'system', 'רכב מבוקש: ' + label); });
@@ -1069,11 +1096,11 @@
       inp.addEventListener('input', function () {
         var q = this.value.trim().toLowerCase(); if (q.length < 1) { res.classList.add('hidden'); return; }
         var m = cars.filter(function (c) { return carMatch(c, q); }).slice(0, 12);
-        res.innerHTML = m.map(function (c, i) { return '<div class="ai" data-i="' + cars.indexOf(c) + '">' + (c.img ? '<img src="' + esc(c.img) + '" style="width:40px;height:26px;object-fit:cover;border-radius:5px">' : '') + '<span><b>' + esc(c.brand) + ' ' + esc(c.name) + '</b> ' + esc(c.trim || '') + ' · ' + nis(c.m) + '/ח\'</span></div>'; }).join('') || '<div class="ai muted">אין תוצאות</div>';
+        res.innerHTML = m.map(function (c, i) { return '<div class="ai" data-i="' + cars.indexOf(c) + '">' + (c.img ? '<img src="' + esc(c.img) + '" style="width:40px;height:26px;object-fit:cover;border-radius:5px">' : '') + '<span><b>' + esc(carName(c)) + '</b> ' + esc(c.trim || '') + ' · ' + nis(c.m) + '/ח\'</span></div>'; }).join('') || '<div class="ai muted">אין תוצאות</div>';
         res.classList.remove('hidden');
         res.querySelectorAll('.ai[data-i]').forEach(function (el) {
           el.addEventListener('click', function () {
-            var c = cars[+el.dataset.i]; var label = c.brand + ' ' + c.name + (c.trim ? ' ' + c.trim : '');
+            var c = cars[+el.dataset.i]; var label = carLabel(c);
             db.from('leads').update({ car: label }).eq('id', lead.id).then(function () { logActivity(lead.id, 'car', 'נבחר רכב לעסקה: ' + label); window.C2B_openLeadCard(lead.id); });
           });
         });
@@ -1170,7 +1197,7 @@
     function dPanel(k, active, inner) { return '<div class="dl-panel' + (active ? '' : ' hidden') + '" data-dpanel="' + k + '">' + inner + '</div>'; }
     view(
       '<div class="lead-top"><div style="display:flex;align-items:center;gap:8px"><button class="btn btn-ghost btn-sm" id="dlBack">' + ((C.role || '') === 'files' ? '→ לרשימת התיקים' : '→ לכרטיס') + '</button><h3 style="margin:0">' + (deal.id ? 'עסקה #' + esc(deal.order_no) : 'עסקה חדשה') + '</h3></div>' +
-        '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><button class="btn btn-ghost btn-sm" id="dlContract">✍ הסכם לחתימה</button> <button class="btn btn-ghost btn-sm" id="dlSubmitFin">🏦 הגש למימון</button> <span id="dlSaveState" style="font-size:12.5px;color:var(--muted);white-space:nowrap">💾 נשמר אוטומטית</span></div></div>' +
+        '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><button class="btn btn-sm" id="dlContract">✍ יצירת הסכם לחתימה</button><span id="dlSaveState" style="display:none"></span></div></div>' +
       (fileMode ? '<div class="card" style="padding:12px"><h3 style="margin:0 0 8px;font-size:13px">שלב התיק (מנהלת תיקי לקוחות)</h3><div class="flow" id="dlStageBar">' + stageBar(curStage) + '</div></div>' : '') +
       '<nav class="tabs" id="dlTabs" style="margin-bottom:14px;flex-wrap:wrap">' +
         dTab('client', '👤 פרטי הלקוח', true) + dTab('deal', '📋 פרטי העסקה') + dTab('car', '🚗 פרטי הרכב המוזמן') + dTab('fin', '🏦 מקטע מימון') + dTab('trade', '🔁 מקטע טרייד-אין') + dTab('record', '🗂️ פרטי רשומה') +
@@ -1278,7 +1305,7 @@
       });
     });
     // submit to financing (validation)
-    $('dlSubmitFin').addEventListener('click', function () {
+    if ($('dlSubmitFin')) $('dlSubmitFin').addEventListener('click', function () {
       var miss = [];
       if (!$('dl_client_id').value.trim()) miss.push('ת.ז לקוח');
       if (!$('dl_car_make').value.trim()) miss.push('רכב');
@@ -1311,7 +1338,7 @@
       inp.addEventListener('input', function () {
         var q = this.value.trim().toLowerCase(); if (!q) { res.classList.add('hidden'); return; }
         var m = cars.filter(function (c) { return carMatch(c, q); }).slice(0, 12);
-        res.innerHTML = m.map(function (c) { return '<div class="ai" data-i="' + cars.indexOf(c) + '">' + (c.img ? '<img src="' + esc(c.img) + '" style="width:40px;height:26px;object-fit:cover;border-radius:5px">' : '') + '<span><b>' + esc(c.brand) + ' ' + esc(c.name) + '</b> ' + esc(c.trim || '') + ' · ' + nis(c.p) + '</span></div>'; }).join('') || '<div class="ai muted">אין תוצאות</div>';
+        res.innerHTML = m.map(function (c) { return '<div class="ai" data-i="' + cars.indexOf(c) + '">' + (c.img ? '<img src="' + esc(c.img) + '" style="width:40px;height:26px;object-fit:cover;border-radius:5px">' : '') + '<span><b>' + esc(carName(c)) + '</b> ' + esc(c.trim || '') + ' · ' + nis(c.p) + '</span></div>'; }).join('') || '<div class="ai muted">אין תוצאות</div>';
         res.classList.remove('hidden');
         res.querySelectorAll('.ai[data-i]').forEach(function (el) { el.addEventListener('click', function () { var c = cars[+el.dataset.i]; $('dl_car_make').value = c.brand || ''; $('dl_car_model').value = c.name || ''; $('dl_car_trim').value = c.trim || ''; $('dl_car_engine').value = c.engine || ''; $('dl_car_price').value = c.p || ''; $('dl_monthly').value = c.m || ''; if ($('dl_commission')) $('dl_commission').value = c.commission || ''; if ($('dl_car_gearbox') && !$('dl_car_gearbox').value && /חשמלי|electric|\bEV\b/i.test(c.engine || '')) $('dl_car_gearbox').value = 'אוטומט'; res.classList.add('hidden'); inp.value = ''; compute(); autoSave(); }); });
       });
@@ -1612,6 +1639,24 @@
 
   // מנוע ההדפסה המקורי של הדפדפן (Chrome) — bidi עברית מושלם, טקסט וקטורי אמיתי, בלי האקים.
   // הוכח מול html2canvas ששבר RTL (היפוך מספרים, בליעת רווחים) — לכן זה הנתיב היחיד ל-PDF יפה.
+  // הורדת ההסכם כקובץ בלחיצה אחת (בלי דיאלוג הדפסה).
+  // פורמט Word: html2canvas נפסל — הוא בולע רווחים והופך ספרות בעברית. Word שומר RTL מושלם
+  // וניתן לשמור ממנו כ-PDF. BOM + charset מונעים ג'יבריש (mojibake).
+  function downloadContractDoc(inner, title) {
+    var head = '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">'
+      + '<head><meta charset="utf-8"><title>' + (title || 'הסכם') + '</title>'
+      + '<!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View><w:Zoom>100</w:Zoom></w:WordDocument></xml><![endif]-->'
+      + '<style>@page WordSection1{size:21cm 29.7cm;margin:1.6cm}div.WordSection1{page:WordSection1}'
+      + 'body{font-family:Arial,sans-serif;direction:rtl;text-align:right}</style></head>'
+      + '<body dir="rtl"><div class="WordSection1">';
+    var blob = new Blob([String.fromCharCode(0xFEFF), head, inner, '</div></body></html>'],
+                        { type: 'application/msword;charset=utf-8' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url; a.download = (title || 'הסכם').replace(/[\/:*?"<>|]/g, '-') + '.doc';
+    document.body.appendChild(a); a.click();
+    setTimeout(function () { document.body.removeChild(a); URL.revokeObjectURL(url); }, 1500);
+  }
   function printContractHtml(inner, title) {
     var w = window.open('', '_blank');
     if (!w) { alert('חלון ההדפסה נחסם — אפשרו חלונות קופצים לאתר ונסו שוב.'); return; }
@@ -1641,9 +1686,15 @@
     var brandName = 'פרי דרייב';
     // סעיפי הסכם "Car 2 Buy" — מבנה מפורט (1–7) לפי התבנית של גלובל דרייב
     function car2buyClauses() {
+      // הצהרת הבעלות (01 ליסינג / 00 פרטי יד ראשונה) — מוצגת ראשונה ומתחלפת עם הבורר
+      function ownSec() {
+        return '<div class="c2b-clause" style="margin:0 0 13px;text-align:justify;line-height:1.85;font-size:13px">'
+             + '<b style="font-size:13.5px"><u>' + (own === '00' ? 'רישום הבעלות — עסקת 00:' : 'רישום הבעלות — עסקת 01:') + '</u></b><br>'
+             + ownStmt + '</div>';
+      }
       function sec(t, b) { return '<div class="c2b-clause" style="margin:0 0 13px;text-align:justify;line-height:1.85;font-size:13px"><b style="font-size:13.5px"><u>' + t + '</u></b><br>' + b + '</div>'; }
       var q = '”'; // גרש כפול
-      return sec('1. מחיר הרכב ותשלומו:',
+      return ownSec() + sec('1. מחיר הרכב ותשלומו:',
           '1.1 מחיר הרכב במועד ההזמנה הינו כמפורט בהסכם זה וכולל את מחיר כל התוספות, המיסים ואגרת הרישוי המפורטים בו (להלן: "מחיר הרכב"). תשומת לב המזמין מופנית לכך שמחיר הרכב לעיל עשוי להשתנות בין מועד ההזמנה לבין מועד מסירת הרכב למזמין.<br><br>' +
           '1.2 האמור בהזמנה זו ביחס למחיר המחירון חל גם על מבצעים (הנחות, מתנות וכיו"ב). לכן המבצע שיחול על המזמין הוא המבצע שיהיה בתוקף, אם יהיה מבצע בתוקף במועד תשלום המחיר הסופי.<br><br>' +
           '1.3 כל תשלום שישלם המזמין על-פי הזמנה זו, למעט התשלום הראשוני, ישולם ישירות לידי היבואן בלבד בצירוף מספר הזמנה ושם המזמין. כל תשלום שישולם על פי הזמנה זו, לרבות תשלום המחיר הסופי, יחשב כתשלום ששולם רק מהמועד בו התשלום נפרע בפועל לחשבון היבואן.<br><br>' +
@@ -1710,7 +1761,7 @@
       'כתובות הצדדים להזמנה זאת הן כקבוע במבוא לה, זאת כל עוד לא הודיע צד למשנהו על שינוי בכתובת. כל הודעה או התראה שתישלח על-ידי צד למשנהו על פי כתובתו כאמור בדואר רשום, תיחשב כאילו התקבלה על-ידי הנמען 72 שעות לאחר מסירתה למשרד הדואר; אם נמסרה ביד — מעת מסירתה. הודעה שנשלחה בפקס תחשב כאילו התקבלה בשעה הרשומה על גבי אישור העברת הפקס בתנאי שנשלחה ביום עבודה (א׳–ה׳) בין השעות 09:00–17:00 (זמן ישראל).'
     ];
     return '<div style="font-family:Arial,sans-serif;line-height:1.75;width:100%;color:#111;font-size:13px;direction:rtl;text-align:right;overflow-wrap:break-word;word-break:break-word">' +
-      '<h1 style="text-align:center;color:#D9F243;margin:0 0 4px;font-size:26px;line-height:1.3;font-weight:800">' + brandName + '</h1>' +
+      '<h1 style="text-align:center;color:#6E8B10;margin:0 0 4px;font-size:26px;line-height:1.3;font-weight:800">' + brandName + '</h1>' +
       '<p style="text-align:center;color:#444;margin:0 0 6px;font-size:13px">באמצעות&nbsp;חברת&nbsp;גלובל&nbsp;דרייב&nbsp;בע״מ&nbsp;ח.פ&nbsp;516685898&nbsp;(להלן:&nbsp;"גלובל&nbsp;דרייב")</p>' +
       '<p style="text-align:center;color:#888;margin:0 0 14px;font-size:12.5px">מספר&nbsp;הזמנה:&nbsp;' + esc(d.order_no || '____________') + '&nbsp;·&nbsp;תאריך:&nbsp;' + today + '</p>' +
       '<hr style="border:0;border-top:1px solid #ddd;margin:0 0 14px">' +
@@ -1759,7 +1810,7 @@
         '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">' +
           '' +   /* בורר סוג הסכם הוסר — לחברה הסכם אחד */
           (signed ? '' : '<label style="font-size:12.5px;color:var(--muted)">בעלות:</label><select class="inp" id="cOwnership" style="width:auto;padding:5px 8px"><option value="01"' + (curOwn === '01' ? ' selected' : '') + '>בעלים 01</option><option value="00"' + (curOwn === '00' ? ' selected' : '') + '>בעלים 00</option></select>') +
-          '<button class="btn btn-sm" id="cPrint">📄 הורד / הדפס PDF</button>' + (signed ? '' : '<button class="btn btn-ghost btn-sm" id="cSend">💾 שמור הסכם</button>') + '</div></div>' +
+          '<button class="btn btn-sm" id="cPrint">⬇️ הורד הסכם</button>' + (signed ? '' : '<button class="btn btn-ghost btn-sm" id="cSend">💾 שמור הסכם</button>') + '</div></div>' +
       (signed ? '<div class="card" style="border:1px solid var(--ok);background:rgba(22,163,74,.06)"><b style="color:var(--ok)">✅ ההסכם נחתם על ידי הלקוח' + (deal.signed_at ? ' בתאריך ' + fmt(deal.signed_at) : '') + '</b><span class="muted"> — למטה ההסכם המלא עם חתימת הלקוח.</span></div>' : '') +
       // תצוגה כ"דף A4" ממורכז — בדיוק כפי שהלקוח והמסמך המודפס נראים; overflow-x מונע גלישת טקסט מחוץ למסמך
       '<div class="card" style="background:var(--surface-2);padding:22px;overflow-x:auto"><div id="cDoc" style="max-width:820px;margin:0 auto;background:#fff;color:#111;padding:34px 44px;box-shadow:0 2px 14px rgba(16,24,40,.14);border-radius:5px">' + contractHTML(deal, deal.signature || null) + '</div></div>' +
@@ -1780,7 +1831,7 @@
     });
     // (בורר סוג ההסכם הוסר — מותג אחד, הסכם אחד)
     // PDF מושלם דרך מנוע ההדפסה של הדפדפן (בדיאלוג בוחרים "שמירה כ-PDF") — bidi עברית ללא פגם
-    $('cPrint').addEventListener('click', function () { printContractHtml($('cDoc').innerHTML, 'הסכם' + (deal.order_no ? ' #' + deal.order_no : '') + ' — ' + (deal.client_name || '')); });
+    $('cPrint').addEventListener('click', function () { downloadContractDoc($('cDoc').innerHTML, 'הסכם' + (deal.order_no ? ' #' + deal.order_no : '') + ' — ' + (deal.client_name || '')); });
     if (signed) { ensureSignedDoc(lead, deal); return; }   // חתום → שומר עותק HTML לתיק + ציר זמן, ואז צפייה/הדפסה בלבד
     // ---- remote signing: build link + send via email / WhatsApp / SMS ----
     if (deal.id) {
