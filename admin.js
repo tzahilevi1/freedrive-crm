@@ -1299,7 +1299,9 @@
         if (!confirm('פעולה זו תחליף את הרשימות "מקור הגעה" ו-"utm_source" בערכים מומלצים ומצומצמים.\nהערכים הקיימים בשני השדות האלה יימחקו. להמשיך?')) return;
         // curated, most-relevant sources — Hebrew display sources + technical utm_source values
         var SRC = ['פייסבוק', 'אינסטגרם', 'טיקטוק', 'גוגל', 'וואטסאפ', 'טופס אתר', 'שיחה נכנסת', 'הפניה', 'יד2', 'ManyChat', 'ידני'];
-        var UTM = ['facebook', 'instagram', 'tiktok', 'google', 'taboola', 'whatsapp', 'manychat', 'direct', 'referral'];
+        var UTM = ['facebook', 'instagram', 'tiktok', 'linkedin', 'taboola', 'outbrain', 'google', 'whatsapp',
+                   'email', 'sms', 'call', 'website', 'organic', 'direct', 'referral', 'affiliate',
+                   'crm', 'automation', 'kisorit', 'manychat', 'unknown'];
         var rows = SRC.map(function (v) { return { field: 'source', value: v }; }).concat(UTM.map(function (v) { return { field: 'utm_source', value: v }; }));
         db.from('field_options').delete().in('field', ['source', 'utm_source']).then(function (dr) {
           if (dr.error) return alert('שגיאה במחיקה: ' + dr.error.message);
