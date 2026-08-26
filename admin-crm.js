@@ -1815,6 +1815,23 @@
       return;
     }
     var signed = !!deal.signature;
+    // מעקב חי אחרי חתימת הלקוח: כל עוד ההסכם פתוח ולא נחתם, בודקים כל 8 שניות.
+    // הבדיקה נעצרת מעצמה כשעוזבים את המסך (cDoc נעלם מה-DOM) או כשנחתם.
+    if (window.__fdSignPoll) { clearInterval(window.__fdSignPoll); window.__fdSignPoll = null; }
+    if (deal.id && !signed) {
+      window.__fdSignPoll = setInterval(function () {
+        if (!C.$('cDoc')) { clearInterval(window.__fdSignPoll); window.__fdSignPoll = null; return; }
+        db.from('deals').select('signature,signed_at').eq('id', deal.id).single().then(function (r) {
+          if (!r.data || !r.data.signature) return;
+          clearInterval(window.__fdSignPoll); window.__fdSignPoll = null;
+          if (!C.$('cDoc')) return;
+          deal.signature = r.data.signature; deal.signed_at = r.data.signed_at; deal._sigLoaded = true;
+          logActivity(lead.id, 'contract', 'הלקוח חתם על ההסכם' + (deal.order_no ? ' #' + deal.order_no : ''));
+          try { C.toast ? C.toast('✅ הלקוח חתם על ההסכם!') : null; } catch (e) {}
+          contractView(lead, deal);
+        });
+      }, 8000);
+    }
     var curOwn = (deal.checklist && deal.checklist._ownership) || '01';
     var curType = deal.contract_type === 'car2buy' ? 'car2buy' : 'click_drive';
     view(
@@ -1828,7 +1845,7 @@
       // תצוגה כ"דף A4" ממורכז — בדיוק כפי שהלקוח והמסמך המודפס נראים; overflow-x מונע גלישת טקסט מחוץ למסמך
       '<div class="card" style="background:var(--surface-2);padding:22px;overflow-x:auto"><div id="cDoc" style="max-width:820px;margin:0 auto;background:#fff;color:#111;padding:34px 44px;box-shadow:0 2px 14px rgba(16,24,40,.14);border-radius:5px">' + contractHTML(deal, deal.signature || null) + '</div></div>' +
       (signed ? '' :
-        '<div class="card"><h3>📨 שליחה לחתימה מרחוק</h3><p class="muted" style="font-size:12px;margin:-6px 0 12px">רק הלקוח חותם — דרך הקישור שנשלח אליו. אין חתימה במקום כדי למנוע זיופים.</p>' +
+        '<div class="card"><h3>📨 שליחה לחתימה מרחוק' + (deal.id ? ' <span style="font-size:12px;font-weight:500;color:var(--muted)">· ⏳ ממתין לחתימת הלקוח — המסך יתעדכן אוטומטית</span>' : '') + '</h3><p class="muted" style="font-size:12px;margin:-6px 0 12px">רק הלקוח חותם — דרך הקישור שנשלח אליו. אין חתימה במקום כדי למנוע זיופים.</p>' +
           (deal.id ? '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px">' +
               '<div style="border:1px solid var(--line);border-radius:12px;padding:12px;background:var(--surface-2)">' +
                 '<div style="font-weight:700;font-size:13.5px;margin-bottom:8px">📧 מייל</div>' +
