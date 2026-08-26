@@ -261,19 +261,10 @@
 </style>
 
 <style id="fd-brand">
-  /* פרי דרייב — הניאון (#D9F243) הוא צבע רקע בלבד, תמיד עם טקסט כהה (כמו בלוגו).
-     הליים הקריא (--brand) משמש לטקסט על רקע בהיר. */
-  .btn, .tabs button.active, .nav-item.active {
-    background: var(--brand-hi) !important;
-    color: var(--brand-ink) !important;
-    border-color: var(--brand-hi) !important;
-  }
-  .btn:hover, .tabs button.active:hover { filter: brightness(.94); }
-  .btn.btn-ghost, .btn-ghost {
-    background: transparent !important;
-    color: var(--brand) !important;
-    border: 1px solid rgba(110,139,16,.35) !important;
-  }
+  /* פרי דרייב — הניאון (#D9F243) שמור לניווט הפעיל בלבד, תמיד עם טקסט כהה (כמו בלוגו).
+     הכפתורים משתמשים ב---brand (ליים קריא) עם טקסט לבן — בלי !important גורף. */
+  .nav-item.active { background: var(--brand-hi); color: var(--brand-ink); font-weight: 700; }
+  .nav-item.active .badge { background: rgba(0,0,0,.14); color: var(--brand-ink); }
 </style>
 </head>
 <body>

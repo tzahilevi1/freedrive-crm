@@ -1662,11 +1662,11 @@
     if (!w) { alert('חלון ההדפסה נחסם — אפשרו חלונות קופצים לאתר ונסו שוב.'); return; }
     w.document.write('<!doctype html><html dir="rtl" lang="he"><head><meta charset="utf-8"><title>' +
       (title || 'הסכם — פרי דרייב') + '</title><style>' +
-      '@page{size:A4;margin:11mm 13mm}' +
+      '@page{size:A4;margin:16mm 15mm}' +
       '*{-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
       'body{margin:0;background:#fff;color:#111;font-family:Arial,\'Segoe UI\',sans-serif}' +
-      '.sheet{max-width:820px;margin:0 auto;padding:4px 8px}' +
-      '.c2b-clause{page-break-inside:avoid}' +
+      '.sheet{max-width:100%;margin:0 auto}' +
+      '.c2b-clause{page-break-inside:avoid;orphans:3;widows:3}h1{page-break-after:avoid}p,div{orphans:3;widows:3}img{max-width:100%}' +
       '</style></head><body><div class="sheet">' + inner + '</div></body></html>');
     w.document.close(); w.focus();
     // מחכים לרינדור מלא (כולל תמונת החתימה) לפני פתיחת דיאלוג ההדפסה
@@ -1810,15 +1810,31 @@
         '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">' +
           '' +   /* בורר סוג הסכם הוסר — לחברה הסכם אחד */
           (signed ? '' : '<label style="font-size:12.5px;color:var(--muted)">בעלות:</label><select class="inp" id="cOwnership" style="width:auto;padding:5px 8px"><option value="01"' + (curOwn === '01' ? ' selected' : '') + '>בעלים 01</option><option value="00"' + (curOwn === '00' ? ' selected' : '') + '>בעלים 00</option></select>') +
-          '<button class="btn btn-sm" id="cPrint">⬇️ הורד הסכם</button>' + (signed ? '' : '<button class="btn btn-ghost btn-sm" id="cSend">💾 שמור הסכם</button>') + '</div></div>' +
+          '<button class="btn btn-sm" id="cPrint">📄 הורד PDF</button>' + (signed ? '' : '<button class="btn btn-ghost btn-sm" id="cSend">💾 שמור הסכם</button>') + '</div></div>' +
       (signed ? '<div class="card" style="border:1px solid var(--ok);background:rgba(22,163,74,.06)"><b style="color:var(--ok)">✅ ההסכם נחתם על ידי הלקוח' + (deal.signed_at ? ' בתאריך ' + fmt(deal.signed_at) : '') + '</b><span class="muted"> — למטה ההסכם המלא עם חתימת הלקוח.</span></div>' : '') +
       // תצוגה כ"דף A4" ממורכז — בדיוק כפי שהלקוח והמסמך המודפס נראים; overflow-x מונע גלישת טקסט מחוץ למסמך
       '<div class="card" style="background:var(--surface-2);padding:22px;overflow-x:auto"><div id="cDoc" style="max-width:820px;margin:0 auto;background:#fff;color:#111;padding:34px 44px;box-shadow:0 2px 14px rgba(16,24,40,.14);border-radius:5px">' + contractHTML(deal, deal.signature || null) + '</div></div>' +
       (signed ? '' :
         '<div class="card"><h3>📨 שליחה לחתימה מרחוק</h3><p class="muted" style="font-size:12px;margin:-6px 0 12px">רק הלקוח חותם — דרך הקישור שנשלח אליו. אין חתימה במקום כדי למנוע זיופים.</p>' +
-          (deal.id ? '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px"><input class="inp" id="cLinkEmail" value="' + esc(deal.client_email || '') + '" placeholder="אימייל הלקוח" style="flex:1;min-width:170px"><button class="btn btn-sm" id="cSendMail">📧 שלח במייל</button></div>' +
-            '<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-ghost btn-sm" id="cWa">💬 וואטסאפ</button><button class="btn btn-ghost btn-sm" id="cSms">✉️ SMS</button><button class="btn btn-ghost btn-sm" id="cCopy">🔗 העתק קישור</button></div>' +
-            '<div id="cLinkMsg" style="font-size:13px;margin-top:10px"></div>'
+          (deal.id ? '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px">' +
+              '<div style="border:1px solid var(--line);border-radius:12px;padding:12px;background:var(--surface-2)">' +
+                '<div style="font-weight:700;font-size:13.5px;margin-bottom:8px">📧 מייל</div>' +
+                '<input class="inp" id="cLinkEmail" value="' + esc(deal.client_email || '') + '" placeholder="אימייל הלקוח" style="width:100%;margin-bottom:8px">' +
+                '<button class="btn btn-sm" id="cSendMail" style="width:100%;justify-content:center">שלח במייל</button></div>' +
+              '<div style="border:1px solid var(--line);border-radius:12px;padding:12px;background:var(--surface-2)">' +
+                '<div style="font-weight:700;font-size:13.5px;margin-bottom:8px">💬 וואטסאפ</div>' +
+                '<input class="inp" id="cWaPhone" value="' + esc(deal.client_phone || '') + '" placeholder="טלפון הלקוח" style="width:100%;margin-bottom:8px">' +
+                '<button class="btn btn-sm" id="cWa" style="width:100%;justify-content:center">פתח וואטסאפ</button></div>' +
+              '<div style="border:1px solid var(--line);border-radius:12px;padding:12px;background:var(--surface-2)">' +
+                '<div style="font-weight:700;font-size:13.5px;margin-bottom:8px">✉️ SMS</div>' +
+                '<p class="muted" style="font-size:12px;margin:0 0 8px">נפתחת אפליקציית המסרונים עם הקישור.</p>' +
+                '<button class="btn btn-ghost btn-sm" id="cSms" style="width:100%;justify-content:center">שלח SMS</button></div>' +
+              '<div style="border:1px solid var(--line);border-radius:12px;padding:12px;background:var(--surface-2)">' +
+                '<div style="font-weight:700;font-size:13.5px;margin-bottom:8px">🔗 קישור ידני</div>' +
+                '<p class="muted" style="font-size:12px;margin:0 0 8px">להעתקה ושליחה בכל דרך שתבחרו.</p>' +
+                '<button class="btn btn-ghost btn-sm" id="cCopy" style="width:100%;justify-content:center">העתק קישור</button></div>' +
+            '</div>' +
+            '<div id="cLinkMsg" style="font-size:13px;margin-top:12px"></div>'
             : '<p class="muted">לחצו <b>💾 שמור הסכם</b> תחילה — לאחר השמירה יופיעו כאן דרכי השליחה ללקוח (מייל / וואטסאפ / SMS / העתקת קישור).</p>') + '</div>')
     );
     var $ = C.$;
@@ -1831,7 +1847,7 @@
     });
     // (בורר סוג ההסכם הוסר — מותג אחד, הסכם אחד)
     // PDF מושלם דרך מנוע ההדפסה של הדפדפן (בדיאלוג בוחרים "שמירה כ-PDF") — bidi עברית ללא פגם
-    $('cPrint').addEventListener('click', function () { downloadContractDoc($('cDoc').innerHTML, 'הסכם' + (deal.order_no ? ' #' + deal.order_no : '') + ' — ' + (deal.client_name || '')); });
+    $('cPrint').addEventListener('click', function () { printContractHtml($('cDoc').innerHTML, 'הסכם פרי דרייב' + (deal.order_no ? ' #' + deal.order_no : '') + ' — ' + (deal.client_name || '')); });
     if (signed) { ensureSignedDoc(lead, deal); return; }   // חתום → שומר עותק HTML לתיק + ציר זמן, ואז צפייה/הדפסה בלבד
     // ---- remote signing: build link + send via email / WhatsApp / SMS ----
     if (deal.id) {
@@ -1868,7 +1884,7 @@
           }, 1500);
         });
       });
-      $('cWa').addEventListener('click', function () { withUrl(function (u) { var p = waIntl(deal.client_phone); window.open('https://wa.me/' + p + '?text=' + encodeURIComponent('שלום, לחתימה על ההסכם: ' + u), '_blank'); }); });
+      $('cWa').addEventListener('click', function () { withUrl(function (u) { var p = waIntl(($('cWaPhone') && $('cWaPhone').value) || deal.client_phone); window.open('https://wa.me/' + p + '?text=' + encodeURIComponent('שלום, לחתימה על ההסכם: ' + u), '_blank'); }); });
       $('cSms').addEventListener('click', function () { withUrl(function (u) { window.location.href = 'sms:' + (deal.client_phone || '') + '?body=' + encodeURIComponent('לחתימה על ההסכם: ' + u); }); });
       $('cCopy').addEventListener('click', function () { withUrl(function (u) { (navigator.clipboard ? navigator.clipboard.writeText(u) : Promise.reject()).then(function () { linkMsg.style.color = 'var(--ok)'; linkMsg.textContent = '🔗 הקישור הועתק'; }).catch(function () { linkMsg.style.color = 'var(--txt)'; linkMsg.textContent = u; }); }); });
     }
