@@ -8,8 +8,6 @@
   'use strict';
   var SUPABASE_URL = 'https://gfwopgoydfqiouratcpc.supabase.co';
   var SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdmd29wZ295ZGZxaW91cmF0Y3BjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc2NDg0NTUsImV4cCI6MjEwMzIyNDQ1NX0.ukPDUGS7KjYgD7jAhzSqAEKo_eJ8gQwsHMqTBGXeux8';
-  var db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
   // ---------- דיווח שגיאות מרכזי ----------
   // מתוך 164 קריאות למסד, כ-60% לא בדקו r.error — כלומר כשל ברשת או הרשאה
   // פשוט לא קרה כלום והמשתמש לא ידע. במקום לתקן 164 מקומות, מיירטים כאן:
@@ -86,6 +84,9 @@
     var m = (e && e.reason && (e.reason.message || e.reason)) || '';
     if (m && !/AbortError/.test(String(m))) showSysError('פעולה נכשלה: ' + String(m).slice(0, 110));
   });
+
+  var db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
 
   function $(id) { return document.getElementById(id); }
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
