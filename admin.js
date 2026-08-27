@@ -10,6 +10,83 @@
   var SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdmd29wZ295ZGZxaW91cmF0Y3BjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc2NDg0NTUsImV4cCI6MjEwMzIyNDQ1NX0.ukPDUGS7KjYgD7jAhzSqAEKo_eJ8gQwsHMqTBGXeux8';
   var db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+  // ---------- דיווח שגיאות מרכזי ----------
+  // מתוך 164 קריאות למסד, כ-60% לא בדקו r.error — כלומר כשל ברשת או הרשאה
+  // פשוט לא קרה כלום והמשתמש לא ידע. במקום לתקן 164 מקומות, מיירטים כאן:
+  // כל תשובה שאינה 2xx מהמסד או מפונקציה מוצגת פעם אחת, בשפה של המשתמש.
+  var ERR_TEXT = {
+    401: 'ההתחברות פגה. רעננו את העמוד והתחברו מחדש.',
+    403: 'אין לך הרשאה לפעולה הזאת.',
+    404: 'הפעולה לא נמצאה בשרת. ייתכן שצריך לרענן את העמוד.',
+    409: 'הרשומה כבר קיימת או שינה אותה מישהו אחר.',
+    413: 'הקובץ גדול מדי.',
+    429: 'יותר מדי בקשות. נסו שוב בעוד רגע.'
+  };
+  var errSeen = {}, errBox2 = null;
+  function friendlyError(status, body, path) {
+    var msg = ERR_TEXT[status];
+    if (!msg) {
+      var m = (body && (body.message || body.msg || body.error_description || body.error)) || '';
+      if (/violates check constraint/i.test(m)) msg = 'הערך שהוזן אינו חוקי עבור השדה הזה.';
+      else if (/violates foreign key/i.test(m)) msg = 'הרשומה המקושרת לא קיימת יותר. רעננו את העמוד.';
+      else if (/duplicate key/i.test(m)) msg = 'רשומה כזאת כבר קיימת.';
+      else if (/כבר קיימת עסקה פעילה/.test(m)) msg = m;
+      else msg = 'שגיאה בשרת (' + status + ')' + (m ? ': ' + String(m).slice(0, 120) : '');
+    }
+    return msg + (path ? ' · ' + path : '');
+  }
+  function showSysError(text) {
+    if (errSeen[text] && Date.now() - errSeen[text] < 15000) return;   // לא מציפים באותה שגיאה
+    errSeen[text] = Date.now();
+    if (!errBox2) {
+      errBox2 = document.createElement('div');
+      errBox2.setAttribute('role', 'alert');
+      errBox2.style.cssText = 'position:fixed;inset-inline-end:16px;bottom:16px;z-index:9999;max-width:380px;display:flex;flex-direction:column;gap:8px';
+      document.body.appendChild(errBox2);
+    }
+    var el = document.createElement('div');
+    el.style.cssText = 'background:var(--surface,#fff);border:1px solid var(--danger,#e2555a);border-inline-start:4px solid var(--danger,#e2555a);' +
+      'border-radius:10px;padding:11px 14px;font-size:13px;line-height:1.5;box-shadow:0 8px 24px -12px rgba(0,0,0,.4);cursor:pointer';
+    el.textContent = '⚠ ' + text;
+    el.addEventListener('click', function () { el.remove(); });
+    errBox2.appendChild(el);
+    setTimeout(function () { el.remove(); }, 9000);
+    if (window.console && console.warn) console.warn('[CRM]', text);
+  }
+  window.C2B_showError = showSysError;
+
+  (function interceptFetch() {
+    var orig = window.fetch;
+    window.fetch = function (input, init) {
+      var url = typeof input === 'string' ? input : (input && input.url) || '';
+      return orig.apply(this, arguments).then(function (res) {
+        if (res.status >= 400 && url.indexOf(SUPABASE_URL) === 0) {
+          // /auth נבדק ומוצג ממילא במסך ההתחברות; storage 400 הוא "לא נמצא" תקין
+          var isAuth = url.indexOf('/auth/v1/') > -1;
+          var seg = (url.split('/v1/')[1] || '').split('?')[0].split('/')[0];
+          if (!isAuth) {
+            res.clone().json().catch(function () { return null; }).then(function (b) {
+              showSysError(friendlyError(res.status, b, seg));
+            });
+          }
+        }
+        return res;
+      }, function (err) {
+        if (url.indexOf(SUPABASE_URL) === 0) showSysError('אין חיבור לשרת. בדקו את האינטרנט ונסו שוב.');
+        throw err;
+      });
+    };
+  })();
+
+  // שגיאות JS שלא נתפסו — מוצגות למשתמש במקום להישאר רק בקונסול
+  window.addEventListener('error', function (e) {
+    if (e && e.message && !/ResizeObserver|Script error/.test(e.message)) showSysError('תקלה במסך: ' + String(e.message).slice(0, 110));
+  });
+  window.addEventListener('unhandledrejection', function (e) {
+    var m = (e && e.reason && (e.reason.message || e.reason)) || '';
+    if (m && !/AbortError/.test(String(m))) showSysError('פעולה נכשלה: ' + String(m).slice(0, 110));
+  });
+
   function $(id) { return document.getElementById(id); }
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
   function fmtDateTime(iso) { if (!iso) return ''; var d = new Date(iso); return d.toLocaleDateString('he-IL') + ' ' + d.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' }); }
