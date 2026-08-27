@@ -851,7 +851,7 @@
       inp.addEventListener('input', function () {
         var q = this.value.trim().toLowerCase(); if (!q) { res.classList.add('hidden'); return; }
         var m = cars.filter(function (c) { return carMatch(c, q); }).slice(0, 12);
-        res.innerHTML = m.map(function (c) { return '<div class="ai" data-i="' + cars.indexOf(c) + '">' + (c.img ? '<img src="' + esc(c.img) + '" style="width:40px;height:26px;object-fit:cover;border-radius:5px">' : '') + '<span><b>' + esc(carName(c)) + '</b>' + (c.trim ? ' <span style="color:var(--muted)">' + esc(prettyCarText(c.trim)) + '</span>' : '') + (c.monthly ? ' <span style="color:var(--brand);font-weight:600">₪' + Number(c.monthly).toLocaleString('he-IL') + '/חודש</span>' : '') + '</span></div>'; }).join('') || '<div class="ai muted">אין תוצאות</div>';
+        res.innerHTML = m.map(function (c) { return '<div class="ai" data-i="' + cars.indexOf(c) + '">' + (c.img ? '<img src="' + esc((C.carImg||function(x){return x})(c.img)) + '" style="width:40px;height:26px;object-fit:cover;border-radius:5px">' : '') + '<span><b>' + esc(carName(c)) + '</b>' + (c.trim ? ' <span style="color:var(--muted)">' + esc(prettyCarText(c.trim)) + '</span>' : '') + (c.monthly ? ' <span style="color:var(--brand);font-weight:600">₪' + Number(c.monthly).toLocaleString('he-IL') + '/חודש</span>' : '') + '</span></div>'; }).join('') || '<div class="ai muted">אין תוצאות</div>';
         res.classList.remove('hidden');
         res.querySelectorAll('.ai[data-i]').forEach(function (el) {
           el.addEventListener('mousedown', function () {   // mousedown fires before blur
@@ -1124,7 +1124,7 @@
       inp.addEventListener('input', function () {
         var q = this.value.trim().toLowerCase(); if (q.length < 1) { res.classList.add('hidden'); return; }
         var m = cars.filter(function (c) { return carMatch(c, q); }).slice(0, 12);
-        res.innerHTML = m.map(function (c, i) { return '<div class="ai" data-i="' + cars.indexOf(c) + '">' + (c.img ? '<img src="' + esc(c.img) + '" style="width:40px;height:26px;object-fit:cover;border-radius:5px">' : '') + '<span><b>' + esc(carName(c)) + '</b> ' + esc(c.trim || '') + ' · ' + nis(c.m) + '/ח\'</span></div>'; }).join('') || '<div class="ai muted">אין תוצאות</div>';
+        res.innerHTML = m.map(function (c, i) { return '<div class="ai" data-i="' + cars.indexOf(c) + '">' + (c.img ? '<img src="' + esc((C.carImg||function(x){return x})(c.img)) + '" style="width:40px;height:26px;object-fit:cover;border-radius:5px">' : '') + '<span><b>' + esc(carName(c)) + '</b> ' + esc(c.trim || '') + ' · ' + nis(c.m) + '/ח\'</span></div>'; }).join('') || '<div class="ai muted">אין תוצאות</div>';
         res.classList.remove('hidden');
         res.querySelectorAll('.ai[data-i]').forEach(function (el) {
           el.addEventListener('click', function () {
@@ -1385,7 +1385,7 @@
       inp.addEventListener('input', function () {
         var q = this.value.trim().toLowerCase(); if (!q) { res.classList.add('hidden'); return; }
         var m = cars.filter(function (c) { return carMatch(c, q); }).slice(0, 12);
-        res.innerHTML = m.map(function (c) { return '<div class="ai" data-i="' + cars.indexOf(c) + '">' + (c.img ? '<img src="' + esc(c.img) + '" style="width:40px;height:26px;object-fit:cover;border-radius:5px">' : '') + '<span><b>' + esc(carName(c)) + '</b> ' + esc(prettyCarText(c.trim || '')) + ' · ' + nis(c.p) + '</span></div>'; }).join('') || '<div class="ai muted">אין תוצאות</div>';
+        res.innerHTML = m.map(function (c) { return '<div class="ai" data-i="' + cars.indexOf(c) + '">' + (c.img ? '<img src="' + esc((C.carImg||function(x){return x})(c.img)) + '" style="width:40px;height:26px;object-fit:cover;border-radius:5px">' : '') + '<span><b>' + esc(carName(c)) + '</b> ' + esc(prettyCarText(c.trim || '')) + ' · ' + nis(c.p) + '</span></div>'; }).join('') || '<div class="ai muted">אין תוצאות</div>';
         res.classList.remove('hidden');
         res.querySelectorAll('.ai[data-i]').forEach(function (el) { el.addEventListener('click', function () { var c = cars[+el.dataset.i]; var mm = carMakeModel(c); $('dl_car_make').value = mm.make; $('dl_car_model').value = mm.model; $('dl_car_trim').value = prettyCarText(c.trim || ''); $('dl_car_engine').value = c.engine || ''; $('dl_car_price').value = c.p || ''; $('dl_monthly').value = c.m || ''; if ($('dl_commission')) $('dl_commission').value = c.commission || ''; if ($('dl_car_gearbox') && !$('dl_car_gearbox').value && /חשמלי|electric|\bEV\b/i.test(c.engine || '')) $('dl_car_gearbox').value = 'אוטומט'; res.classList.add('hidden'); inp.value = ''; compute(); autoSave(); }); });
       });

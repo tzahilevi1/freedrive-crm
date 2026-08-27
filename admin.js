@@ -74,7 +74,16 @@
     });
   }
 
-  window.C2B = { db: db, $: $, esc: esc, fmt: fmtDateTime, nis: nis, view: view, loading: loading, errBox: errBox, stat: stat, openDrawer: openDrawer, closeDrawer: closeDrawer, viewDoc: viewDoc, go: function (n, o) { return go(n, o); } };
+  // ספריית התמונות של icar.co.il חוסמת hotlinking (403 בלי Referer שלה).
+  // הכתובות מגיעות מגיליון הרכבים ונדרסות בכל sync-cars, לכן מנתבים דרך proxy
+  // במקום לתקן את המסד. כל מקור אחר עובר as-is.
+  function carImg(u) {
+    if (!u) return u;
+    return /(^https:\/\/)(www\.)?icar\.co\.il\//.test(u)
+      ? SUPABASE_URL + '/functions/v1/img-proxy?u=' + encodeURIComponent(u)
+      : u;
+  }
+  window.C2B = { db: db, $: $, esc: esc, carImg: carImg, fmt: fmtDateTime, nis: nis, view: view, loading: loading, errBox: errBox, stat: stat, openDrawer: openDrawer, closeDrawer: closeDrawer, viewDoc: viewDoc, go: function (n, o) { return go(n, o); } };
 
   // ---------- theme ----------
   (function () {
@@ -477,7 +486,7 @@
   var SHEET_URL = 'https://docs.google.com/spreadsheets/d/1LiK--j3BCPnHO4rZQj7N2RetdnExEmwimWTwn7kmWe8/edit';
   var CAR_COLS = 12;
   var CAR_COL_DEFS = [
-    { key: 'img', label: 'תמונה', cell: function (c) { return '<td>' + (c.img ? '<img src="' + esc(c.img) + '" style="width:52px;height:34px;object-fit:cover;border-radius:8px" onerror="this.style.display=\'none\'">' : '') + '</td>'; } },
+    { key: 'img', label: 'תמונה', cell: function (c) { return '<td>' + (c.img ? '<img src="' + esc(carImg(c.img)) + '" style="width:52px;height:34px;object-fit:cover;border-radius:8px" onerror="this.style.display=\'none\'">' : '') + '</td>'; } },
     { key: 'brand', label: 'מותג', fixed: true, cell: function (c) { return '<td><b>' + esc(c.brand) + '</b></td>'; } },
     { key: 'name', label: 'דגם', fixed: true, cell: function (c) { return '<td>' + esc(c.name) + (c.nameEn ? '<div class="muted" style="font-size:11px">' + esc(c.nameEn) + '</div>' : '') + '</td>'; } },
     { key: 'trim', label: 'גרסה', cell: function (c) { return '<td class="muted">' + esc(c.trim || '—') + '</td>'; } },
@@ -493,7 +502,7 @@
   var carCols = null;
   function carRows(list) {
     return list.map(function (c) {
-      return '<tr><td>' + (c.img ? '<img src="' + esc(c.img) + '" style="width:52px;height:34px;object-fit:cover;border-radius:8px" onerror="this.style.display=\'none\'">' : '') +
+      return '<tr><td>' + (c.img ? '<img src="' + esc(carImg(c.img)) + '" style="width:52px;height:34px;object-fit:cover;border-radius:8px" onerror="this.style.display=\'none\'">' : '') +
         '</td><td><b>' + esc(c.brand) + '</b></td><td>' + esc(c.name) + (c.nameEn ? '<div class="muted" style="font-size:11px">' + esc(c.nameEn) + '</div>' : '') + '</td>' +
         '<td class="muted">' + esc(c.trim) + '</td><td class="muted">' + esc(c.engine) + '</td><td>' + esc(c.seats || '') + '</td>' +
         '<td class="muted" style="white-space:normal;max-width:120px">' + esc(c.colors) + '</td>' +
