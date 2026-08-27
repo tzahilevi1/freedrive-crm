@@ -884,7 +884,7 @@
       db.from('events').select('type,session_id'),
       db.from('tasks').select('done'),
       db.from('profiles').select('user_id,full_name'),
-      db.from('deals').select('id,lead_id,brand,stage,status,car_make,car_model,total,commission,discount_amt,salesperson,created_at,financing,tradein,has_signature'),
+      db.from('deals').select('id,lead_id,brand,stage,status,car_make,car_model,total,commission,discount_amt,salesperson,created_at,financing,tradein,has_signature').is('deleted_at', null),
       db.from('payments').select('amount,kind,deal_id')
     ]).then(function (res) {
       var leads = res[0].data || [], appts = res[1].data || [], events = res[2].data || [], tasks = res[3].data || [];

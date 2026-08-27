@@ -996,9 +996,11 @@
             '<button class="btn btn-ghost btn-sm" data-purge="' + l.id + '">מחק סופית</button></td></tr>';
         }).join('') : '<tr><td colspan="7" class="empty">הסל ריק</td></tr>';
         C.view('<h2 style="margin:0 0 4px">🗑️ סל מיחזור</h2>' +
-          '<p class="muted" style="font-size:13px;margin:0 0 14px">לידים שהוסרו מהמסכים. ההיסטוריה, המסמכים והעסקאות נשמרו במלואם. מחיקה סופית היא בלתי הפיכה.</p>' +
-          '<div class="card"><div class="table-scroll"><table><thead><tr><th>שם</th><th>טלפון</th><th>רכב</th><th>מקור</th><th>הועבר לסל</th><th>על ידי</th><th></th></tr></thead><tbody>' +
-          body + '</tbody></table></div></div>');
+          '<p class="muted" style="font-size:13px;margin:0 0 14px">לידים ותיקים שהוסרו מהמסכים. ההיסטוריה, המסמכים וההסכמים נשמרו במלואם. מחיקה סופית היא בלתי הפיכה, והסכם חתום לא נמחק לעולם.</p>' +
+          '<div class="card"><h3>לידים</h3><div class="table-scroll"><table><thead><tr><th>שם</th><th>טלפון</th><th>רכב</th><th>מקור</th><th>הועבר לסל</th><th>על ידי</th><th></th></tr></thead><tbody>' +
+          body + '</tbody></table></div></div>' +
+          '<div class="card"><h3>תיקים והסכמים</h3><div id="trashDeals">טוען…</div></div>');
+        loadTrashDeals();
         C.$('view').querySelectorAll('[data-restore]').forEach(function (b) {
           b.addEventListener('click', function () {
             b.disabled = true;
@@ -1020,6 +1022,47 @@
         });
       });
   };
+
+  function loadTrashDeals() {
+    db.from('deals').select('id,order_no,client_name,car_make,car_model,total,stage,deleted_at,deleted_by,has_signature')
+      .not('deleted_at', 'is', null).order('deleted_at', { ascending: false }).limit(300)
+      .then(function (r) {
+        var box = C.$('trashDeals'); if (!box) return;
+        if (r.error) { box.textContent = 'שגיאה: ' + r.error.message; return; }
+        var rows = r.data || [];
+        if (!rows.length) { box.innerHTML = '<p class="empty" style="margin:0">אין תיקים בסל</p>'; return; }
+        box.innerHTML = '<div class="table-scroll"><table><thead><tr><th>הזמנה</th><th>לקוח</th><th>רכב</th><th>סכום</th><th>הועבר לסל</th><th>על ידי</th><th></th></tr></thead><tbody>' +
+          rows.map(function (d) {
+            return '<tr><td><b>#' + esc(d.order_no || '?') + '</b>' + (d.has_signature ? ' <span style="color:var(--ok)" title="נחתם">✍</span>' : '') + '</td>' +
+              '<td>' + esc(d.client_name || '—') + '</td>' +
+              '<td class="muted">' + esc(((d.car_make || '') + ' ' + (d.car_model || '')).trim() || '—') + '</td>' +
+              '<td class="muted">' + nis(d.total) + '</td>' +
+              '<td class="muted">' + fmt(d.deleted_at) + '</td>' +
+              '<td class="muted">' + esc(profiles[d.deleted_by] || '—') + '</td>' +
+              '<td style="white-space:nowrap"><button class="btn btn-sm" data-drestore="' + d.id + '">↩ שחזר</button>' +
+              (d.has_signature ? '' : ' <button class="btn btn-ghost btn-sm" data-dpurge="' + d.id + '">מחק סופית</button>') + '</td></tr>';
+          }).join('') + '</tbody></table></div>';
+        box.querySelectorAll('[data-drestore]').forEach(function (b) {
+          b.addEventListener('click', function () {
+            b.disabled = true;
+            db.rpc('restore_deal', { p_deal: b.dataset.drestore }).then(function (rr) {
+              if (rr.error) { b.disabled = false; return alert('שגיאה: ' + rr.error.message); }
+              window.C2B_renderTrash();
+            });
+          });
+        });
+        box.querySelectorAll('[data-dpurge]').forEach(function (b) {
+          b.addEventListener('click', function () {
+            if (!confirm('למחוק את התיק לצמיתות? פעולה בלתי הפיכה.')) return;
+            b.disabled = true;
+            db.rpc('purge_deal', { p_deal: b.dataset.dpurge }).then(function (rr) {
+              if (rr.error) { b.disabled = false; return alert('שגיאה: ' + rr.error.message); }
+              window.C2B_renderTrash();
+            });
+          });
+        });
+      });
+  }
 
   // ---------- יומן פעולות ----------
   // עונה על "מי שינה את זה?" — כל שינוי בשדה במעקב נרשם עם ערך לפני/אחרי.
@@ -1697,7 +1740,7 @@
     selectedAcct = {};
     loading();
     Promise.all([
-      db.from('deals').select('id,lead_id,order_no,brand,stage,status,client_name,client_phone,car_make,car_model,total,commission,salesperson,created_at,updated_at,checklist,cancel_reason,acct_status,has_contract,has_signature').eq('has_signature', true).order('created_at', { ascending: false }).limit(2000),   // הנהלת חשבונות רק עסקאות חתומות
+      db.from('deals').select('id,lead_id,order_no,brand,stage,status,client_name,client_phone,car_make,car_model,total,commission,salesperson,created_at,updated_at,checklist,cancel_reason,acct_status,has_contract,has_signature').eq('has_signature', true).is('deleted_at', null).order('created_at', { ascending: false }).limit(2000),   // הנהלת חשבונות רק עסקאות חתומות
       db.from('payments').select('*'),
       db.from('profiles').select('user_id,full_name'),
       db.from('lead_documents').select('*').order('created_at', { ascending: false }).limit(500),
@@ -2191,7 +2234,19 @@
     if ($('fSelAll')) $('fSelAll').addEventListener('change', function () { var on = this.checked; $('filesBody').querySelectorAll('input[data-fsel]').forEach(function (cb) { cb.checked = on; if (on) selectedDeals[cb.dataset.fsel] = true; else delete selectedDeals[cb.dataset.fsel]; }); update(); });
     if ($('fBulkClear')) $('fBulkClear').addEventListener('click', function () { selectedDeals = {}; $('filesBody').querySelectorAll('input[data-fsel]').forEach(function (cb) { cb.checked = false; }); update(); });
     if ($('fBulkApply')) $('fBulkApply').addEventListener('click', function () { var list = ids(); if (!list.length) return; var st = $('fBulkStage').value; if (!st) { alert('בחרו שלב'); return; } db.from('deals').update({ stage: st }).in('id', list).then(function (r) { if (r.error) { alert('שגיאה: ' + r.error.message); return; } reRender(); }); });
-    if ($('fBulkDel')) $('fBulkDel').addEventListener('click', function () { var list = ids(); if (!list.length) return; if (!confirm('למחוק ' + list.length + ' תיקים/הסכמים? פעולה בלתי הפיכה.')) return; db.from('deals').delete().in('id', list).then(function (r) { if (r.error) { alert('שגיאה: ' + r.error.message); return; } reRender(); }); });
+    if ($('fBulkDel')) $('fBulkDel').addEventListener('click', function () {
+      var list = ids(); if (!list.length) return;
+      // סל מיחזור במקום מחיקה קשיחה — לידים כבר היו מוגנים, תיקים לא היו,
+      // וכך תיק (כולל הסכם חתום) יכול היה להימחק לצמיתות בלחיצה אחת.
+      if (!confirm('להעביר ' + list.length + ' תיקים לסל המיחזור?\n\nההסכמים והמסמכים נשמרים. מנהל יכול לשחזר בכל רגע.')) return;
+      var btn = this; btn.disabled = true;
+      Promise.all(list.map(function (id) { return db.rpc('trash_deal', { p_deal: id }); })).then(function (res) {
+        btn.disabled = false;
+        var bad = res.filter(function (r) { return r.error || (r.data && r.data.ok === false); });
+        if (bad.length) alert('לא הועברו ' + bad.length + ' תיקים: ' + (bad[0].error ? bad[0].error.message : bad[0].data.error));
+        reRender();
+      });
+    });
     update();
   }
   var FILE_COLS = [
@@ -2210,7 +2265,7 @@
   var fileCols = null;
   window.C2B_renderFiles = function (stageFilter) {
     loading(); selectedDeals = {};
-    db.from('deals').select('id,lead_id,order_no,brand,stage,status,client_name,client_phone,car_make,car_model,total,commission,salesperson,created_at,updated_at,checklist,cancel_reason,acct_status,has_contract,has_signature').order('created_at', { ascending: false }).limit(2000).then(function (r) {
+    db.from('deals').select('id,lead_id,order_no,brand,stage,status,client_name,client_phone,car_make,car_model,total,commission,salesperson,created_at,updated_at,checklist,cancel_reason,acct_status,has_contract,has_signature').is('deleted_at', null).order('created_at', { ascending: false }).limit(2000).then(function (r) {
       if (r.error) return errBox(r.error.message);
       var deals = r.data || [];
       var counts = { all: deals.length }; DEAL_STAGES.forEach(function (s) { counts[s.k] = 0; });
