@@ -183,7 +183,9 @@
           '<div class="field" style="margin:0;width:120px"><label>בעוד (ימים)</label><input class="inp" id="auDays" type="number" min="0" value="1"></div>' +
           '<button class="btn" id="auAdd">➕ הוסף חוק</button></div></div>' +
         '<div class="card"><h3>חוקים פעילים (' + rules.length + ')</h3><div class="table-scroll"><table><thead><tr><th>שם</th><th>תנאי</th><th>פעולה</th><th>מצב</th><th></th></tr></thead><tbody>' + list + '</tbody></table></div>' +
-        '<p class="muted" style="font-size:12px;margin-top:10px">✅ <b>המנוע פעיל.</b> כשסטטוס של ליד משתנה ב-CRM, החוקים המתאימים רצים אוטומטית — פותחים משימת מעקב, רושמים הערה בציר הזמן, או פותחים תזכורת "שלח WhatsApp". (שליחת WhatsApp/מייל אוטומטית לגמרי, בלי משימה, תתאפשר לאחר חיבור ה-Meta API.)</p></div>');
+        '<p class="muted" style="font-size:12px;margin-top:10px">✅ <b>המנוע רץ בשרת.</b> החוקים נורים בכל מסלול שבו סטטוס משתנה — שינוי ידני, עדכון מרוכז, חתימת לקוח, ליד שנקלט מפייסבוק או מהאתר. כל חוק רץ פעם אחת בלבד לכל ליד בכל סטטוס. שליחת WhatsApp אוטומטית תתאפשר אחרי חיבור ManyChat; עד אז החוק פותח משימה ידנית.</p>' +
+        '<div class="row-between" style="margin-top:14px"><h3 style="margin:0">הרצות אחרונות</h3><button class="btn btn-ghost btn-sm" id="auRefreshRuns">↻ רענן</button></div>' +
+        '<div id="auRuns" class="muted" style="font-size:12.5px;margin-top:8px">טוען…</div></div>');
       var editState = null;
       $('auAdd').addEventListener('click', function () {
         var name = $('auName').value.trim(); if (!name) { $('auName').focus(); return; }
@@ -222,6 +224,25 @@
       });
       $('view').querySelectorAll('[data-del]').forEach(function (b) { b.addEventListener('click', function () { db.from('automations').delete().eq('id', b.dataset.del).then(function () { window.C2B_renderAutomations(); }); }); });
       $('view').querySelectorAll('[data-toggle]').forEach(function (cb) { cb.addEventListener('change', function () { db.from('automations').update({ active: cb.checked }).eq('id', cb.dataset.toggle).then(function () { window.C2B_renderAutomations(); }); }); });
+      // ניטור: כל הרצה נרשמת, כולל כישלונות — אין כישלון שקט
+      function loadRuns() {
+        var box = $('auRuns'); if (!box) return;
+        db.from('automation_runs').select('at,rule_name,action,ok,detail,lead_id')
+          .order('at', { ascending: false }).limit(40).then(function (r) {
+            if (!$('auRuns')) return;
+            if (r.error) { $('auRuns').textContent = 'לא ניתן לטעון הרצות: ' + r.error.message; return; }
+            var rows = r.data || [];
+            if (!rows.length) { $('auRuns').innerHTML = '<p class="empty" style="margin:0">עוד לא רצו אוטומציות</p>'; return; }
+            $('auRuns').innerHTML = '<div class="table-scroll"><table><thead><tr><th>מתי</th><th>חוק</th><th>תוצאה</th><th>פרטים</th></tr></thead><tbody>' +
+              rows.map(function (x) {
+                return '<tr><td style="white-space:nowrap">' + C.fmt(x.at) + '</td><td>' + esc(x.rule_name || '—') + '</td>' +
+                  '<td style="white-space:nowrap;color:' + (x.ok ? 'var(--ok)' : 'var(--danger)') + '">' + (x.ok ? '✔ בוצע' : '✖ לא בוצע') + '</td>' +
+                  '<td>' + esc(x.detail || '') + '</td></tr>';
+              }).join('') + '</tbody></table></div>';
+          });
+      }
+      loadRuns();
+      if ($('auRefreshRuns')) $('auRefreshRuns').addEventListener('click', loadRuns);
     });
   };
 

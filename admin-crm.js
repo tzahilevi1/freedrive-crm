@@ -192,30 +192,13 @@
     if (channel === 'whatsapp') { payload.name = (lead && lead.name) || ''; if (p.template) payload.template = p.template; }
     return db.functions.invoke('send-message', { body: payload }).then(function (r) { return !(r.error || (r.data && r.data.error)); }, function () { return false; });
   }
+  // מנוע האוטומציות עבר לרמת המסד (hardening-5-automations.sql) כדי שירוץ גם
+  // בעדכון מרוכז, אחרי חתימת לקוח, ועל ליד שנקלט מפייסבוק או מ-API.
+  // כאן נשארת רק המתנה קצרה כדי שהטריגר יספיק לכתוב לפני שהמסך מצויר מחדש.
   function runAutomations(leadId, newStatus, lead, done) {
-    return db.from('automations').select('name,action,params').eq('active', true).eq('trigger_status', newStatus).then(function (r) {
-      var rules = (r.data || []), ops = [];
-      rules.forEach(function (a) {
-        var p = a.params || {}, nm = a.name || 'אוטומציה';
-        if (a.action === 'note') {
-          ops.push(logActivity(leadId, 'note', p.text || ('🤖 ' + nm)));
-        } else if (a.action === 'email') {
-          ops.push(sendCustomerMsg('email', lead, p).then(function (ok) { return logActivity(leadId, 'email', '🤖 אוטומציה — מייל ללקוח (' + nm + '): ' + (ok ? 'נשלח ✓' : 'לא נשלח (חסר אימייל/הגדרה)')); }));
-        } else if (a.action === 'whatsapp_send') {
-          ops.push(sendCustomerMsg('whatsapp', lead, p).then(function (ok) { return logActivity(leadId, 'whatsapp', '🤖 אוטומציה — WhatsApp ללקוח (' + nm + '): ' + (ok ? 'נשלח ✓' : 'לא נשלח (הגדרת Meta חסרה)')); }));
-        } else if (a.action === 'whatsapp') {
-          var soon = new Date(Date.now() + 3600000).toISOString();
-          ops.push(db.from('tasks').insert({ lead_id: leadId, title: '📱 לשלוח WhatsApp ל' + ((lead && lead.name) || 'ליד'), due_at: soon, notes: p.text || null }));
-          ops.push(logActivity(leadId, 'system', '🤖 אוטומציה: תזכורת לשלוח WhatsApp — ' + nm));
-        } else { // 'task' (default): open a follow-up task
-          var days = (p.days != null ? +p.days : 1);
-          var due = new Date(Date.now() + days * 86400000).toISOString();
-          ops.push(db.from('tasks').insert({ lead_id: leadId, title: p.text || ('מעקב: ' + nm), due_at: due, notes: null }));
-          ops.push(logActivity(leadId, 'system', '🤖 אוטומציה: נפתחה משימת מעקב — ' + nm));
-        }
-      });
-      return Promise.all(ops).then(function () { if (C.refreshBadges) C.refreshBadges(); if (done) done(); }, function () { if (done) done(); });
-    }, function () { if (done) done(); });
+    return new Promise(function (res) {
+      setTimeout(function () { if (C.refreshBadges) C.refreshBadges(); if (done) done(); res(); }, 450);
+    });
   }
   C.runAutomations = runAutomations;   // reusable from other status-change paths
 
