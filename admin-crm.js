@@ -903,8 +903,8 @@
           el.addEventListener('mousedown', function () {   // mousedown fires before blur
             var c = cars[+el.dataset.i], label = carLabel(c);
             inp.value = label; res.classList.add('hidden');
-            var bf = C.$('view').querySelector('[data-field="brand"]'); if (bf) bf.value = c.brand || '';
-            db.from('leads').update({ car: label, brand: c.brand || null }).eq('id', lead.id).then(function (r) { if (r.error) { alert('שגיאה: ' + r.error.message); return; } lead.car = label; lead.brand = c.brand; logActivity(lead.id, 'system', 'רכב מבוקש: ' + label); });
+            // שדה "מותג" הוא המותג העסקי שלנו ולא יצרן הרכב — לא נוגעים בו כאן
+            db.from('leads').update({ car: label }).eq('id', lead.id).then(function (r) { if (r.error) { alert('שגיאה: ' + r.error.message); return; } lead.car = label; logActivity(lead.id, 'system', 'רכב מבוקש: ' + label); });
           });
         });
       });
@@ -1341,8 +1341,12 @@
     function gearboxSel(v) { return '<div class="field" style="margin:0"><label>תיבת הילוכים</label><select class="inp" id="dl_car_gearbox" style="width:100%"><option value="">— בחר —</option>' + ['אוטומט', 'ידני', 'רובוטית', 'טיפטרוניק'].map(function (g) { return '<option' + (v === g ? ' selected' : '') + '>' + g + '</option>'; }).join('') + '</select></div>'; }
     // --- cards (grouped into tabs matching the reference layout) ---
     var clientCard = '<div class="card"><h3>👤 פרטי הלקוח</h3>' + grid(G('שם לקוח', 'client_name', deal.client_name || lead.name) + G('טלפון נייד', 'client_phone', deal.client_phone || lead.phone) + G('דוא"ל', 'client_email', deal.client_email || lead.email) + G('כתובת', 'client_address', deal.client_address || lead.city) + G('ת.ז / ח.פ', 'client_id', deal.client_id || lead.id_num) + G('שם לחשבונית', 'invoice_name', deal.invoice_name || lead.name)) + '</div>';
-    var brandDl = ((C.lists && C.lists.brand) || []).map(function (v) { return '<option value="' + esc(v) + '">'; }).join('');
-    var brandField = '<div class="field" style="margin:0"><label>מותג</label><input class="inp" id="dl_brand" list="dl_brandOpts" value="' + esc(deal.brand || lead.brand || '') + '" placeholder="שם המותג" style="width:100%"><datalist id="dl_brandOpts">' + brandDl + '</datalist></div>';
+    // רשימה סגורה: "מותג" הוא המותג העסקי שלנו, לא יצרן הרכב.
+    // כשדה חופשי אפשר היה להקליד "ב.מ.וו" ולשבש את כל הדוחות לפי מותג.
+    var brandOpts = (window.C2B.marketingBrands && window.C2B.marketingBrands.length)
+      ? window.C2B.marketingBrands : ((C.lists && C.lists.brand) || []);
+    var brandField = '<div class="field" style="margin:0"><label>מותג</label><select class="inp" id="dl_brand" style="width:100%">' +
+      C.selOpts(brandOpts, deal.brand || lead.brand || (brandOpts.length === 1 ? brandOpts[0] : ''), '— מותג —') + '</select></div>';
     var ownVal = checklist._ownership || '01';
     var ownSel = '<div class="field" style="margin:0"><label>סוג הסכם (בעלות)</label><select class="inp" id="dl_ownership" style="width:100%"><option value="01"' + (ownVal === '01' ? ' selected' : '') + '>בעלים 01 (הרכב על שם הלקוח)</option><option value="00"' + (ownVal === '00' ? ' selected' : '') + '>בעלים 00 (בעלות קודמת)</option></select></div>';
     var autoBrand = deal.brand || lead.brand || '';
