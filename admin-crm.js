@@ -2288,7 +2288,10 @@
         }).join('');
         var bulk = '<div id="fBulk" class="filterbar" style="display:none;background:var(--brand-soft);align-items:center"><b id="fBulkCount" style="color:var(--brand)">נבחרו 0</b>' +
           '<select id="fBulkStage"><option value="">🏷️ שנה שלב…</option>' + DEAL_STAGES.map(function (s) { return '<option value="' + s.k + '">' + esc(s.label) + '</option>'; }).join('') + '</select>' +
-          '<button class="btn btn-sm" id="fBulkApply">החל</button><button class="btn btn-ghost btn-sm" id="fBulkDel" style="color:var(--danger);border-color:var(--danger)">🗑️ מחק נבחרים</button><button class="btn btn-ghost btn-sm" id="fBulkClear">בטל בחירה</button></div>';
+          '<button class="btn btn-sm" id="fBulkApply">החל</button>' +
+          // מחיקת תיק מותרת למנהל המערכת בלבד — לא מציגים כפתור שייכשל
+          (C.role === 'admin' ? '<button class="btn btn-ghost btn-sm" id="fBulkDel" style="color:var(--danger);border-color:var(--danger)">🗑️ מחק נבחרים</button>' : '') +
+          '<button class="btn btn-ghost btn-sm" id="fBulkClear">בטל בחירה</button></div>';
         C.$('filesBody').innerHTML = fileFilter.render() + bulk +
           '<div class="table-scroll"><table><thead><tr><th style="width:30px;text-align:center"><input type="checkbox" id="fSelAll"></th>' + fileCols.thead() + '</tr></thead><tbody>' + (rows || '<tr><td colspan="' + (fileCols.colCount() + 1) + '" class="empty">אין תיקים</td></tr>') + '</tbody></table></div>';
         fileFilter.bind();
