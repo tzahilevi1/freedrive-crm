@@ -2260,7 +2260,7 @@
   };
 
   // ---------- DASHBOARD ----------
-  var dashRange = { preset: 'all' };
+  var dashRange = { preset: 'year' };   // לא 'all' — ראה dashLoad למטה
   var PERIODS = [['today', 'היום'], ['7', '7 ימים'], ['30', '30 יום'], ['month', 'החודש'], ['quarter', 'רבעון'], ['year', 'שנה'], ['all', 'הכל']];
   function periodStart(p) { var d = new Date(); d.setHours(0, 0, 0, 0); if (p === 'today') return d.getTime(); if (p === '7') return Date.now() - 7 * 864e5; if (p === '30') return Date.now() - 30 * 864e5; if (p === 'month') { var m = new Date(); m.setDate(1); m.setHours(0, 0, 0, 0); return m.getTime(); } if (p === 'quarter') return Date.now() - 90 * 864e5; if (p === 'year') return Date.now() - 365 * 864e5; return 0; }
   // ---- per-block date filters (each dashboard card filters independently) ----
@@ -2300,6 +2300,14 @@
     setTimeout(function () { document.addEventListener('click', closeFieldPop, { once: true }); }, 0);
   }
   function fieldBtnLabel(f) { return f && f.field && f.value ? '🔎 ' + (DASH_FIELD_LABEL[f.field] || f.field) + ': ' + esc(f.value) : '🔎 שדה'; }
+  // האם הטווח שנבחר חורג מהחלון שכבר נטען לדשבורד?
+  function needsFullHistory(r) {
+    if (dashLoaded === null) return false;                 // כבר טעון הכל
+    if (!r) return false;
+    if (r.preset === 'all') return true;
+    if (r.from && new Date(r.from + 'T00:00:00').getTime() < Date.now() - dashLoaded * 864e5) return true;
+    return false;
+  }
   function inRange(ts, r) {
     if (!r || r.preset === 'all' || (!r.preset && !r.from && !r.to)) return true;
     var t = new Date(ts || 0).getTime();
@@ -2339,17 +2347,26 @@
       }).join('') : '<p class="empty">אין רשומות</p>') + '</div>');
     document.getElementById('drawer').querySelectorAll('[data-lead]').forEach(function (el) { el.addEventListener('click', function () { C.closeDrawer(); window.C2B_openLeadCard(el.dataset.lead); }); });
   }
-  window.C2B_renderDashboard = function () {
+  // כמה היסטוריה כבר נטענה (ms). null = הכל. מונע הורדה חוזרת של אותם נתונים.
+  var dashLoaded = null;
+  window.C2B_renderDashboard = function (opts) {
+    var wantAll = (opts && opts.all) || dashRange.preset === 'all' || !!dashRange.from;
+    var days = wantAll ? null : 400;                       // 400 יום מכסה את "שנה אחורה" בנוחות
+    // כבר יש בזיכרון כיסוי מספיק? מציירים מחדש בלי בקשה נוספת.
+    if (dashAll && (dashLoaded === null || (days !== null && dashLoaded >= days))) return drawDashboard();
     loading();
+    var since = days ? new Date(Date.now() - days * 864e5).toISOString() : null;
+    var leadsQ = db.from('leads').select('id,name,phone,car,brand,status,source,created_at,first_response_at,assigned_to,marketing_company,city,utm_source,utm_campaign').is('deleted_at', null);
+    var dealsQ = db.from('deals').select('id,lead_id,client_name,car_make,car_model,total,stage,created_at');
+    if (since) { leadsQ = leadsQ.gte('created_at', since); dealsQ = dealsQ.gte('created_at', since); }
     Promise.all([
-      db.from('leads').select('id,name,phone,car,brand,status,source,created_at,first_response_at,assigned_to,marketing_company,city,utm_source,utm_campaign').is('deleted_at', null),
-      db.from('tasks').select('done'),
-      db.from('appointments').select('status'),
-      db.from('deals').select('id,lead_id,client_name,car_make,car_model,total,stage,created_at'),
-      db.from('profiles').select('user_id,full_name')
+      leadsQ, db.from('tasks').select('done'), db.from('appointments').select('status'),
+      dealsQ, db.from('profiles').select('user_id,full_name')
     ]).then(function (res) {
+      if (res[0].error) return errBox(res[0].error.message);
       var prof = {}; ((res[4] && res[4].data) || []).forEach(function (p) { prof[p.user_id] = p.full_name; });
       dashAll = { leads: res[0].data || [], tasks: res[1].data || [], deals: (res[3] && res[3].data) || [], prof: prof };
+      dashLoaded = days;
       drawDashboard();
     }).catch(function (e) { errBox(e.message || e); });
   };
@@ -2393,14 +2410,27 @@
     );
     C.$('dashPeriod').addEventListener('click', function (e) {
       var b = e.target.closest('[data-p]');
-      if (b) { dashRange = { preset: b.dataset.p }; drawDashboard(); return; }
+      if (b) {
+        dashRange = { preset: b.dataset.p };
+        // 'all' דורש היסטוריה מלאה — טוענים לפי דרישה ולא מראש
+        if (b.dataset.p === 'all' && dashLoaded !== null) return window.C2B_renderDashboard({ all: true });
+        drawDashboard(); return;
+      }
       var c = e.target.closest('[data-dpcustom]');
-      if (c) { e.stopPropagation(); dateFilterPopup(c, dashRange, function (r) { dashRange = r; drawDashboard(); }); }
+      if (c) { e.stopPropagation(); dateFilterPopup(c, dashRange, function (r) {
+        dashRange = r;
+        if (needsFullHistory(r)) return window.C2B_renderDashboard({ all: true });
+        drawDashboard();
+      }); }
     });
     ['chart', 'status', 'stage', 'brand', 'agent', 'source'].forEach(function (k) {
       drawBlock(k);
       var btn = C.$('flt_' + k);
-      if (btn) btn.addEventListener('click', function (e) { e.stopPropagation(); dateFilterPopup(btn, blockR[k], function (r) { blockR[k] = r; btn.innerHTML = fltLabel(r); drawBlock(k); }); });
+      if (btn) btn.addEventListener('click', function (e) { e.stopPropagation(); dateFilterPopup(btn, blockR[k], function (r) {
+        blockR[k] = r; btn.innerHTML = fltLabel(r);
+        if (needsFullHistory(r)) return window.C2B_renderDashboard({ all: true });
+        drawBlock(k);
+      }); });
       var fb = C.$('fltf_' + k);
       if (fb) fb.addEventListener('click', function (e) { e.stopPropagation(); fieldFilterPopup(fb, k, function (f) { blockF[k] = f; fb.innerHTML = fieldBtnLabel(f); drawBlock(k); }); });
     });

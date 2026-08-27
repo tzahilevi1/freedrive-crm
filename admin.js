@@ -604,10 +604,16 @@
   var apptFilter = 'all';
   function renderAppointments() {
     loading();
-    Promise.all([
-      db.from('appointments').select('*').order('appt_at', { ascending: true }),
-      db.from('leads').select('id,phone').is('deleted_at', null)
-    ]).then(function (res) {
+    db.from('appointments').select('*').order('appt_at', { ascending: true }).limit(2000).then(function (ar) {
+      if (ar.error) return errBox(ar.error.message);
+      // מיפוי טלפון→ליד נדרש רק לפגישות שהגיעו בלי lead_id (טופס ציבורי)
+      var phones = [];
+      (ar.data || []).forEach(function (a) { if (!a.lead_id && a.phone && phones.indexOf(a.phone) < 0) phones.push(a.phone); });
+      var leadsQ = phones.length
+        ? db.from('leads').select('id,phone').in('phone', phones.slice(0, 900))
+        : Promise.resolve({ data: [] });
+      return Promise.all([Promise.resolve(ar), leadsQ]);
+    }).then(function (res) {
       if (res[0].error) return errBox(res[0].error.message);
       var appts = res[0].data || [], byPhone = {};
       (res[1].data || []).forEach(function (l) { if (l.phone) byPhone[String(l.phone).replace(/\D/g, '')] = l.id; });
@@ -689,10 +695,17 @@
   var taskFilter = 'all';
   function renderTasks() {
     loading();
-    Promise.all([
-      db.from('tasks').select('*').order('due_at', { ascending: true }),
-      db.from('leads').select('id,name,phone,car').is('deleted_at', null)
-    ]).then(function (res) {
+    // שתי מנות: קודם המשימות, ואז רק הלידים שהן באמת מצביעות עליהם.
+    // קודם ירדה כל טבלת הלידים לכל פתיחה של המסך.
+    db.from('tasks').select('*').order('due_at', { ascending: true }).limit(2000).then(function (tr) {
+      if (tr.error) return errBox(tr.error.message);
+      var ids = [];
+      (tr.data || []).forEach(function (t) { if (t.lead_id && ids.indexOf(t.lead_id) < 0) ids.push(t.lead_id); });
+      var leadsQ = ids.length
+        ? db.from('leads').select('id,name,phone,car').in('id', ids.slice(0, 900))
+        : Promise.resolve({ data: [] });
+      return Promise.all([Promise.resolve(tr), leadsQ]);
+    }).then(function (res) {
       if (res[0].error) return errBox(res[0].error.message);
       var tasks = res[0].data || [], lmap = {}, now = Date.now();
       (res[1].data || []).forEach(function (l) { lmap[l.id] = l; });
