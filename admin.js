@@ -792,7 +792,7 @@
       db.from('events').select('type,session_id'),
       db.from('tasks').select('done'),
       db.from('profiles').select('user_id,full_name'),
-      db.from('deals').select('*'),
+      db.from('deals').select('id,lead_id,brand,stage,status,car_make,car_model,total,commission,discount_amt,salesperson,created_at,financing,tradein,has_signature'),
       db.from('payments').select('amount,kind,deal_id')
     ]).then(function (res) {
       var leads = res[0].data || [], appts = res[1].data || [], events = res[2].data || [], tasks = res[3].data || [];
@@ -812,9 +812,9 @@
 
       // ---- deal-side aggregates ----
       // עסקה נחשבת "עסקה" רק לאחר חתימת הלקוח — הצעות/טיוטות לא-חתומות אינן נספרות בדאשבורד
-      var deals = allDeals.filter(function (d) { return d.status !== 'cancelled' && !!d.signature; });
+      var deals = allDeals.filter(function (d) { return d.status !== 'cancelled' && !!d.has_signature; });
       var cancelled = allDeals.filter(function (d) { return d.status === 'cancelled'; }).length;
-      function isDone(d) { return d.status === 'ordered' || !!d.signature; }
+      function isDone(d) { return d.status === 'ordered' || !!d.has_signature; }
       var doneDeals = deals.filter(isDone);
       var revenue = deals.reduce(function (a, d) { return a + (+d.total || 0); }, 0);
       var profit = deals.reduce(function (a, d) { return a + (+d.commission || 0); }, 0);

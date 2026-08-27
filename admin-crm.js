@@ -407,7 +407,7 @@
     curFilter = statusFilter || null; selectedLeads = {};
     loading();
     Promise.all([
-      db.from('leads').select('*').is('deleted_at', null).order('created_at', { ascending: false }),
+      db.from('leads').select('id,name,phone,email,car,city,source,status,brand,marketing_company,assigned_to,created_at,updated_at,status_changed_at,first_response_at,close_reason,id_num,utm_source,utm_campaign,utm_medium,utm_content,utm_term,ad_group,adset_name,ad_name,campaign,medium,ad_id,form_id,external_id,message,page_url').is('deleted_at', null).order('created_at', { ascending: false }).limit(3000),
       db.from('profiles').select('user_id,full_name')
     ]).then(function (res) {
       if (res[0].error) return errBox(res[0].error.message);
@@ -1689,7 +1689,7 @@
   var acctTab = 'deals', selectedAcct = {};
   var ACCT_COLS = [
     { key: 'order', label: '#', fixed: true, cell: function (d) { return '<td><b>#' + esc(d.order_no) + '</b></td>'; } },
-    { key: 'client', label: 'לקוח', fixed: true, cell: function (d) { return '<td>' + esc(d.client_name) + (d.signature ? ' <span style="color:var(--ok)" title="נחתם">✅</span>' : '') + '</td>'; } },
+    { key: 'client', label: 'לקוח', fixed: true, cell: function (d) { return '<td>' + esc(d.client_name) + (d.has_signature ? ' <span style="color:var(--ok)" title="נחתם">✅</span>' : '') + '</td>'; } },
     { key: 'invoice', label: 'קבלה על שם', cell: function (d) { return '<td>' + esc(d.invoice_name || d.client_name || '—') + '</td>'; } },
     { key: 'car', label: 'מה נקנה', cell: function (d) { return '<td>' + esc(((d.car_make || '') + ' ' + (d.car_model || '')).trim() || '—') + '</td>'; } },
     { key: 'total', label: 'סכום', cell: function (d) { return '<td>' + nis(d._tot) + '</td>'; } },
@@ -1706,7 +1706,7 @@
     selectedAcct = {};
     loading();
     Promise.all([
-      db.from('deals').select('*').not('signature', 'is', null).order('created_at', { ascending: false }),   // הנהלת חשבונות רק עסקאות חתומות
+      db.from('deals').select('id,lead_id,order_no,brand,stage,status,client_name,client_phone,car_make,car_model,total,commission,salesperson,created_at,updated_at,checklist,cancel_reason,acct_status,has_contract,has_signature').eq('has_signature', true).order('created_at', { ascending: false }).limit(2000),   // הנהלת חשבונות רק עסקאות חתומות
       db.from('payments').select('*'),
       db.from('profiles').select('user_id,full_name'),
       db.from('lead_documents').select('*').order('created_at', { ascending: false }).limit(500),
@@ -1828,7 +1828,7 @@
           var byPurpose = {}; dp.forEach(function (p) { if (p.kind === 'invoice') return; var k = p.purpose || 'other'; byPurpose[k] = (byPurpose[k] || 0) + (+p.amount || 0); });
           var breakdown = PAY_PURPOSES.map(function (pp) { var v = byPurpose[pp.k] || 0; return '<div class="lf"><span class="k">' + pp.label + '</span><span class="v"><b style="color:' + (v > 0 ? 'var(--ok)' : 'var(--muted)') + '">' + nis(v) + '</b></span></div>'; }).join('');
 
-          return '<div class="card"><div class="row-between"><h3 style="margin:0">עסקה #' + esc(d.order_no) + (d.signature ? ' <span class="tag" style="border-color:var(--ok);color:var(--ok)">✅ נחתם</span>' : '') + '</h3>' + acctStatusSel(d.id, d.acct_status) + '</div>' +
+          return '<div class="card"><div class="row-between"><h3 style="margin:0">עסקה #' + esc(d.order_no) + (d.has_signature ? ' <span class="tag" style="border-color:var(--ok);color:var(--ok)">✅ נחתם</span>' : '') + '</h3>' + acctStatusSel(d.id, d.acct_status) + '</div>' +
             '<div class="grid2">' +
               // פרטי חשבונית מרוכזים — ניתנים לעריכה ע"י הנה"ח
               '<form class="aef lead-fields" data-deal="' + d.id + '"><div class="muted" style="font-size:12px;font-weight:700;margin-bottom:4px">🧾 פרטים לחשבונית / קבלה</div>' +
@@ -2216,7 +2216,7 @@
   var fileCols = null;
   window.C2B_renderFiles = function (stageFilter) {
     loading(); selectedDeals = {};
-    db.from('deals').select('*').order('created_at', { ascending: false }).then(function (r) {
+    db.from('deals').select('id,lead_id,order_no,brand,stage,status,client_name,client_phone,car_make,car_model,total,commission,salesperson,created_at,updated_at,checklist,cancel_reason,acct_status,has_contract,has_signature').order('created_at', { ascending: false }).limit(2000).then(function (r) {
       if (r.error) return errBox(r.error.message);
       var deals = r.data || [];
       var counts = { all: deals.length }; DEAL_STAGES.forEach(function (s) { counts[s.k] = 0; });
