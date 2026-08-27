@@ -294,14 +294,15 @@
     // מנהל מערכת רואה הכל — בלי זה C2B.views של אדמין מחושב כ-['dashboard'] בלבד
     admin: ['dashboard','leads','files','accounting','cars','appointments','tasks','analytics',
             'reports','ai','quotes','documents','whatsapp','emails','sms','automations','users','branches','trash','audit','settings'],
-    // סוכן מכירות: דשבורד, לידים, תיקי לקוחות, רכבים, יומן, משימות
-    sales: ['dashboard', 'leads', 'files', 'cars', 'appointments', 'tasks'],
+    // סוכן מכירות: כל התפעול שלו — בלי כספים, בלי דוחות/אנליטיקס, בלי ערוצי הודעות
+    sales: ['dashboard', 'leads', 'files', 'cars', 'appointments', 'tasks', 'ai', 'quotes', 'documents'],
     // מנהלת תיקי לקוחות: דשבורד, תיקי לקוחות, רכבים, יומן, משימות, הצעות מחיר, מסמכים והסכמים
     files: ['dashboard', 'files', 'cars', 'appointments', 'tasks', 'quotes', 'documents'],
     // מנהלת חשבונות: דשבורד, הנהלת חשבונות, רכבים, יומן, משימות, דוחות, עוזר AI, הצעות מחיר, מסמכים והסכמים
     accounting: ['dashboard', 'accounting', 'cars', 'appointments', 'tasks', 'reports', 'ai', 'quotes', 'documents'],
-    // מנהל סניף: כל התפעול של הסניף — בלי הנהלת חשבונות, משתמשים והגדרות
-    branch: ['dashboard', 'leads', 'files', 'cars', 'appointments', 'tasks', 'analytics', 'reports', 'quotes', 'documents', 'whatsapp', 'emails', 'sms', 'audit']
+    // מנהל סניף: רואה הכל, למעט מסכי הניהול של המערכת (משתמשים, הגדרות, אוטומציות)
+    branch: ['dashboard', 'leads', 'files', 'accounting', 'cars', 'appointments', 'tasks', 'analytics',
+             'reports', 'ai', 'quotes', 'documents', 'whatsapp', 'emails', 'sms', 'audit']
   };
   // screens the admin can grant when creating a user (label + key)
   var GRANTABLE_VIEWS = [
