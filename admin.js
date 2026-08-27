@@ -1056,9 +1056,9 @@
           var d = res.data || {};
           msg.textContent = '';
           // always show the credentials (works even if email is blocked)
-          $('nuResult').innerHTML = '<div class="card" style="box-shadow:none;border:1px solid var(--ok);background:rgba(22,163,74,.06);margin:0">' +
-            '<b style="color:var(--ok)">✅ המשתמש נוצר.</b> נשלח מייל עם הפרטים. אם לא הגיע — מסרו ידנית:' +
-            '<div style="margin-top:8px;font-family:monospace;font-size:13px;background:var(--surface);padding:10px;border-radius:8px">אימייל: ' + esc(d.email || email) + '<br>סיסמה זמנית: <b>' + esc(d.password || '') + '</b></div>' +
+          $('nuResult').innerHTML = '<div class="card" id="nuBox" style="box-shadow:none;border:1px solid var(--line);margin:0">' +
+            '<b id="nuTitle">⏳ יוצר משתמש…</b>' +
+            '<div id="nuCreds" class="hidden" style="margin-top:8px;font-family:monospace;font-size:13px;background:var(--surface);padding:10px;border-radius:8px">אימייל: ' + esc(d.email || email) + '<br>סיסמה זמנית: <b>' + esc(d.password || '') + '</b></div>' +
             '<div id="nuDiag" class="muted" style="font-size:12.5px;margin-top:8px">בודק סטטוס יצירה ושליחה…</div></div>';
           $('nuName').value = ''; $('nuEmail').value = ''; if ($('nuPhone')) $('nuPhone').value = '';
           diagnoseInvite(d);
@@ -1240,7 +1240,13 @@
       if (tries > 10 || (createDone && emailDone)) { clearInterval(poll); paint(); addRefresh(); return; }
       if (!createDone) db.rpc('admin_net_result', { p_id: d.create_req }).then(function (r) {
         if (r.error || !r.data) return; createDone = true; var b = netParse(r.data.content) || {};
-        createTxt = (r.data.status >= 200 && r.data.status < 300) ? '<span style="color:var(--ok)">✔ הצליחה</span>' : '<span style="color:var(--danger)">✖ נכשלה (' + r.data.status + '): ' + esc(b.msg || b.error_description || b.message || b.error || '') + '</span>'; paint();
+        var good = (r.data.status >= 200 && r.data.status < 300);
+        createTxt = good ? '<span style="color:var(--ok)">✔ הצליחה</span>' : '<span style="color:var(--danger)">✖ נכשלה (' + r.data.status + '): ' + esc(b.msg || b.error_description || b.message || b.error || '') + '</span>';
+        var box = $('nuBox'), title = $('nuTitle'), creds = $('nuCreds');
+        if (title) { title.innerHTML = good ? '<span style="color:var(--ok)">✅ המשתמש נוצר</span>' : '<span style="color:var(--danger)">❌ המשתמש לא נוצר</span>'; }
+        if (box) { box.style.borderColor = good ? 'var(--ok)' : 'var(--danger)'; box.style.background = good ? 'rgba(22,163,74,.06)' : 'rgba(226,85,90,.06)'; }
+        if (creds && good) creds.classList.remove('hidden');   // סיסמה מוצגת רק כשהיא באמת תקפה
+        paint();
       });
       if (!emailDone) db.rpc('admin_net_result', { p_id: d.email_req }).then(function (r) {
         if (r.error || !r.data) return; emailDone = true; var b = netParse(r.data.content) || {};
