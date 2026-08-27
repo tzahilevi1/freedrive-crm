@@ -1255,56 +1255,222 @@
   }
 
   // ---------- AI ASSISTANT (managers) ----------
-  var SUGGESTIONS = [
-    'אילו לידים כדאי לתעדף השבוע ולמה?',
-    'נתח את אחוז ההמרה ומה חוסם אותנו',
-    'מהם המקורות הכי משתלמים ואיפה לבזבז פחות?',
-    'סכם את מצב הכספים והגבייה הפתוחה',
-    'תן לי סיכום מנהלים של השבוע ו-3 פעולות'
-  ];
+  // ---------- עוזר AI מותאם לתפקיד ----------
+  //  עוזר גנרי אחד לכולם נותן לכל אחד תשובות שלא רלוונטיות לו: הסוכן מקבל ניתוח
+  //  רווחיות, והנהלת החשבונות מקבלת עצות מכירה. כל תפקיד מקבל כאן פרסונה משלו —
+  //  ידע, נתונים ושאלות מוצעות — כך שהתשובה נוגעת במה שהוא באמת אחראי עליו.
+  //
+  //  הערה על פרטיות: ההקשר נבנה מהנתונים שהמשתמש רשאי לקרוא. RLS כבר מגביל
+  //  סוכן ללידים שלו בלבד, ולכן "כל הלידים" עבורו = הלידים שלו.
+  var AI_BASE = 'אתה עוזר AI בתוך מערכת CRM של סוכנות רכב ישראלית בשם פרי דרייב ' +
+    '(ליסינג מימוני פרטי, עבודה מול כל היבואנים, מימון עד 100%, טרייד-אין, מעטפת מלאה). ' +
+    'ענה תמיד בעברית תקנית, תמציתי וברור, ומבוסס אך ורק על הנתונים שקיבלת. ' +
+    'אם נתון חסר או לא ניתן להסיק אותו — אמור זאת במפורש ואל תמציא מספרים. דיוק לפני הכל. ' +
+    'סיים תמיד ב-2–4 המלצות פעולה קונקרטיות שאפשר לבצע כבר היום.';
+
+  var AI_PERSONAS = {
+    admin: {
+      title: '🤖 עוזר AI — מנכ"ל',
+      lead: 'תמונת מצב עסקית: רווחיות, מקורות, ביצועי צוות וצווארי בקבוק.',
+      system: 'אתה יועץ אסטרטגי לבעל העסק. אתה מסתכל על התמונה הרחבה: מאיפה מגיע הכסף, ' +
+        'איזה מקור לידים משתלם ואיזה שורף תקציב, איפה המשפך דולף, ואיך הצוות מתפקד. ' +
+        'תעדף לפי השפעה כספית. אל תחשוש לומר שמשהו לא עובד.',
+      qs: ['מהם המקורות הכי משתלמים ואיפה לבזבז פחות?',
+           'איפה המשפך דולף הכי הרבה ומה לתקן ראשון?',
+           'תן לי סיכום מנהלים של השבוע ו-3 פעולות',
+           'מי מהסוכנים מוביל ומי צריך עזרה?']
+    },
+    branch: {
+      title: '🤖 עוזר AI — מנהל סניף',
+      lead: 'תפעול הסניף: תיקים תקועים, זמני תגובה, עומס על הצוות והתקדמות המשפך.',
+      system: 'אתה יד ימינו של מנהל הסניף. אתה אחראי על התפעול היומיומי: לידים שנתקעו, ' +
+        'זמן תגובה ראשון, תיקים שלא זזים בין שלבים, ומשימות שעברו את המועד. ' +
+        'התמקד במה שאפשר לתקן היום עם הצוות הקיים, לא באסטרטגיה ארוכת טווח.',
+      qs: ['אילו תיקים תקועים ולמה?',
+           'איך זמן התגובה שלנו ומה זה עולה לנו?',
+           'מה צריך לקרות השבוע כדי לסגור יותר?',
+           'איפה יש עומס או פערים בצוות?']
+    },
+    sales: {
+      title: '🤖 עוזר AI — הסוכן שלי',
+      lead: 'מאמן אישי: על מי להתקשר עכשיו, מה תקוע אצלי ואיך לסגור יותר.',
+      system: 'אתה מאמן מכירות אישי של סוכן אחד. הנתונים שאתה רואה הם שלו בלבד. ' +
+        'דבר אליו בגוף שני ("כדאי שתתקשר…"). התמקד בפעולות שהוא יכול לעשות בעצמו היום: ' +
+        'למי להתקשר עכשיו, איזה ליד מתקרר, מה לשלוח, ואיך לנסח. ' +
+        'אל תדבר על רווחיות החברה, על סוכנים אחרים או על תקציבי שיווק — זה לא בתחומו.',
+      qs: ['על מי כדאי שאתקשר עכשיו ולמה?',
+           'אילו לידים שלי מתקררים ואיך להחזיר אותם?',
+           'מה תקוע אצלי ומה הצעד הבא בכל תיק?',
+           'איך אני יכול לסגור יותר החודש?']
+    },
+    files: {
+      title: '🤖 עוזר AI — ניהול תיקים',
+      lead: 'מצב התיקים: מסמכים חסרים, תיקים שלא זזים ומה צריך לרדוף אחריו.',
+      system: 'אתה עוזר למנהלת תיקי הלקוחות. אתה אחראי על התקדמות התיק אחרי החתימה: ' +
+        'איסוף מסמכים, שלבי מימון, ומה חוסם כל תיק. ' +
+        'התמקד בתיקים ספציפיים ובמה חסר בהם, לא במכירות ולא בשיווק.',
+      qs: ['אילו תיקים חסרים מסמכים?',
+           'מה תקוע הכי הרבה זמן ומה חוסם?',
+           'מה סדר העדיפויות שלי היום?',
+           'אילו תיקים קרובים למסירה?']
+    },
+    accounting: {
+      title: '🤖 עוזר AI — כספים',
+      lead: 'כסף: גבייה פתוחה, יתרות, עמלות והכנסה צפויה.',
+      system: 'אתה עוזר להנהלת החשבונות. אתה מסתכל רק על הכסף: מה נגבה, מה פתוח, ' +
+        'אילו עסקאות ממתינות לתשלום, מה צפוי להיכנס, ומה מצב העמלות. ' +
+        'אל תיתן עצות מכירה. אם חסר מידע פיננסי — אמור מה חסר.',
+      qs: ['מה מצב הגבייה הפתוחה?',
+           'אילו עסקאות ממתינות לתשלום הכי הרבה זמן?',
+           'מה ההכנסה הצפויה מהתיקים הפתוחים?',
+           'סכם את העמלות לתקופה']
+    }
+  };
+  function aiPersona() {
+    var r = (window.C2B && window.C2B.role) || 'admin';
+    return AI_PERSONAS[r] || AI_PERSONAS.admin;
+  }
+
   function renderAI() {
     loading();
+    var per = aiPersona(), role = (window.C2B && window.C2B.role) || 'admin';
+    var since = new Date(Date.now() - 90 * 864e5).toISOString();   // חלון של 90 יום — מספיק לכל שאלה תפעולית
     Promise.all([
-      db.from('leads').select('status,source,created_at,first_response_at,city,brand').is('deleted_at', null),
-      db.from('deals').select('total,commission,stage,status'),
-      db.from('payments').select('amount,kind'),
-      db.from('tasks').select('done,due_at'),
-      db.from('appointments').select('status')
+      db.from('leads').select('id,name,status,source,created_at,first_response_at,status_changed_at,city,brand,car,assigned_to')
+        .is('deleted_at', null).gte('created_at', since).limit(3000),
+      db.from('deals').select('id,lead_id,order_no,client_name,total,commission,stage,status,created_at,updated_at,car_make,car_model,has_signature,checklist'),
+      db.from('payments').select('amount,kind,created_at,deal_id'),
+      db.from('tasks').select('done,due_at,title,lead_id'),
+      db.from('appointments').select('status,appt_at'),
+      db.from('profiles').select('user_id,full_name')
     ]).then(function (res) {
-      var leads = res[0].data || [], deals = res[1].data || [], pays = res[2].data || [], tasks = res[3].data || [], appts = res[4].data || [];
+      if (res[0].error) return errBox(res[0].error.message);
+      var leads = res[0].data || [], deals = res[1].data || [], pays = res[2].data || [],
+          tasks = res[3].data || [], appts = res[4].data || [], profs = res[5].data || [];
+      var pmap = {}; profs.forEach(function (p) { pmap[p.user_id] = p.full_name; });
       var ST = window.C2B_STATUSES || [];
+      var stLabel = function (k) { for (var i = 0; i < ST.length; i++) if (ST[i].k === k) return ST[i].label; return k || '—'; };
+      var now = Date.now(), days = function (t) { return t ? Math.round((now - new Date(t)) / 864e5) : null; };
+      var money = function (n) { return nis(Math.round(n || 0)); };
+
+      // ---- אבני בניין משותפות ----
       var by = {}; leads.forEach(function (l) { by[l.status || 'new'] = (by[l.status || 'new'] || 0) + 1; });
       var won = by.won || 0, lost = by.lost || 0, conv = (won + lost) ? Math.round(won / (won + lost) * 100) : 0;
-      var src = {}; leads.forEach(function (l) { var s = l.source || 'לא ידוע'; src[s] = src[s] || { t: 0, w: 0 }; src[s].t++; if (l.status === 'won') src[s].w++; });
-      var rts = leads.filter(function (l) { return l.first_response_at; }).map(function (l) { return (new Date(l.first_response_at) - new Date(l.created_at)) / 60000; });
+      var rts = leads.filter(function (l) { return l.first_response_at; })
+                     .map(function (l) { return (new Date(l.first_response_at) - new Date(l.created_at)) / 60000; });
       var avgRt = rts.length ? Math.round(rts.reduce(function (a, b) { return a + b; }, 0) / rts.length) : 0;
-      var revenue = deals.reduce(function (a, d) { return a + (+d.total || 0); }, 0);
-      var commission = deals.reduce(function (a, d) { return a + (+d.commission || 0); }, 0);
-      var collected = pays.filter(function (p) { return p.kind !== 'invoice'; }).reduce(function (a, p) { return a + (+p.amount || 0); }, 0);
-      var stageC = {}; deals.forEach(function (d) { stageC[d.stage || 'initial'] = (stageC[d.stage || 'initial'] || 0) + 1; });
-      // compact Hebrew data summary the model reasons over
-      var ctx = 'נתוני פרי דרייב (' + new Date().toLocaleDateString('he-IL') + '):\n' +
-        '- לידים: ' + leads.length + ' סה"כ. פילוח סטטוס: ' + ST.map(function (s) { return s.label + '=' + (by[s.k] || 0); }).join(', ') + '.\n' +
-        '- אחוז סגירה: ' + conv + '% (נסגרו ' + won + ', אבודים ' + lost + '). זמן תגובה ממוצע: ' + (avgRt ? avgRt + ' דק\'' : 'לא ידוע') + '.\n' +
-        '- לידים לפי מקור: ' + Object.keys(src).map(function (s) { return s + ' (' + src[s].t + ' לידים, ' + src[s].w + ' עסקאות)'; }).join('; ') + '.\n' +
-        '- עסקאות: ' + deals.length + ', שווי כולל ' + nis(revenue) + ', עמלות סוכן ' + nis(commission) + ', נגבה ' + nis(collected) + ', יתרה פתוחה ' + nis(revenue - collected) + '.\n' +
-        '- שלבי תיקים: ' + Object.keys(stageC).map(function (k) { return k + '=' + stageC[k]; }).join(', ') + '.\n' +
-        '- משימות פתוחות: ' + tasks.filter(function (t) { return !t.done; }).length + '. פגישות: ' + appts.length + '.';
-      view('<div class="card"><h3>🤖 עוזר AI למנהלים</h3><p class="muted" style="font-size:13px">שאל שאלה על העסק — המערכת מנתחת את נתוני ה-CRM (לידים, המרה, מקורות, כספים) ומחזירה תובנות והמלצות. הנתונים נשלחים ל-Claude; מפתח ה-API שמור במסד ואינו נחשף.</p>' +
-        '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">' + SUGGESTIONS.map(function (s) { return '<button class="btn btn-ghost btn-sm" data-sug="' + esc(s) + '">' + esc(s) + '</button>'; }).join('') + '</div>' +
+      var noResp = leads.filter(function (l) { return !l.first_response_at && l.status === 'new'; });
+      var openLeads = leads.filter(function (l) { return ['won', 'lost'].indexOf(l.status) < 0; });
+      var cold = openLeads.filter(function (l) { return days(l.status_changed_at || l.created_at) >= 7; })
+                          .sort(function (a, b) { return new Date(a.status_changed_at || a.created_at) - new Date(b.status_changed_at || b.created_at); });
+      var overdue = tasks.filter(function (t) { return !t.done && t.due_at && new Date(t.due_at) < now; });
+      var head = 'נתוני פרי דרייב · ' + new Date().toLocaleDateString('he-IL') + ' · 90 הימים האחרונים' + '\n';
+
+      var ctx;
+      if (role === 'sales') {
+        // ---- הסוכן: רק התיקים שלו, ובשפה של "מה לעשות עכשיו" ----
+        var mine = openLeads.slice().sort(function (a, b) {
+          return new Date(a.status_changed_at || a.created_at) - new Date(b.status_changed_at || b.created_at); });
+        ctx = head +
+          '- הלידים שלי: ' + leads.length + ' (פתוחים: ' + openLeads.length + '). נסגרו ' + won + ', לא רלוונטי ' + lost +
+            (conv ? ', אחוז סגירה ' + conv + '%' : '') + '.\n' +
+          '- פילוח סטטוס: ' + ST.map(function (s) { return s.label + '=' + (by[s.k] || 0); }).filter(function (x) { return !/=0$/.test(x); }).join(', ') + '.\n' +
+          '- טרם נענו: ' + noResp.length + ' לידים חדשים.' + (avgRt ? ' זמן תגובה ממוצע שלי: ' + avgRt + ' דק\'.' : '') + '\n' +
+          '- משימות פתוחות: ' + tasks.filter(function (t) { return !t.done; }).length + ', מתוכן ' + overdue.length + ' באיחור.\n' +
+          '- לידים שלא זזו הכי הרבה זמן (עד 12):\n' +
+            (mine.slice(0, 12).map(function (l) {
+              return '   · ' + (l.name || 'ללא שם') + ' — ' + stLabel(l.status) + ', ' + (days(l.status_changed_at || l.created_at) || 0) + ' ימים ללא שינוי' +
+                     (l.car ? ', מתעניין ב' + l.car : '') + (l.source ? ', מקור ' + l.source : ''); }).join('\n') || '   (אין)') + '\n' +
+          '- העסקאות שלי: ' + deals.length + (deals.length ? ', שווי ' + money(deals.reduce(function (a, d) { return a + (+d.total || 0); }, 0)) : '') + '.';
+
+      } else if (role === 'accounting') {
+        // ---- כספים: גבייה, יתרות, עמלות ----
+        var revenue = deals.reduce(function (a, d) { return a + (+d.total || 0); }, 0);
+        var comm = deals.reduce(function (a, d) { return a + (+d.commission || 0); }, 0);
+        var paidBy = {}; pays.forEach(function (p) { if (p.kind !== 'invoice') paidBy[p.deal_id] = (paidBy[p.deal_id] || 0) + (+p.amount || 0); });
+        var collected = Object.keys(paidBy).reduce(function (a, k) { return a + paidBy[k]; }, 0);
+        var openDeals = deals.filter(function (d) { return (d.stage || '') !== 'cancelled'; });
+        var owing = openDeals.map(function (d) { return { d: d, bal: (+d.total || 0) - (paidBy[d.id] || 0) }; })
+                             .filter(function (x) { return x.bal > 0; })
+                             .sort(function (a, b) { return b.bal - a.bal; });
+        ctx = head +
+          '- עסקאות פעילות: ' + openDeals.length + ' · שווי כולל ' + money(revenue) + '.\n' +
+          '- נגבה בפועל: ' + money(collected) + ' · יתרה פתוחה: ' + money(revenue - collected) + '.\n' +
+          '- עמלות סוכן מצטברות: ' + money(comm) + '.\n' +
+          '- תנועות שנרשמו: ' + pays.length + ' (' + ['payment', 'receipt', 'invoice'].map(function (k) {
+              return k + '=' + pays.filter(function (p) { return p.kind === k; }).length; }).join(', ') + ').\n' +
+          '- עסקאות עם יתרה לתשלום (עד 15, מהגדולה):\n' +
+            (owing.slice(0, 15).map(function (x) {
+              return '   · הזמנה #' + (x.d.order_no || '?') + ' — ' + (x.d.client_name || '') + ', יתרה ' + money(x.bal) +
+                     ', שלב ' + (x.d.stage || '—') + ', נפתחה לפני ' + (days(x.d.created_at) || 0) + ' ימים'; }).join('\n') || '   (אין)') + '\n' +
+          '- עסקאות חתומות שממתינות: ' + openDeals.filter(function (d) { return d.has_signature && (paidBy[d.id] || 0) === 0; }).length + '.';
+
+      } else if (role === 'files') {
+        // ---- תיקים: מה חסר ומה תקוע ----
+        var stuck = deals.filter(function (d) { return (d.stage || '') !== 'cancelled' && (d.stage || '') !== 'delivered'; })
+                         .sort(function (a, b) { return new Date(a.updated_at || a.created_at) - new Date(b.updated_at || b.created_at); });
+        var byStage = {}; deals.forEach(function (d) { byStage[d.stage || 'ללא שלב'] = (byStage[d.stage || 'ללא שלב'] || 0) + 1; });
+        var missDocs = stuck.filter(function (d) { var c = d.checklist || {}; return Object.keys(c).filter(function (k) { return k[0] !== '_' && c[k]; }).length < 3; });
+        ctx = head +
+          '- תיקים פעילים: ' + stuck.length + ' מתוך ' + deals.length + '.\n' +
+          '- פילוח לפי שלב: ' + Object.keys(byStage).map(function (k) { return k + '=' + byStage[k]; }).join(', ') + '.\n' +
+          '- תיקים עם פחות מ-3 מסמכים בצ\'קליסט: ' + missDocs.length + '.\n' +
+          '- התיקים שלא זזו הכי הרבה זמן (עד 15):\n' +
+            (stuck.slice(0, 15).map(function (d) {
+              var c = d.checklist || {}, have = Object.keys(c).filter(function (k) { return k[0] !== '_' && c[k]; }).length;
+              return '   · הזמנה #' + (d.order_no || '?') + ' — ' + (d.client_name || '') + ', שלב ' + (d.stage || '—') +
+                     ', ' + (days(d.updated_at || d.created_at) || 0) + ' ימים ללא עדכון, ' + have + ' מסמכים סומנו' +
+                     (d.has_signature ? ', חתום' : ', טרם נחתם'); }).join('\n') || '   (אין)') + '\n' +
+          '- משימות פתוחות: ' + tasks.filter(function (t) { return !t.done; }).length + ', מתוכן ' + overdue.length + ' באיחור.';
+
+      } else {
+        // ---- מנכ"ל / מנהל סניף: תמונה מלאה, בדגש שונה ----
+        var src = {}; leads.forEach(function (l) { var k = l.source || 'לא ידוע';
+          src[k] = src[k] || { t: 0, w: 0 }; src[k].t++; if (l.status === 'won') src[k].w++; });
+        var agents = {}; leads.forEach(function (l) { var k = pmap[l.assigned_to] || 'לא משויך';
+          agents[k] = agents[k] || { t: 0, w: 0, r: 0 }; agents[k].t++;
+          if (l.status === 'won') agents[k].w++; if (l.first_response_at) agents[k].r++; });
+        var revenue2 = deals.reduce(function (a, d) { return a + (+d.total || 0); }, 0);
+        var stageC = {}; deals.forEach(function (d) { stageC[d.stage || 'ללא שלב'] = (stageC[d.stage || 'ללא שלב'] || 0) + 1; });
+        var collected2 = pays.filter(function (p) { return p.kind !== 'invoice'; }).reduce(function (a, p) { return a + (+p.amount || 0); }, 0);
+        ctx = head +
+          '- לידים: ' + leads.length + ' · פילוח: ' + ST.map(function (s) { return s.label + '=' + (by[s.k] || 0); }).filter(function (x) { return !/=0$/.test(x); }).join(', ') + '.\n' +
+          '- אחוז סגירה: ' + conv + '% (נסגרו ' + won + ', אבודים ' + lost + ').\n' +
+          '- זמן תגובה ראשון ממוצע: ' + (avgRt ? avgRt + ' דק\'' : 'לא ידוע') + ' · לידים חדשים שטרם נענו: ' + noResp.length + '.\n' +
+          '- לידים פתוחים שלא זזו 7+ ימים: ' + cold.length + ' · משימות באיחור: ' + overdue.length + '.\n' +
+          '- לפי מקור: ' + Object.keys(src).sort(function (a, b) { return src[b].t - src[a].t; }).slice(0, 12)
+              .map(function (k) { return k + ' (' + src[k].t + ' לידים, ' + src[k].w + ' סגירות' +
+                   (src[k].t ? ', ' + Math.round(src[k].w / src[k].t * 100) + '%' : '') + ')'; }).join('; ') + '.\n' +
+          '- לפי סוכן: ' + Object.keys(agents).sort(function (a, b) { return agents[b].t - agents[a].t; }).slice(0, 12)
+              .map(function (k) { return k + ' (' + agents[k].t + ' לידים, ' + agents[k].w + ' סגירות, ' +
+                   agents[k].r + ' נענו)'; }).join('; ') + '.\n' +
+          '- עסקאות: ' + deals.length + ' · שווי ' + money(revenue2) + ' · נגבה ' + money(collected2) +
+              ' · יתרה ' + money(revenue2 - collected2) + '.\n' +
+          '- שלבי תיקים: ' + Object.keys(stageC).map(function (k) { return k + '=' + stageC[k]; }).join(', ') + '.\n' +
+          '- פגישות: ' + appts.length + ' · משימות פתוחות: ' + tasks.filter(function (t) { return !t.done; }).length + '.';
+      }
+
+      view('<div class="card"><h3>' + per.title + '</h3>' +
+        '<p class="muted" style="font-size:13px;margin:0 0 12px">' + esc(per.lead) + '</p>' +
+        '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">' +
+          per.qs.map(function (q) { return '<button class="btn btn-ghost btn-sm" data-sug="' + esc(q) + '">' + esc(q) + '</button>'; }).join('') + '</div>' +
         '<textarea class="inp" id="aiQ" rows="3" style="width:100%" placeholder="כתוב כאן שאלה…"></textarea>' +
         '<div style="margin-top:10px"><button class="btn" id="aiAsk">שאל את ה-AI</button> <span class="muted" id="aiState" style="font-size:13px;margin-inline-start:10px"></span></div>' +
         '<div id="aiAns" style="margin-top:16px"></div>' +
-        '<details style="margin-top:16px"><summary class="muted" style="font-size:12px;cursor:pointer">הנתונים שנשלחים למודל</summary><pre style="white-space:pre-wrap;font-size:12px;color:var(--muted);margin-top:8px">' + esc(ctx) + '</pre></details></div>');
-      $('view').querySelectorAll('[data-sug]').forEach(function (b) { b.addEventListener('click', function () { $('aiQ').value = b.dataset.sug; $('aiAsk').click(); }); });
-      $('aiAsk').addEventListener('click', function () { askAI(ctx); });
+        '<details style="margin-top:16px"><summary class="muted" style="font-size:12px;cursor:pointer">הנתונים שנשלחים למודל</summary>' +
+        '<pre style="white-space:pre-wrap;font-size:11.5px;background:var(--surface-2);padding:12px;border-radius:8px;margin-top:8px">' + esc(ctx) + '</pre></details></div>');
+      $('view').querySelectorAll('[data-sug]').forEach(function (b) {
+        b.addEventListener('click', function () { $('aiQ').value = b.dataset.sug; $('aiAsk').click(); }); });
+      $('aiAsk').addEventListener('click', function () { askAI(ctx, per.system); });
     }).catch(function (e) { errBox(e.message || e); });
   }
-  function askAI(ctx) {
+  function askAI(ctx, sysPrompt) {
     var q = ($('aiQ').value || '').trim(); if (!q) return;
     var state = $('aiState'), ans = $('aiAns'), btn = $('aiAsk');
     state.style.color = 'var(--muted)'; state.textContent = 'חושב… (עד ~30 שניות)'; ans.innerHTML = ''; btn.disabled = true;
-    db.functions.invoke('ai-assistant', { body: { prompt: ctx + '\n\nשאלת המנהל: ' + q } }).then(function (r) {
+    db.functions.invoke('ai-assistant', {
+      body: { prompt: ctx + '\n\nהשאלה: ' + q, system: sysPrompt ? (AI_BASE + ' ' + sysPrompt) : undefined }
+    }).then(function (r) {
       btn.disabled = false; state.textContent = '';
       var d = r.data || {};
       if (r.error || d.error) {
