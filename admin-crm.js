@@ -785,16 +785,16 @@
       signer.then(function (sres) {
         var urls = {};
         ((sres && sres.data) || []).forEach(function (s) { if (s && s.signedUrl) urls[s.path] = s.signedUrl; });
-        renderLeadCard(lead, acts, tasks, docs, deals, pays, urls);
+        renderLeadCard(lead, acts, tasks, docs, deals, pays, urls, audits);
       });
     });
   };
-  function renderLeadCard(lead, acts, tasks, docs, deals, pays, urls) {
+  function renderLeadCard(lead, acts, tasks, docs, deals, pays, urls, audits) {
     var role = C.role || 'admin';
     var wa = waLink(lead.phone);
     var idx = orderIds.indexOf(lead.id);
     var prev = idx > 0 ? orderIds[idx - 1] : null, next = idx >= 0 && idx < orderIds.length - 1 ? orderIds[idx + 1] : null;
-    var feed = buildFeed(acts, tasks, docs, deals, pays, urls, audits);
+    var feed = buildFeed(acts, tasks, docs, deals, pays, urls, audits || []);
     var metaByK = {}; LEAD_ACTIONS.forEach(function (a) { metaByK[a.k] = a; });
     var actBtns = getActionCfg().filter(function (c) { var a = metaByK[c.k]; return c.on !== false && a && a.roles.indexOf(role) >= 0; }).map(function (c) {
       var a = metaByK[c.k], lbl = esc(c.label || a.label);
