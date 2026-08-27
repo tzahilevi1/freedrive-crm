@@ -233,6 +233,41 @@
   }
 
   // admin-managed dropdown options for a field (or null → free-text filter)
+  // ---- ולידציית קלט ----
+  // הבדיקות רצות גם בדפדפן (הודעה ידידותית מיד) וגם במסד (CHECK constraint),
+  // כי טופס ציבורי, ייבוא CSV ו-API עוקפים את הדפדפן לגמרי.
+  var MAX_LEN = { name: 120, email: 160, car: 160, city: 80, id_num: 20, phone: 25 };
+  function normPhone(v) { return String(v || '').replace(/[^0-9]/g, ''); }
+  function validPhone(v) {
+    var d = normPhone(v);
+    if (d.indexOf('972') === 0) d = '0' + d.slice(3);
+    return /^0(5[0-9]|[2-4,8-9]|7[0-9])[0-9]{7}$/.test(d);
+  }
+  function validEmail(v) { return /^[^@\s]+@[^@\s]+\.[^@\s]{2,}$/.test(String(v || '').trim()); }
+  function validIdNum(v) { var d = normPhone(v); return d.length >= 8 && d.length <= 9; }
+  // מחזיר הודעת שגיאה ראשונה, או null אם הכל תקין
+  function validateLead(f) {
+    if (!String(f.name || '').trim() && !String(f.phone || '').trim()) return 'נא למלא לפחות שם או טלפון';
+    if (f.phone && !validPhone(f.phone)) return 'מספר טלפון לא תקין — צריך להיות מספר ישראלי, למשל 050-1234567';
+    if (f.email && !validEmail(f.email)) return 'כתובת מייל לא תקינה';
+    if (f.id_num && !validIdNum(f.id_num)) return 'ת.ז / ח.פ צריך להיות 8 או 9 ספרות';
+    for (var k in MAX_LEN) {
+      if (f[k] && String(f[k]).length > MAX_LEN[k]) return 'השדה "' + k + '" ארוך מדי (מקסימום ' + MAX_LEN[k] + ' תווים)';
+    }
+    return null;
+  }
+  // מחפש ליד קיים לפי טלפון/מייל כדי להזהיר לפני יצירת כפילות
+  function findExistingLead(phone, email) {
+    var d = normPhone(phone);
+    var ors = [];
+    if (d.length >= 9) ors.push('phone.ilike.%' + d.slice(-9) + '%');
+    if (email) ors.push('email.eq.' + String(email).trim().toLowerCase());
+    if (!ors.length) return Promise.resolve(null);
+    return db.from('leads').select('id,name,phone,status,created_at,assigned_to').is('deleted_at', null).or(ors.join(',')).limit(1)
+      .then(function (r) { return (r.data && r.data[0]) || null; }, function () { return null; });
+  }
+  C.validateLead = validateLead; C.findExistingLead = findExistingLead; C.validPhone = validPhone; C.validEmail = validEmail;
+
   function listOpts(field) { var vs = (C.lists && C.lists[field]) || []; return vs.length ? [{ v: '', l: '— הכל —' }].concat(vs.map(function (v) { return { v: v, l: v }; })) : null; }
 
   // ---- שם תצוגה נקי לרכב ----
@@ -372,7 +407,7 @@
     curFilter = statusFilter || null; selectedLeads = {};
     loading();
     Promise.all([
-      db.from('leads').select('*').order('created_at', { ascending: false }),
+      db.from('leads').select('*').is('deleted_at', null).order('created_at', { ascending: false }),
       db.from('profiles').select('user_id,full_name')
     ]).then(function (res) {
       if (res[0].error) return errBox(res[0].error.message);
@@ -463,9 +498,14 @@
     });
     if ($('bulkDel')) $('bulkDel').addEventListener('click', function () {
       var list = ids(); if (!list.length) return;
-      if (!confirm('למחוק ' + list.length + ' לידים? כולל כל הפעילות, המסמכים והעסקאות שלהם. פעולה בלתי הפיכה.')) return;
-      db.from('leads').delete().in('id', list).then(function (r) {
-        if (r.error) { alert('שגיאה במחיקה: ' + r.error.message); return; }
+      if (!confirm('להעביר ' + list.length + ' לידים לסל המיחזור?\n\nההיסטוריה, המסמכים והעסקאות נשמרים. מנהל יכול לשחזר בכל רגע.')) return;
+      var btn = this; btn.disabled = true;
+      // סל מיחזור במקום מחיקה: trash_lead מסמן deleted_at, מסתיר מכל המסכים ומתעד בציר הזמן.
+      // מחיקה סופית קיימת רק למנהל, ורק מתוך מסך הסל.
+      Promise.all(list.map(function (id) { return db.rpc('trash_lead', { p_lead: id }); })).then(function (res) {
+        btn.disabled = false;
+        var bad = res.filter(function (r) { return r.error || (r.data && r.data.ok === false); });
+        if (bad.length) alert('לא הועברו ' + bad.length + ' לידים: ' + (bad[0].error ? bad[0].error.message : bad[0].data.error));
         selectedLeads = {}; C.refreshBadges && C.refreshBadges(); window.C2B_renderLeads(curFilter);
       });
     });
@@ -519,14 +559,34 @@
       '</div><div style="margin-top:14px"><button class="btn" id="nlSave">צור ליד ופתח כרטיס</button> <span id="nlMsg" class="muted" style="font-size:13px;margin-inline-start:8px"></span></div></div>');
     C.$('nlBack').addEventListener('click', function () { window.C2B_renderLeads(curFilter); });
     C.$('nlSave').addEventListener('click', function () {
-      var name = C.$('nl_name').value.trim(), phone = C.$('nl_phone').value.trim(), msg = C.$('nlMsg');
-      if (!name && !phone) { msg.style.color = 'var(--danger)'; msg.textContent = 'נא למלא לפחות שם או טלפון'; return; }
-      msg.style.color = 'var(--muted)'; msg.textContent = 'יוצר…';
-      var payload = { name: name || null, phone: phone || null, email: C.$('nl_email').value.trim() || null, car: C.$('nl_car').value.trim() || null, brand: C.$('nl_brand').value.trim() || null, source: C.$('nl_source').value.trim() || 'ידני', city: C.$('nl_city').value.trim() || null, status: 'new', assigned_to: C.userId || null };
-      db.from('leads').insert(payload).select('id').single().then(function (r) {
-        if (r.error) { msg.style.color = 'var(--danger)'; msg.textContent = 'שגיאה: ' + r.error.message; return; }
-        C.refreshBadges && C.refreshBadges();
-        window.C2B_openLeadCard(r.data.id);
+      var btn = this, msg = C.$('nlMsg');
+      if (btn.disabled) return;                        // לחיצה כפולה יצרה שני לידים זהים
+      var payload = {
+        name: C.$('nl_name').value.trim() || null, phone: C.$('nl_phone').value.trim() || null,
+        email: C.$('nl_email').value.trim() || null, car: C.$('nl_car').value.trim() || null,
+        brand: C.$('nl_brand').value.trim() || null, source: C.$('nl_source').value.trim() || 'ידני',
+        city: C.$('nl_city').value.trim() || null, status: 'new', assigned_to: C.userId || null
+      };
+      var bad = validateLead(payload);
+      if (bad) { msg.style.color = 'var(--danger)'; msg.textContent = bad; return; }
+
+      btn.disabled = true; msg.style.color = 'var(--muted)'; msg.textContent = 'בודק כפילויות…';
+      // כפילות מזהירה ולא חוסמת: לפעמים אותו לקוח באמת פונה שוב על רכב אחר.
+      findExistingLead(payload.phone, payload.email).then(function (ex) {
+        if (ex) {
+          var who = (ex.name || 'ללא שם') + (ex.phone ? ' · ' + ex.phone : '');
+          var when = ex.created_at ? new Date(ex.created_at).toLocaleDateString('he-IL') : '';
+          var go = confirm('כבר קיים ליד עם הפרטים האלה:' + '\n\n' + who + (when ? '  (נוצר ' + when + ')' : '') +
+                           '\n\nלחצו אישור כדי לפתוח את הכרטיס הקיים, או ביטול כדי ליצור ליד חדש בכל זאת.');
+          if (go) { btn.disabled = false; return window.C2B_openLeadCard(ex.id); }
+        }
+        msg.textContent = 'יוצר…';
+        db.from('leads').insert(payload).select('id').single().then(function (r) {
+          btn.disabled = false;
+          if (r.error) { msg.style.color = 'var(--danger)'; msg.textContent = 'שגיאה: ' + r.error.message; return; }
+          C.refreshBadges && C.refreshBadges();
+          window.C2B_openLeadCard(r.data.id);
+        });
       });
     });
   }
@@ -726,10 +786,13 @@
       db.from('lead_documents').select('*').eq('lead_id', id).order('created_at', { ascending: false }),
       db.from('deals').select('*').eq('lead_id', id).order('created_at', { ascending: false }),
       db.from('profiles').select('user_id,full_name'),
-      db.from('payments').select('*').eq('lead_id', id).order('created_at', { ascending: false })
+      db.from('payments').select('*').eq('lead_id', id).order('created_at', { ascending: false }),
+      // יומן הפעולות של הליד — נכשל בשקט לתפקידים שאין להם הרשאה, ואז פשוט לא מוצג
+      db.from('audit_log').select('at,actor_name,entity,action,changes').eq('lead_id', id).order('at', { ascending: false }).limit(60)
     ]).then(function (r) {
       if (r[0].error) return errBox(r[0].error.message);
       var lead = r[0].data, acts = r[1].data || [], tasks = r[2].data || [], docs = r[3].data || [], deals = (r[4] && r[4].data) || [], pays = (r[6] && r[6].data) || [];
+      var audits = (r[7] && !r[7].error && r[7].data) || [];
       if (r[5] && r[5].data) { profiles = {}; r[5].data.forEach(function (p) { profiles[p.user_id] = p.full_name; }); }
       curDeals = deals;
       // signed URLs → inline preview of uploaded documents/images inside the timeline
@@ -748,7 +811,7 @@
     var wa = waLink(lead.phone);
     var idx = orderIds.indexOf(lead.id);
     var prev = idx > 0 ? orderIds[idx - 1] : null, next = idx >= 0 && idx < orderIds.length - 1 ? orderIds[idx + 1] : null;
-    var feed = buildFeed(acts, tasks, docs, deals, pays, urls);
+    var feed = buildFeed(acts, tasks, docs, deals, pays, urls, audits);
     var metaByK = {}; LEAD_ACTIONS.forEach(function (a) { metaByK[a.k] = a; });
     var actBtns = getActionCfg().filter(function (c) { var a = metaByK[c.k]; return c.on !== false && a && a.roles.indexOf(role) >= 0; }).map(function (c) {
       var a = metaByK[c.k], lbl = esc(c.label || a.label);
@@ -867,8 +930,17 @@
   }
   // ---- unified timeline feed (everything, newest first) ----
   var FEED_TAG = { note: 'הערה', call: 'שיחה', whatsapp: 'WhatsApp', email: 'מייל', status: 'סטטוס', task: 'משימה', document: 'מסמך', meeting: 'פגישה', deal: 'עסקה', contract: 'הסכם' };
-  function buildFeed(acts, tasks, docs, deals, pays, urls) {
+  function buildFeed(acts, tasks, docs, deals, pays, urls, audits) {
     var items = [];
+    // שינויי שדות מהיומן — "מי שינה את המחיר" מופיע בציר הזמן ולא רק במסך נפרד
+    (audits || []).forEach(function (e) {
+      var ch = e.changes || {};
+      if (ch._created || ch._deleted) return;                 // יצירה כבר מופיעה כאירוע נפרד
+      var txt = C.auditLine ? C.auditLine(e) : '';
+      if (!txt) return;
+      items.push({ ts: e.at, icon: '✏️', who: e.actor_name, tag: 'שינוי', cls: 'audit',
+                   html: '<span class="muted" style="font-size:12.5px">' + esc(txt) + '</span>' });
+    });
     acts.forEach(function (a) { items.push({ ts: a.created_at, icon: ACT_ICON[a.type] || '•', who: profiles[a.created_by], html: a.body ? esc(a.body) : '', tag: FEED_TAG[a.type] || a.type }); });
     docs.forEach(function (d) {
       var u = urls[d.storage_path], body, isPdf = /\.pdf$/i.test(d.name || '') || /\.pdf$/i.test(d.storage_path || '');
@@ -918,11 +990,107 @@
       CLOSE_REASONS.map(function (x) { return '<option' + (lead.close_reason === x ? ' selected' : '') + '>' + esc(x) + '</option>'; }).join('') + '</select></div>';
   }
   // ---------- ACTIVITY (global feed: who did what) ----------
+  // ---------- סל מיחזור ----------
+  // לידים שהועברו לסל מוסתרים מכל המסכים אבל שומרים את כל ההיסטוריה.
+  // רק מנהל רואה את המסך הזה, ורק ממנו אפשר לשחזר או למחוק סופית.
+  window.C2B_renderTrash = function () {
+    C.loading();
+    db.from('leads').select('id,name,phone,car,status,source,created_at,deleted_at,deleted_by')
+      .not('deleted_at', 'is', null).order('deleted_at', { ascending: false }).limit(500)
+      .then(function (r) {
+        if (r.error) return C.errBox('שגיאה בטעינת הסל: ' + r.error.message);
+        var rows = r.data || [];
+        var body = rows.length ? rows.map(function (l) {
+          return '<tr><td><b>' + esc(l.name || 'ללא שם') + '</b></td><td class="muted">' + esc(l.phone || '—') + '</td>' +
+            '<td class="muted">' + esc(l.car || '—') + '</td><td class="muted">' + esc(l.source || '—') + '</td>' +
+            '<td class="muted">' + fmt(l.deleted_at) + '</td>' +
+            '<td class="muted">' + esc(profiles[l.deleted_by] || '—') + '</td>' +
+            '<td style="white-space:nowrap"><button class="btn btn-sm" data-restore="' + l.id + '">↩ שחזר</button> ' +
+            '<button class="btn btn-ghost btn-sm" data-purge="' + l.id + '">מחק סופית</button></td></tr>';
+        }).join('') : '<tr><td colspan="7" class="empty">הסל ריק</td></tr>';
+        C.view('<h2 style="margin:0 0 4px">🗑️ סל מיחזור</h2>' +
+          '<p class="muted" style="font-size:13px;margin:0 0 14px">לידים שהוסרו מהמסכים. ההיסטוריה, המסמכים והעסקאות נשמרו במלואם. מחיקה סופית היא בלתי הפיכה.</p>' +
+          '<div class="card"><div class="table-scroll"><table><thead><tr><th>שם</th><th>טלפון</th><th>רכב</th><th>מקור</th><th>הועבר לסל</th><th>על ידי</th><th></th></tr></thead><tbody>' +
+          body + '</tbody></table></div></div>');
+        C.$('view').querySelectorAll('[data-restore]').forEach(function (b) {
+          b.addEventListener('click', function () {
+            b.disabled = true;
+            db.rpc('restore_lead', { p_lead: b.dataset.restore }).then(function (rr) {
+              if (rr.error) { b.disabled = false; return alert('שגיאה: ' + rr.error.message); }
+              C.refreshBadges && C.refreshBadges(); window.C2B_renderTrash();
+            });
+          });
+        });
+        C.$('view').querySelectorAll('[data-purge]').forEach(function (b) {
+          b.addEventListener('click', function () {
+            if (!confirm('למחוק את הליד לצמיתות?\n\nכל הפעילות, המסמכים והעסקאות שלו יימחקו ולא ניתן יהיה לשחזר אותם.')) return;
+            b.disabled = true;
+            db.rpc('purge_lead', { p_lead: b.dataset.purge }).then(function (rr) {
+              if (rr.error) { b.disabled = false; return alert('שגיאה: ' + rr.error.message); }
+              window.C2B_renderTrash();
+            });
+          });
+        });
+      });
+  };
+
+  // ---------- יומן פעולות ----------
+  // עונה על "מי שינה את זה?" — כל שינוי בשדה במעקב נרשם עם ערך לפני/אחרי.
+  var AUDIT_LABEL = {
+    status: 'סטטוס', assigned_to: 'איש מכירות', phone: 'טלפון', email: 'מייל', name: 'שם',
+    id_num: 'ת.ז / ח.פ', source: 'מקור הגעה', brand: 'מותג', close_reason: 'סיבת סגירה',
+    deleted_at: 'סל מיחזור', stage: 'שלב תיק', car_price: 'מחיר רכב', monthly: 'החזר חודשי',
+    commission: 'עמלה', down_total: 'מקדמה', total: 'סה"כ', discount_amt: 'הנחה',
+    salesperson: 'נציג', client_name: 'שם לקוח', client_id: 'ת.ז לקוח', signed_at: 'חתימה',
+    cancel_reason: 'סיבת ביטול', amount: 'סכום', kind: 'סוג', method: 'אמצעי תשלום',
+    ref_no: 'אסמכתא', role: 'תפקיד', active: 'פעיל', views: 'הרשאות תצוגה', full_name: 'שם מלא'
+  };
+  var ENTITY_LABEL = { leads: 'ליד', deals: 'עסקה', payments: 'תשלום', profiles: 'משתמש' };
+  function auditVal(field, v) {
+    if (v === null || v === undefined || v === '') return '—';
+    if (field === 'assigned_to') return profiles[v] || String(v).slice(0, 8);
+    if (field === 'status') return (stDef(v) || {}).label || v;
+    if (field === 'active') return v === 'true' ? 'כן' : 'לא';
+    return String(v).slice(0, 60);
+  }
+  function auditLine(e) {
+    var ch = e.changes || {};
+    if (ch._created) return 'נוצר';
+    if (ch._deleted) return 'נמחק לצמיתות';
+    return Object.keys(ch).map(function (k) {
+      return (AUDIT_LABEL[k] || k) + ': ' + auditVal(k, ch[k].from) + ' ← ' + auditVal(k, ch[k].to);
+    }).join(' · ');
+  }
+  C.auditLine = auditLine;
+  window.C2B_renderAudit = function () {
+    C.loading();
+    db.from('audit_log').select('at,actor_name,entity,entity_id,action,changes,lead_id')
+      .order('at', { ascending: false }).limit(300)
+      .then(function (r) {
+        if (r.error) return C.errBox('שגיאה בטעינת היומן: ' + r.error.message);
+        var rows = r.data || [];
+        var body = rows.length ? rows.map(function (e) {
+          return '<tr><td class="muted" style="white-space:nowrap">' + fmt(e.at) + '</td>' +
+            '<td>' + esc(e.actor_name || 'מערכת') + '</td>' +
+            '<td>' + esc(ENTITY_LABEL[e.entity] || e.entity) + '</td>' +
+            '<td>' + esc(auditLine(e)) + '</td>' +
+            '<td>' + (e.lead_id ? '<button class="btn btn-ghost btn-sm" data-goLead="' + e.lead_id + '">לכרטיס →</button>' : '') + '</td></tr>';
+        }).join('') : '<tr><td colspan="5" class="empty">אין עדיין רשומות</td></tr>';
+        C.view('<h2 style="margin:0 0 4px">📜 יומן פעולות</h2>' +
+          '<p class="muted" style="font-size:13px;margin:0 0 14px">כל שינוי בשדה חשוב — מי, מה, מתי, ומה היה הערך לפני. היומן נכתב על ידי המסד ואינו ניתן לעריכה.</p>' +
+          '<div class="card"><div class="table-scroll"><table><thead><tr><th>מתי</th><th>מי</th><th>מה</th><th>שינוי</th><th></th></tr></thead><tbody>' +
+          body + '</tbody></table></div></div>');
+        C.$('view').querySelectorAll('[data-goLead]').forEach(function (b) {
+          b.addEventListener('click', function () { window.C2B_openLeadCard(b.dataset.golead); });
+        });
+      });
+  };
+
   window.C2B_renderActivity = function () {
     loading();
     Promise.all([
       db.from('activities').select('*').order('created_at', { ascending: false }).limit(300),
-      db.from('leads').select('id,name'),
+      db.from('leads').select('id,name').is('deleted_at', null),
       db.from('profiles').select('user_id,full_name')
     ]).then(function (res) {
       if (res[0].error) return errBox(res[0].error.message);
@@ -957,6 +1125,15 @@
       var el = e.target.closest('[data-field]'); if (!el) return;
       var field = el.dataset.field, val = (el.value || '').trim(), patch = {};
       patch[field] = val || null;
+      // אותה ולידציה כמו בטופס הליד החדש — שדה שנערך ישירות בכרטיס עקף אותה עד עכשיו
+      var bad = val ? validateLead(Object.assign({ name: lead.name, phone: lead.phone }, patch)) : null;
+      if (bad) {
+        el.style.borderColor = 'var(--danger)';
+        alert(bad);
+        el.value = lead[field] == null ? '' : lead[field];
+        setTimeout(function () { el.style.borderColor = ''; }, 1200);
+        return;
+      }
       db.from('leads').update(patch).eq('id', lead.id).then(function (r) {
         if (r.error) { alert('שגיאה בשמירה: ' + r.error.message); return; }
         lead[field] = patch[field];
@@ -1412,11 +1589,23 @@
       if (inFlight) { dirtyAgain = true; return; }
       inFlight = true; setState('💾 שומר…');
       var payload = readForm();
-      var q = deal.id ? db.from('deals').update(payload).eq('id', deal.id)
-                      : db.from('deals').insert(payload).select('id,order_no').single();
+      // נעילה אופטימית: מעדכנים רק אם updated_at לא השתנה מאז שטענו.
+      // אם עמית שמר בינתיים — נקבל 0 שורות ונזהיר, במקום לדרוס לו את השינוי בשקט.
+      var q = deal.id
+        ? (deal.updated_at
+            ? db.from('deals').update(payload).eq('id', deal.id).eq('updated_at', deal.updated_at).select('id,order_no,updated_at')
+            : db.from('deals').update(payload).eq('id', deal.id).select('id,order_no,updated_at'))
+        : db.from('deals').insert(payload).select('id,order_no,updated_at').single();
       q.then(function (r) {
         inFlight = false;
         if (r.error) { setState('⚠ שגיאת שמירה'); console.warn('[deal auto-save]', r.error); return; }
+        if (deal.id && Array.isArray(r.data) && r.data.length === 0) {
+          setState('⚠ נחסם');
+          alert('משתמש אחר שמר את העסקה הזאת בזמן שערכת.\n\nכדי לא לדרוס את השינוי שלו, השמירה שלך לא בוצעה.\nהמסך ייטען מחדש עם הגרסה העדכנית.');
+          return window.C2B_openLeadCard(lead.id);
+        }
+        if (Array.isArray(r.data) && r.data[0]) { deal.updated_at = r.data[0].updated_at; r.data = r.data[0]; }
+        else if (r.data && r.data.updated_at) deal.updated_at = r.data.updated_at;
         if (!deal.id && r.data) {
           deal.id = r.data.id; deal.order_no = r.data.order_no;
           var h = C.$('view') && C.$('view').querySelector('.lead-top h3'); if (h) h.textContent = 'עסקה #' + (deal.order_no || '');
@@ -1521,7 +1710,7 @@
       db.from('payments').select('*'),
       db.from('profiles').select('user_id,full_name'),
       db.from('lead_documents').select('*').order('created_at', { ascending: false }).limit(500),
-      db.from('leads').select('id,name')
+      db.from('leads').select('id,name').is('deleted_at', null)
     ]).then(function (res) {
       if (res[0].error) return errBox(res[0].error.message);
       var deals = res[0].data || [], pays = (res[1] && res[1].data) || [], docs = (res[3] && res[3].data) || [];
@@ -2153,7 +2342,7 @@
   window.C2B_renderDashboard = function () {
     loading();
     Promise.all([
-      db.from('leads').select('id,name,phone,car,brand,status,source,created_at,first_response_at,assigned_to,marketing_company,city,utm_source,utm_campaign'),
+      db.from('leads').select('id,name,phone,car,brand,status,source,created_at,first_response_at,assigned_to,marketing_company,city,utm_source,utm_campaign').is('deleted_at', null),
       db.from('tasks').select('done'),
       db.from('appointments').select('status'),
       db.from('deals').select('id,lead_id,client_name,car_make,car_model,total,stage,created_at'),

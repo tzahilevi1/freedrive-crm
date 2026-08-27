@@ -215,7 +215,7 @@
   var DEFAULT_VIEWS = {
     // מנהל מערכת רואה הכל — בלי זה C2B.views של אדמין מחושב כ-['dashboard'] בלבד
     admin: ['dashboard','leads','files','accounting','cars','appointments','tasks','analytics',
-            'reports','ai','quotes','documents','whatsapp','emails','sms','automations','users','branches','settings'],
+            'reports','ai','quotes','documents','whatsapp','emails','sms','automations','users','branches','trash','audit','settings'],
     // סוכן מכירות: דשבורד, לידים, תיקי לקוחות, רכבים, יומן, משימות
     sales: ['dashboard', 'leads', 'files', 'cars', 'appointments', 'tasks'],
     // מנהלת תיקי לקוחות: דשבורד, תיקי לקוחות, רכבים, יומן, משימות, הצעות מחיר, מסמכים והסכמים
@@ -223,7 +223,7 @@
     // מנהלת חשבונות: דשבורד, הנהלת חשבונות, רכבים, יומן, משימות, דוחות, עוזר AI, הצעות מחיר, מסמכים והסכמים
     accounting: ['dashboard', 'accounting', 'cars', 'appointments', 'tasks', 'reports', 'ai', 'quotes', 'documents'],
     // מנהל סניף: כל התפעול של הסניף — בלי הנהלת חשבונות, משתמשים והגדרות
-    branch: ['dashboard', 'leads', 'files', 'cars', 'appointments', 'tasks', 'analytics', 'reports', 'quotes', 'documents', 'whatsapp', 'emails', 'sms']
+    branch: ['dashboard', 'leads', 'files', 'cars', 'appointments', 'tasks', 'analytics', 'reports', 'quotes', 'documents', 'whatsapp', 'emails', 'sms', 'audit']
   };
   // screens the admin can grant when creating a user (label + key)
   var GRANTABLE_VIEWS = [
@@ -302,6 +302,8 @@
     if (nav === 'sms') return window.C2B_renderComms && window.C2B_renderComms('sms');
     if (nav === 'automations') return window.C2B_renderAutomations && window.C2B_renderAutomations();
     if (nav === 'branches') return window.C2B_renderBranches && window.C2B_renderBranches();
+    if (nav === 'trash') return window.C2B_renderTrash && window.C2B_renderTrash();
+    if (nav === 'audit') return window.C2B_renderAudit && window.C2B_renderAudit();
     if (nav.indexOf('soon:') === 0) return renderSoon(nav.slice(5));
     return window.C2B_renderDashboard && window.C2B_renderDashboard();
   }
@@ -311,7 +313,7 @@
   });
 
   function refreshBadges() {
-    db.from('leads').select('id', { count: 'exact', head: true }).then(function (r) { if (r.count != null) $('bLeads').textContent = r.count; });
+    db.from('leads').select('id', { count: 'exact', head: true }).is('deleted_at', null).then(function (r) { if (r.count != null) $('bLeads').textContent = r.count; });
     db.from('tasks').select('id', { count: 'exact', head: true }).eq('done', false).then(function (r) { if (r.count != null) $('bTasks').textContent = r.count; }).catch(function () {});
     loadBell();
   }
@@ -322,7 +324,7 @@
     var q = this.value.trim().replace(/[(),*]/g, ' ').trim(); clearTimeout(gsT);   // strip PostgREST filter-grammar chars
     if (q.length < 2) { $('gsres').classList.add('hidden'); return; }
     gsT = setTimeout(function () {
-      db.from('leads').select('id,name,phone,car,status').or('name.ilike.%' + q + '%,phone.ilike.%' + q + '%,car.ilike.%' + q + '%').limit(8).then(function (r) {
+      db.from('leads').select('id,name,phone,car,status').is('deleted_at', null).or('name.ilike.%' + q + '%,phone.ilike.%' + q + '%,car.ilike.%' + q + '%').limit(8).then(function (r) {
         var rows = (r.data || []).map(function (l) { return '<div class="sr" data-lead="' + l.id + '"><b>' + esc(l.name) + '</b> <span class="muted">· ' + esc(l.phone) + (l.car ? ' · ' + esc(l.car) : '') + '</span></div>'; }).join('');
         $('gsres').innerHTML = rows || '<div class="sr muted">אין תוצאות</div>';
         $('gsres').classList.remove('hidden');
@@ -604,7 +606,7 @@
     loading();
     Promise.all([
       db.from('appointments').select('*').order('appt_at', { ascending: true }),
-      db.from('leads').select('id,phone')
+      db.from('leads').select('id,phone').is('deleted_at', null)
     ]).then(function (res) {
       if (res[0].error) return errBox(res[0].error.message);
       var appts = res[0].data || [], byPhone = {};
@@ -689,7 +691,7 @@
     loading();
     Promise.all([
       db.from('tasks').select('*').order('due_at', { ascending: true }),
-      db.from('leads').select('id,name,phone,car')
+      db.from('leads').select('id,name,phone,car').is('deleted_at', null)
     ]).then(function (res) {
       if (res[0].error) return errBox(res[0].error.message);
       var tasks = res[0].data || [], lmap = {}, now = Date.now();
@@ -785,7 +787,7 @@
   function renderReports() {
     loading();
     Promise.all([
-      db.from('leads').select('id,name,status,source,created_at,first_response_at,assigned_to,brand,utm_campaign,utm_source,utm_content,marketing_company,city'),
+      db.from('leads').select('id,name,status,source,created_at,first_response_at,assigned_to,brand,utm_campaign,utm_source,utm_content,marketing_company,city').is('deleted_at', null),
       db.from('appointments').select('status'),
       db.from('events').select('type,session_id'),
       db.from('tasks').select('done'),
@@ -1171,7 +1173,7 @@
   function renderAI() {
     loading();
     Promise.all([
-      db.from('leads').select('status,source,created_at,first_response_at,city,brand'),
+      db.from('leads').select('status,source,created_at,first_response_at,city,brand').is('deleted_at', null),
       db.from('deals').select('total,commission,stage,status'),
       db.from('payments').select('amount,kind'),
       db.from('tasks').select('done,due_at'),
