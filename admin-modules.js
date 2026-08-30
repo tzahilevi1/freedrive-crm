@@ -17,6 +17,7 @@
 
   /* ============================ הצעות מחיר ============================ */
   window.C2B_renderQuotes = function (statusFilter) {
+    var isAdmin = (C.role === 'admin');
     view('<div class="loading">טוען הצעות מחיר…</div>');
     db.from('deals').select('id,order_no,lead_id,client_name,brand,car_make,car_model,total,monthly,down_total,status,created_at').order('created_at', { ascending: false }).then(function (r) {
       if (r.error) return view('<div class="card"><h3>הצעות מחיר</h3><p class="muted">שגיאה בטעינה: ' + esc(r.error.message) + '</p></div>');
@@ -34,8 +35,12 @@
           '<td>' + money(d.total) + '</td>' +
           '<td>' + money(d.monthly) + ' / חודש</td>' +
           '<td onclick="event.stopPropagation()"><select class="inp" data-qstatus="' + esc(d.id) + '" style="padding:5px 8px;font-size:12.5px;width:auto;font-weight:700;color:' + st[1] + '">' + ['quote', 'ordered', 'cancelled'].map(function (k) { return '<option value="' + k + '"' + ((d.status || 'quote') === k ? ' selected' : '') + '>' + STAT[k][0] + '</option>'; }).join('') + '</select></td>' +
-          '<td>' + when(d.created_at) + '</td></tr>';
-      }).join('') : '<tr><td colspan="7" class="empty">אין הצעות מחיר עדיין. צרו הצעה מתוך כרטיס ליד → "עסקה".</td></tr>';
+          '<td>' + when(d.created_at) + '</td>' +
+          // מחיקת הצעה = מחיקת עסקה. פעולת ניהול, לא פעולה תפעולית.
+          (isAdmin ? '<td onclick="event.stopPropagation()"><button class="btn btn-ghost btn-sm" data-qdel="' + esc(d.id) +
+                     '" data-qno="' + esc(d.order_no || '') + '" style="color:var(--danger)">🗑️</button></td>' : '') +
+          '</tr>';
+      }).join('') : '<tr><td colspan="' + (isAdmin ? 8 : 7) + '" class="empty">אין הצעות מחיר עדיין. צרו הצעה מתוך כרטיס ליד → "עסקה".</td></tr>';
       view('<div class="row-between" style="align-items:center;margin-bottom:12px"><h2 style="margin:0">📄 הצעות מחיר <span class="muted" style="font-size:14px">(' + filtered.length + ')</span></h2>' +
         '<div style="display:flex;gap:6px;flex-wrap:wrap">' + chip('', 'הכל') + chip('quote', 'הצעות') + chip('ordered', 'הזמנות') + chip('cancelled', 'בוטלו') + '<button class="btn btn-sm" id="qExport">⬇ ייצוא CSV</button></div></div>' +
         '<div class="card" style="display:flex;gap:24px;flex-wrap:wrap;margin-bottom:12px"><div><div class="muted" style="font-size:12px">סה"כ הצעות</div><b style="font-size:20px">' + filtered.length + '</b></div>' +
@@ -55,29 +60,56 @@
           });
         });
       });
+      $('view').querySelectorAll('[data-qdel]').forEach(function (b) {
+        b.addEventListener('click', function (e) {
+          e.stopPropagation();
+          if (!confirm('להעביר את הצעה #' + (b.dataset.qno || '') + ' לסל המיחזור?\n\nההסכם והמסמכים נשמרים. אפשר לשחזר ממסך הסל.')) return;
+          b.disabled = true;
+          db.rpc('trash_deal', { p_deal: b.dataset.qdel }).then(function (r) {
+            b.disabled = false;
+            if (r.error || (r.data && r.data.ok === false)) return alert('שגיאה: ' + (r.error ? r.error.message : r.data.error));
+            window.C2B_renderQuotes(statusFilter);
+          });
+        });
+      });
       if ($('qExport')) $('qExport').addEventListener('click', function () { C.exportCsv(filtered, ['order_no', 'client_name', 'car_make', 'car_model', 'total', 'monthly', 'status', 'created_at'], 'הצעות-מחיר'); });
     });
   };
 
   /* ======================= מסמכים והסכמים ======================= */
   window.C2B_renderDocuments = function () {
+    var isAdmin = (C.role === 'admin');
     view('<div class="loading">טוען מסמכים…</div>');
     Promise.all([
       db.from('deals').select('id,order_no,lead_id,client_name,brand,signed_at,created_at').not('signature', 'is', null).order('signed_at', { ascending: false }),
-      db.from('lead_documents').select('id,lead_id,name,storage_path,created_at').order('created_at', { ascending: false }).limit(300)
+      db.from('lead_documents').select('id,lead_id,name,storage_path,created_at').is('deleted_at', null).order('created_at', { ascending: false }).limit(300)
     ]).then(function (res) {
       var contracts = (res[0] && res[0].data) || [], docs = (res[1] && res[1].data) || [];
       var cRows = contracts.length ? contracts.map(function (d) {
         return '<tr data-lead="' + esc(d.lead_id) + '" style="cursor:pointer"><td>✍️ הסכם חתום</td><td><b>#' + esc(d.order_no || '—') + '</b> · ' + esc(d.client_name || '') + (d.brand ? ' · ' + esc(d.brand) : '') + '</td><td><span class="tag" style="color:#1f8a4c;border-color:#1f8a4c">נחתם</span></td><td>' + when(d.signed_at || d.created_at) + '</td></tr>';
       }).join('') : '<tr><td colspan="4" class="empty">אין עדיין הסכמים חתומים.</td></tr>';
       var dRows = docs.length ? docs.map(function (o) {
-        return '<tr><td>📎 ' + esc(o.name || 'מסמך') + '</td><td>' + when(o.created_at) + '</td><td><button class="btn btn-ghost btn-sm" data-doc="' + esc(o.storage_path || '') + '" data-docname="' + esc(o.name || '') + '">👁️ פתח</button> <button class="btn btn-ghost btn-sm" data-lead="' + esc(o.lead_id) + '">לכרטיס הליד</button></td></tr>';
+        return '<tr><td>📎 ' + esc(o.name || 'מסמך') + '</td><td>' + when(o.created_at) + '</td><td><button class="btn btn-ghost btn-sm" data-doc="' + esc(o.storage_path || '') + '" data-docname="' + esc(o.name || '') + '">👁️ פתח</button> <button class="btn btn-ghost btn-sm" data-lead="' + esc(o.lead_id) + '">לכרטיס הליד</button>' +
+          (isAdmin ? ' <button class="btn btn-ghost btn-sm" data-ddel="' + esc(o.id) + '" data-dname="' + esc(o.name || '') + '" style="color:var(--danger)">🗑️</button>' : '') +
+          '</td></tr>';
       }).join('') : '<tr><td colspan="3" class="empty">אין מסמכים שהועלו. אפשר להעלות מכרטיס ליד → "מסמכים".</td></tr>';
       view('<h2 style="margin:0 0 12px">✍️ מסמכים והסכמים</h2>' +
         '<div class="card"><h3>הסכמים חתומים (' + contracts.length + ')</h3><div class="table-scroll"><table><thead><tr><th>סוג</th><th>פרטים</th><th>סטטוס</th><th>תאריך</th></tr></thead><tbody>' + cRows + '</tbody></table></div></div>' +
         '<div class="card"><h3>מסמכי לקוחות שהועלו (' + docs.length + ')</h3><p class="muted" style="font-size:12px;margin:-4px 0 10px">ת"ז · תלושים · דפי בנק · כל קובץ שהועלה לתיקי הלקוחות.</p><div class="table-scroll"><table><thead><tr><th>מסמך</th><th>תאריך</th><th>פעולות</th></tr></thead><tbody>' + dRows + '</tbody></table></div></div>');
       $('view').querySelectorAll('tr[data-lead]').forEach(function (tr) { tr.addEventListener('click', function (e) { if (e.target.closest('[data-doc]')) return; openLead(tr.dataset.lead); }); });
       $('view').querySelectorAll('[data-lead]').forEach(function (b) { if (b.tagName === 'BUTTON') b.addEventListener('click', function (e) { e.stopPropagation(); openLead(b.dataset.lead); }); });
+      $('view').querySelectorAll('[data-ddel]').forEach(function (b) {
+        b.addEventListener('click', function (e) {
+          e.stopPropagation();
+          if (!confirm('להעביר את "' + (b.dataset.dname || 'המסמך') + '" לסל המיחזור? אפשר לשחזר ממסך הסל.')) return;
+          b.disabled = true;
+          db.rpc('trash_document', { p_doc: b.dataset.ddel }).then(function (r) {
+            b.disabled = false;
+            if (r.error || (r.data && r.data.ok === false)) return alert('שגיאה: ' + (r.error ? r.error.message : r.data.error));
+            window.C2B_renderDocuments();
+          });
+        });
+      });
       $('view').querySelectorAll('[data-doc]').forEach(function (b) { b.addEventListener('click', function (e) { e.stopPropagation(); var path = b.dataset.doc; if (!path) return; window.C2B.viewDoc(path, b.dataset.docname); }); });
     });
   };
