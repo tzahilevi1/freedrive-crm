@@ -1243,7 +1243,7 @@
           (isSelf ? '<span class="muted" style="font-size:11px">אי אפשר לשנות את התפקיד של עצמך</span>' : '') +
         '</div>' +
         fld('שלוחת SIP', 'ue_sip', p.sip_ext) +
-        fld('תפקיד / תואר (חופשי)', 'ue_title', p.title) +
+        fld('תפקיד / תואר', 'ue_title', p.title || roleLabel(p.role)) +
         fld('סניף', 'ue_branch', p.branch) +
       '</div>' +
       (isSelf ? '' :
@@ -1257,6 +1257,9 @@
     $('ue_close').addEventListener('click', function () { tr.classList.add('hidden'); td.innerHTML = ''; });
     if ($('ue_role')) $('ue_role').addEventListener('change', function () {
       var w = $('ue_viewsWrap'); if (w) w.classList.toggle('hidden', this.value === p.role);
+      // התואר עוקב אחרי התפקיד — אבל רק אם לא נכתב שם תואר מותאם
+      var t = $('ue_title'), known = ROLES.map(function (r) { return r[1]; });
+      if (t && (!t.value.trim() || known.indexOf(t.value.trim()) >= 0)) t.value = roleLabel(this.value);
     });
     $('ue_save').addEventListener('click', function () {
       var patch = {
