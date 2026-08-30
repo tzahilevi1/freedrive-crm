@@ -491,17 +491,79 @@
     function openPanel(anchor) {
       closeColPanel();
       var m = document.createElement('div'); m.id = 'colpickmenu'; m.className = 'colpick-menu';
-      m.innerHTML = '<div class="cp-head">בחירת עמודות · גררו בחצים לשינוי סדר</div><div class="cp-list">' +
+      m.innerHTML = '<div class="cp-head">בחירת עמודות · גררו לשינוי סדר</div><div class="cp-list">' +
         state.order.map(function (k) { var c = byKey[k], on = state.hidden.indexOf(k) < 0;
-          return '<div class="cp-row" data-k="' + esc(k) + '"><span class="cp-mv"><button data-cpu aria-label="למעלה">▲</button><button data-cpd aria-label="למטה">▼</button></span><span class="cp-lbl">' + esc(c.label) + (c.fixed ? ' 🔒' : '') + '</span><label class="cp-sw"><input type="checkbox" data-cptg ' + (on ? 'checked' : '') + (c.fixed ? ' disabled' : '') + '><span class="cp-sl"></span></label></div>';
+          return '<div class="cp-row" data-k="' + esc(k) + '"><span class="cp-mv" data-cpdrag tabindex="0" role="button" title="גררו לשינוי סדר (או חצים במקלדת)" aria-label="גררו לשינוי סדר">⠿</span><span class="cp-lbl">' + esc(c.label) + (c.fixed ? ' 🔒' : '') + '</span><label class="cp-sw"><input type="checkbox" data-cptg ' + (on ? 'checked' : '') + (c.fixed ? ' disabled' : '') + '><span class="cp-sl"></span></label></div>';
         }).join('') + '</div><button class="btn btn-ghost btn-sm" data-cpreset style="width:100%;margin-top:8px">איפוס לברירת מחדל</button>';
       document.body.appendChild(m);
       var r = anchor.getBoundingClientRect(); m.style.top = (r.bottom + 6) + 'px'; m.style.right = Math.max(8, window.innerWidth - r.right) + 'px';
       m.addEventListener('click', function (e) { e.stopPropagation(); });
       m.querySelectorAll('[data-cptg]').forEach(function (cb) { cb.addEventListener('change', function () { var k = cb.closest('.cp-row').dataset.k, i = state.hidden.indexOf(k); if (cb.checked) { if (i >= 0) state.hidden.splice(i, 1); } else if (i < 0) state.hidden.push(k); save(); onChange(); }); });
-      function move(k, d) { var i = state.order.indexOf(k), j = i + d; if (j < 0 || j >= state.order.length) return; var t = state.order[i]; state.order[i] = state.order[j]; state.order[j] = t; save(); onChange(); openPanel(anchor); }
-      m.querySelectorAll('[data-cpu]').forEach(function (b) { b.addEventListener('click', function (e) { e.stopPropagation(); move(b.closest('.cp-row').dataset.k, -1); }); });
-      m.querySelectorAll('[data-cpd]').forEach(function (b) { b.addEventListener('click', function (e) { e.stopPropagation(); move(b.closest('.cp-row').dataset.k, 1); }); });
+      // ---- גרירה לשינוי סדר ----
+      //  Pointer Events ולא HTML5 drag-and-drop: אותו קוד עובד בעכבר ובמגע,
+      //  ו-DnD המובנה פשוט לא קיים במסכי מגע. השורה הנגררת מורמת ויזואלית,
+      //  והשורות סביבה מפנות לה מקום לפי נקודת האמצע שלהן.
+      var listEl = m.querySelector('.cp-list');
+      var drag = null;
+      function rowsOf() { return [].slice.call(listEl.querySelectorAll('.cp-row')); }
+
+      listEl.addEventListener('pointerdown', function (e) {
+        var handle = e.target.closest('[data-cpdrag]'); if (!handle) return;
+        var row = handle.closest('.cp-row'); if (!row) return;
+        e.preventDefault(); e.stopPropagation();
+        var rect = row.getBoundingClientRect();
+        drag = { row: row, startY: e.clientY, offset: e.clientY - rect.top, moved: false };
+        row.setPointerCapture && row.setPointerCapture(e.pointerId);
+        handle.setPointerCapture && handle.setPointerCapture(e.pointerId);
+        row.classList.add('cp-dragging');
+        listEl.classList.add('cp-reordering');
+      });
+
+      listEl.addEventListener('pointermove', function (e) {
+        if (!drag) return;
+        e.preventDefault();
+        var dy = e.clientY - drag.startY;
+        if (Math.abs(dy) > 2) drag.moved = true;
+        drag.row.style.transform = 'translateY(' + dy + 'px)';
+        // מחליפים מקום כשחוצים את אמצע השורה השכנה
+        var rows = rowsOf(), me = rows.indexOf(drag.row), y = e.clientY;
+        for (var i = 0; i < rows.length; i++) {
+          if (rows[i] === drag.row) continue;
+          var r = rows[i].getBoundingClientRect(), mid = r.top + r.height / 2;
+          if ((i < me && y < mid) || (i > me && y > mid)) {
+            listEl.insertBefore(drag.row, i < me ? rows[i] : rows[i].nextSibling);
+            drag.startY = e.clientY - (drag.row.getBoundingClientRect().top + drag.offset - e.clientY + drag.offset);
+            drag.startY = e.clientY; drag.row.style.transform = '';
+            break;
+          }
+        }
+      });
+
+      function endDrag() {
+        if (!drag) return;
+        drag.row.style.transform = '';
+        drag.row.classList.remove('cp-dragging');
+        listEl.classList.remove('cp-reordering');
+        var moved = drag.moved; drag = null;
+        if (!moved) return;
+        state.order = rowsOf().map(function (r) { return r.dataset.k; });
+        save(); onChange();          // הפאנל נשאר פתוח — אפשר לסדר כמה עמודות ברצף
+      }
+      listEl.addEventListener('pointerup', endDrag);
+      listEl.addEventListener('pointercancel', endDrag);
+
+      // מקלדת: נגישות ותאימות לאחור לשינוי סדר בלי עכבר
+      listEl.addEventListener('keydown', function (e) {
+        var h = e.target.closest('[data-cpdrag]'); if (!h) return;
+        var d = e.key === 'ArrowUp' ? -1 : e.key === 'ArrowDown' ? 1 : 0; if (!d) return;
+        e.preventDefault();
+        var k = h.closest('.cp-row').dataset.k, i = state.order.indexOf(k), j = i + d;
+        if (j < 0 || j >= state.order.length) return;
+        var t = state.order[i]; state.order[i] = state.order[j]; state.order[j] = t;
+        save(); onChange(); openPanel(anchor);
+        var again = document.querySelector('.cp-row[data-k="' + k + '"] [data-cpdrag]');
+        if (again) again.focus();
+      });
       m.querySelector('[data-cpreset]').addEventListener('click', function () { try { localStorage.removeItem(LSKEY); } catch (e) {} state = load(); onChange(); openPanel(anchor); });
       setTimeout(function () { document.addEventListener('click', closeColPanel, { once: true }); }, 0);
     }

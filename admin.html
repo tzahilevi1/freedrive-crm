@@ -97,9 +97,18 @@
   .colpick-menu .cp-head{font-size:11.5px;color:var(--muted);font-weight:700;padding:2px 4px 9px}
   .cp-row{display:flex;align-items:center;gap:8px;padding:6px 4px;border-radius:8px}
   .cp-row:hover{background:var(--surface-2)}
-  .cp-mv{display:flex;flex-direction:column}
-  .cp-mv button{background:none;border:0;color:var(--muted);cursor:pointer;font-size:9px;line-height:1.1;padding:1px 3px}
-  .cp-mv button:hover{color:var(--brand)}
+  /* ידית גרירה. touch-action:none חיוני — בלעדיו הדפדפן במסך מגע
+     תופס את התנועה כגלילה והגרירה לא מתחילה בכלל. */
+  .cp-mv{display:flex;align-items:center;justify-content:center;width:22px;height:26px;
+         color:var(--muted);cursor:grab;font-size:15px;line-height:1;border-radius:6px;
+         touch-action:none;user-select:none;flex:none}
+  .cp-mv:hover{color:var(--brand);background:var(--surface-2)}
+  .cp-mv:active{cursor:grabbing}
+  .cp-mv:focus-visible{outline:2px solid var(--brand);outline-offset:1px}
+  .cp-row.cp-dragging{background:var(--surface);box-shadow:0 8px 20px -8px rgba(0,0,0,.35);
+                      position:relative;z-index:3;opacity:.97}
+  .cp-list.cp-reordering .cp-row:not(.cp-dragging){transition:transform .12s ease}
+  .cp-list.cp-reordering{cursor:grabbing}
   .cp-lbl{flex:1;font-size:13.5px;font-weight:600}
   .cp-sw{position:relative;display:inline-block;width:38px;height:21px;flex:none}
   .cp-sw input{opacity:0;width:0;height:0;position:absolute}
@@ -347,8 +356,8 @@
 <div id="drawer"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js" integrity="sha384-0w2KAL2YHP6wKOkUDzkCDGgVvfmHnj02DHeQ6XcHOgTfFsGyonKOpShMH1x6nk9o" crossorigin="anonymous"></script>
-<script src="admin.js?v=202608300852"></script>
-<script src="admin-crm.js?v=202608300852"></script>
-<script src="admin-modules.js?v=202608300852"></script>
+<script src="admin.js?v=202608300857"></script>
+<script src="admin-crm.js?v=202608300857"></script>
+<script src="admin-modules.js?v=202608300857"></script>
 </body>
 </html>
