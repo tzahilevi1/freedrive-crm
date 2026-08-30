@@ -1305,7 +1305,6 @@
           (isSelf ? '<span class="muted" style="font-size:11px">אי אפשר לשנות את התפקיד של עצמך</span>' : '') +
         '</div>' +
         fld('שלוחת SIP', 'ue_sip', p.sip_ext) +
-        fld('תפקיד / תואר', 'ue_title', p.title || roleLabel(p.role)) +
         fld('סניף', 'ue_branch', p.branch) +
       '</div>' +
       (isSelf ? '' :
@@ -1319,10 +1318,8 @@
     $('ue_close').addEventListener('click', function () { tr.classList.add('hidden'); td.innerHTML = ''; });
     if ($('ue_role')) $('ue_role').addEventListener('change', function () {
       var w = $('ue_viewsWrap'); if (w) w.classList.toggle('hidden', this.value === p.role);
-      // התואר עוקב אחרי התפקיד — אבל רק אם לא נכתב שם תואר מותאם
-      var t = $('ue_title'), known = ROLES.map(function (r) { return r[1]; });
-      if (t && (!t.value.trim() || known.indexOf(t.value.trim()) >= 0)) t.value = roleLabel(this.value);
     });
+    function newRoleValue() { return ($('ue_role') && !isSelf) ? $('ue_role').value : p.role; }
     $('ue_save').addEventListener('click', function () {
       var patch = {
         full_name: ($('ue_name').value || '').trim() || null,
@@ -1330,11 +1327,11 @@
         phone: ($('ue_phone').value || '').trim() || null,
         mobile: ($('ue_mobile').value || '').trim() || null,
         sip_ext: ($('ue_sip').value || '').trim() || null,
-        title: ($('ue_title').value || '').trim() || null,
+        title: roleLabel(newRoleValue()),   // נגזר מהתפקיד — אין יותר שדה נפרד
         branch: ($('ue_branch').value || '').trim() || null,
         notes: ($('ue_notes').value || '').trim() || null
       };
-      var newRole = $('ue_role') ? $('ue_role').value : p.role;
+      var newRole = newRoleValue();
       if (!isSelf && newRole && newRole !== p.role) {
         patch.role = newRole;
         // המסכים נגזרים מהתפקיד. בלי העדכון הזה מנהל סניף חדש היה נשאר
