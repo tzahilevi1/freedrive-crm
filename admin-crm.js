@@ -876,7 +876,14 @@
     // מקור הגעה נערך מתוך רשימת "מקור הגעה" שבהגדרות ורשימות (field_options.source)
     return '<div class="lead-fields">' +
       '<div class="lf"><span class="k">מקור הגעה</span><select class="lf-edit" data-field="source" data-label="מקור הגעה">' + C.selOpts((C.lists && C.lists.source) || [], lead.source, '— מקור —') + '</select></div>' +
+      lf('מותג', esc(lead.brand)) +
       lf('חברת שיווק', esc(lead.marketing_company)) +
+      // מזהה הליד אצל פייסבוק — המפתח לאימות מול Ads Manager ולמניעת כפילויות
+      lf('Lead ID · פייסבוק', lead.external_id
+        ? '<span class="mono" style="user-select:all;direction:ltr;display:inline-block">' + esc(lead.external_id) + '</span>'
+        : '') +
+      lf('מזהה טופס', esc(lead.form_id)) +
+      lf('מזהה מודעה', esc(lead.ad_id)) +
       lf('utm_source', esc(lead.utm_source)) +
       lf('utm_campaign', esc(lead.utm_campaign)) +
       lf('utm_medium', esc(lead.utm_medium)) +
