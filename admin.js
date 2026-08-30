@@ -308,8 +308,12 @@
   var GRANTABLE_VIEWS = [
     ['dashboard', 'דשבורד'], ['leads', 'לידים'], ['files', 'תיקי לקוחות'], ['accounting', 'הנהלת חשבונות'],
     ['cars', 'רכבים'], ['appointments', 'יומן פגישות'], ['tasks', 'משימות'], ['analytics', 'אנליטיקס'], ['reports', 'דוחות'],
-    ['ai', 'עוזר AI'], ['quotes', 'הצעות מחיר'], ['documents', 'מסמכים והסכמים'], ['whatsapp', 'WhatsApp'], ['emails', 'מיילים'], ['sms', 'SMS']
+    ['ai', 'עוזר AI'], ['quotes', 'הצעות מחיר'], ['documents', 'מסמכים והסכמים'], ['whatsapp', 'WhatsApp'], ['emails', 'מיילים'], ['sms', 'SMS'],
+    ['audit', 'יומן פעולות']
   ];
+  // מסכי ניהול שאינם ניתנים להקצאה (מנהל מערכת בלבד) — כאן רק כדי שיוצגו בעברית
+  var ADMIN_ONLY_VIEWS = { users: 'משתמשים והרשאות', settings: 'הגדרות ורשימות', branches: 'סניפים',
+                           automations: 'אוטומציות', trash: 'סל מיחזור' };
   function navAllowed(nav, role) {
     if (role === 'admin' || !role) return true;
     if (nav === 'activity' || nav === 'dashboard') return true;   // always available
@@ -1082,7 +1086,12 @@
   function viewsLabel(v, role) {
     var isDefault = !(v && v.length);
     var eff = isDefault ? (DEFAULT_VIEWS[role] || ['dashboard']) : v;
-    var tags = eff.map(function (k) { var g = GRANTABLE_VIEWS.filter(function (x) { return x[0] === k; })[0]; return '<span class="tag" style="margin:2px">' + esc(g ? g[1] : k) + '</span>'; }).join('');
+    var tags = eff.map(function (k) {
+      var g = GRANTABLE_VIEWS.filter(function (x) { return x[0] === k; })[0];
+      // בלי המפה הזאת מסך ניהול הוצג כמפתח אנגלי גולמי ("audit") בטבלת המשתמשים
+      var label = g ? g[1] : (ADMIN_ONLY_VIEWS[k] || k);
+      return '<span class="tag" style="margin:2px">' + esc(label) + '</span>';
+    }).join('');
     return (isDefault ? '<span class="muted" style="font-size:10.5px;display:block;margin-bottom:3px">ברירת מחדל לתפקיד (מה שהם רואים):</span>' : '') + tags;
   }
   function viewChecks(idPrefix, checked) {
@@ -1215,6 +1224,8 @@
     $('view').querySelectorAll('tr[id^="uedit_"]').forEach(function (t) { if (t !== tr) { t.classList.add('hidden'); var c = t.querySelector('td'); if (c) c.innerHTML = ''; } });
     tr.classList.remove('hidden');
     var p = ps.filter(function (x) { return x.user_id === uid; })[0] || {};
+    //  מנהל שמוריד לעצמו את התפקיד ננעל מחוץ למערכת ואין מי שיחזיר אותו.
+    var isSelf = (uid === window.C2B.userId);
     function fld(label, id, val, type) { return '<div class="field" style="margin:0"><label>' + label + '</label><input class="inp" id="' + id + '" type="' + (type || 'text') + '" value="' + esc(val == null ? '' : val) + '" style="width:100%"></div>'; }
     td.innerHTML = '<div class="card" style="box-shadow:none;border:1px solid var(--line);background:var(--surface-2);margin:8px 0">' +
       '<div class="row-between" style="margin-bottom:10px"><b>✏️ עריכת פרטי משתמש</b><span class="muted" style="font-size:11.5px">' + roleLabel(p.role) + '</span></div>' +
@@ -1223,15 +1234,30 @@
         fld('מייל', 'ue_email', p.email, 'email') +
         fld('טלפון', 'ue_phone', p.phone, 'tel') +
         fld('נייד', 'ue_mobile', p.mobile, 'tel') +
+        // התפקיד קובע מה המשתמש רואה ומה מותר לו. עד עכשיו אפשר היה לשנות אותו
+        // רק מהתפריט הקטן בטבלה — כאן הוא במקום שבו באמת עורכים משתמש.
+        '<div class="field" style="margin:0"><label>תפקיד במערכת</label>' +
+          '<select class="inp" id="ue_role" style="width:100%"' + (isSelf ? ' disabled' : '') + '>' +
+          ROLES.map(function (r) { return '<option value="' + r[0] + '"' + (p.role === r[0] ? ' selected' : '') + '>' + esc(r[1]) + '</option>'; }).join('') +
+          '</select>' +
+          (isSelf ? '<span class="muted" style="font-size:11px">אי אפשר לשנות את התפקיד של עצמך</span>' : '') +
+        '</div>' +
         fld('שלוחת SIP', 'ue_sip', p.sip_ext) +
-        fld('תפקיד / תואר', 'ue_title', p.title) +
+        fld('תפקיד / תואר (חופשי)', 'ue_title', p.title) +
         fld('סניף', 'ue_branch', p.branch) +
       '</div>' +
+      (isSelf ? '' :
+        '<label id="ue_viewsWrap" class="hidden" style="display:flex;gap:8px;align-items:center;margin-top:10px;font-size:13px">' +
+          '<input type="checkbox" id="ue_resetViews" checked> עדכן גם את המסכים לברירת המחדל של התפקיד החדש' +
+        '</label>') +
       '<div class="field" style="margin-top:10px"><label>הערות</label><textarea class="inp" id="ue_notes" style="height:64px;width:100%">' + esc(p.notes || '') + '</textarea></div>' +
       '<div style="margin-top:12px"><button class="btn btn-sm" id="ue_save">💾 שמור פרטים</button> <button class="btn btn-ghost btn-sm" id="ue_close">✕ סגור</button> <span id="ue_msg" style="font-size:12.5px;margin-inline-start:8px"></span></div>' +
       '<p class="muted" style="font-size:11px;margin-top:8px">שדות אלו (שלוחת SIP, טלפון, סניף…) זמינים לחיבור אוטומציות, חיוג וניתוב בהמשך.</p>' +
     '</div>';
     $('ue_close').addEventListener('click', function () { tr.classList.add('hidden'); td.innerHTML = ''; });
+    if ($('ue_role')) $('ue_role').addEventListener('change', function () {
+      var w = $('ue_viewsWrap'); if (w) w.classList.toggle('hidden', this.value === p.role);
+    });
     $('ue_save').addEventListener('click', function () {
       var patch = {
         full_name: ($('ue_name').value || '').trim() || null,
@@ -1243,6 +1269,14 @@
         branch: ($('ue_branch').value || '').trim() || null,
         notes: ($('ue_notes').value || '').trim() || null
       };
+      var newRole = $('ue_role') ? $('ue_role').value : p.role;
+      if (!isSelf && newRole && newRole !== p.role) {
+        patch.role = newRole;
+        // המסכים נגזרים מהתפקיד. בלי העדכון הזה מנהל סניף חדש היה נשאר
+        // עם ההרשאות של סוכן, ולהפך — ומסכים היו נפתחים ריקים.
+        if ($('ue_resetViews') && $('ue_resetViews').checked) patch.views = DEFAULT_VIEWS[newRole] || null;
+        if (!confirm('לשנות את התפקיד של ' + (p.full_name || '') + '\nמ־' + roleLabel(p.role) + ' ל־' + roleLabel(newRole) + '?')) return;
+      }
       if (!patch.full_name) { $('ue_msg').style.color = 'var(--danger)'; $('ue_msg').textContent = 'שם חובה'; return; }
       var btn = this; btn.disabled = true; $('ue_msg').style.color = 'var(--muted)'; $('ue_msg').textContent = 'שומר…';
       db.from('profiles').update(patch).eq('user_id', uid).select().then(function (u) {
