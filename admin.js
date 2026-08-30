@@ -1751,13 +1751,15 @@
   function renderIntegrations() {
     var host = $('integrationsCard'); if (!host) return;
     var FN = SUPABASE_URL + '/functions/v1/ingest';
-    var PLAT = { google: ['🔍', 'Google Ads'], taboola: ['🟠', 'Taboola'], outbrain: ['🔵', 'Outbrain'], kishurit: ['🟢', 'קישורית'], webhook: ['🔗', 'Webhook כללי'], facebook: ['📘', 'פייסבוק'] };
+    var PLAT = { google: ['🔍', 'Google Ads'], taboola: ['🟠', 'Taboola'], outbrain: ['🔵', 'Outbrain'], kishurit: ['🟢', 'קישורית'], webhook: ['🔗', 'Webhook כללי'], facebook: ['📘', 'פייסבוק'],
+                 website: ['🌐', 'אתר / דף נחיתה'] };
     var HINT = {
       google: 'ב-Google Ads → טופס הליד → "Data integration / Webhook": הדביקו את ה-URL, ובשדה Key את המפתח (החלק שאחרי key= ב-URL).',
       taboola: 'ב-Taboola → Lead Generation → Webhook integration → הדביקו את ה-URL.',
       outbrain: 'ב-Outbrain → Lead generation → Webhook → הדביקו את ה-URL.',
       kishurit: 'בקישורית → הגדרת העברת לידים / postback → הדביקו את ה-URL (POST JSON).',
-      webhook: 'כל מערכת (או Zapier / Make) — שלחו POST עם JSON של הליד ל-URL הזה.'
+      webhook: 'כל מערכת (או Zapier / Make) — שלחו POST עם JSON של הליד ל-URL הזה.',
+      website: 'בטופס באתר: action="<הכתובת שלמעלה>" method="POST". שמות השדות בעברית או באנגלית — המערכת מזהה לבד (שם, טלפון, מייל, עיר, רכב). אפשר גם POST עם JSON.'
     };
     var CRMF = [['', '—'], ['name', 'שם'], ['phone', 'טלפון'], ['email', 'אימייל'], ['car', 'רכב'], ['city', 'עיר'], ['message', 'הודעה'], ['id_num', 'ת.ז/ח.פ'], ['marketing_company', 'חברת שיווק'], ['utm_source', 'utm_source'], ['utm_campaign', 'utm_campaign']];
     function crmSel(id) { return '<select class="inp" id="' + id + '" style="width:120px;font-size:12px">' + CRMF.map(function (f) { return '<option value="' + f[0] + '">' + f[1] + '</option>'; }).join('') + '</select>'; }
@@ -1784,7 +1786,7 @@
         '<div id="fbSection" style="border-top:1px solid var(--line);margin-top:12px;padding-top:12px"><div class="row-between"><b style="font-size:13.5px">📘 פייסבוק · טפסי לידים <span class="muted" style="font-weight:400;font-size:12px">(כל חשבונות ה-BM)</span></b><button class="btn btn-sm" id="fbLoad">🔄 טען טפסים מפייסבוק</button></div><div id="fbForms" style="margin-top:8px"></div></div>' +
         '<div style="border-top:1px solid var(--line);margin-top:12px;padding-top:12px"><b style="font-size:13.5px">➕ הוספת חיבור</b>' +
           '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:8px">' +
-            '<select class="inp" id="niPlat" style="width:150px"><option value="google">🔍 Google Ads</option><option value="taboola">🟠 Taboola</option><option value="outbrain">🔵 Outbrain</option><option value="kishurit">🟢 קישורית</option><option value="webhook">🔗 Webhook כללי</option></select>' +
+            '<select class="inp" id="niPlat" style="width:150px"><option value="google">🔍 Google Ads</option><option value="taboola">🟠 Taboola</option><option value="website">🌐 אתר / דף נחיתה</option><option value="outbrain">🔵 Outbrain</option><option value="kishurit">🟢 קישורית</option><option value="webhook">🔗 Webhook כללי</option></select>' +
             '<input class="inp" id="niLabel" placeholder="שם החיבור (למשל: גוגל ראשי)" style="width:180px">' +
             '<input class="inp" id="niSource" placeholder="מקור הגעה בליד (source)" style="width:170px">' +
             '<button class="btn btn-sm" id="niAdd">צור חיבור</button>' +
