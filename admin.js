@@ -215,6 +215,14 @@
       }
       window.C2B.role = (r.data && r.data.role) || 'sales';
       window.C2B.views = (r.data && r.data.views && r.data.views.length) ? r.data.views : (DEFAULT_VIEWS[window.C2B.role] || ['dashboard']);
+      // מסך ניהול חדש שנוסף בקוד לא מופיע אצל מי שרשימת המסכים שלו כבר
+      // שמורה במסד — והיא נשמרת לכל משתמש שנערך אי פעם. מנהל מערכת
+      // חייב לראות את מסכי הניהול תמיד, ולכן הם מתווספים ולא נגזרים.
+      if (window.C2B.role === 'admin') {
+        (DEFAULT_VIEWS.admin || []).forEach(function (v) {
+          if (window.C2B.views.indexOf(v) < 0) window.C2B.views.push(v);
+        });
+      }
       if (r.data && r.data.full_name) { window.C2B.userName = r.data.full_name; $('whoami').textContent = r.data.full_name + ' · ' + roleLabel(window.C2B.role); }
       applyRole(window.C2B.role); refreshBadges(); go('dashboard');
     });
