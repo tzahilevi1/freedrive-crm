@@ -2351,9 +2351,10 @@
       order_no: d.order_no || '', date: new Date().toLocaleDateString('he-IL'),
       brand: d.brand || 'פרי דרייב', salesperson: d.salesperson || (window.C2B && C2B.userName) || '',
       company: 'פרי דרייב', legal_entity: LEGAL_ENTITY || '',
+      // הנוסח זהה לזה שהיה בקוד לפני העברת ההסכם לתבניות — לא ניסוח מחדש
       ownership_statement: (own === '00')
         ? 'הרכב יירשם על שם הלקוח כרכב פרטי יד ראשונה 00.'
-        : 'הלקוח מצהיר ומסכים כי ידוע לו והובהר לו ע״י החברה כי הרכב יירשם בבעלות חברת ליסינג.',
+        : 'הלקוח מצהיר ומסכים כי ידוע לו והובהר לו ע״י החברה כי הרכישה מכוח ההסכם הנה במסגרת "עסקת 01" והרכב נרשם במסגרת עסקת ליסינג.',
       accessories: ad.accessories ? 'כן' : ''
     };
   }
