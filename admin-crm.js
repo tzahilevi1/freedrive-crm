@@ -2142,8 +2142,221 @@
     setTimeout(function () { try { w.print(); } catch (e) {} }, 350);
   }
 
+
+  // ---------- מסך ניהול תבניות ההסכמים ----------
+  function renderContractTemplates() {
+    if (C.role !== 'admin') return view('<div class="card"><p class="muted">המסך פתוח למנהל מערכת בלבד.</p></div>');
+    ctInvalidate();
+    view('<div class="card"><h3 style="margin:0 0 4px">📜 תבניות הסכמים</h3>' +
+      '<p class="muted" style="font-size:13px;margin:0 0 12px">הנוסח המשפטי של ההסכם. שינוי כאן משפיע על הסכמים חדשים בלבד — הסכם שנחתם שומר את הנוסח שעליו חתמו.</p>' +
+      '<div id="ctList">טוען…</div>' +
+      '<button class="btn btn-sm" id="ctNew" style="margin-top:12px">+ תבנית חדשה</button></div>' +
+      '<div id="ctEdit"></div>');
+    $('ctNew').addEventListener('click', function () { ctForm(null); });
+    ctLoad();
+  }
+
+  function ctLoad() {
+    db.from('contract_templates').select('*').order('sort').then(function (r) {
+      if (r.error) { $('ctList').innerHTML = '<p class="muted" style="color:var(--warn)">שגיאה: ' + esc(r.error.message) + ' — הריצו contract-templates.sql</p>'; return; }
+      var list = r.data || [];
+      if (!list.length) { $('ctList').innerHTML = '<p class="muted">אין תבניות. צרו אחת כדי להתחיל.</p>'; return; }
+      $('ctList').innerHTML = '<table style="width:100%"><thead><tr><th>שם</th><th>מצב</th><th>ברירת מחדל</th><th>עודכן</th><th></th></tr></thead><tbody>' +
+        list.map(function (t) {
+          return '<tr><td><b>' + esc(t.name) + '</b>' +
+              (t.description ? '<div class="muted" style="font-size:12px">' + esc(t.description) + '</div>' : '') + '</td>' +
+            '<td><label class="cp-sw" title="פעילה"><input type="checkbox" data-ctact="' + esc(t.id) + '"' + (t.active ? ' checked' : '') + '><span class="cp-sl"></span></label></td>' +
+            '<td>' + (t.is_default ? '<span class="tag">★ ברירת מחדל</span>'
+                     : '<button class="btn btn-ghost btn-sm" data-ctdef="' + esc(t.id) + '">הפוך לברירת מחדל</button>') + '</td>' +
+            '<td class="muted">' + esc(fmt(t.updated_at)) + '</td>' +
+            '<td style="text-align:left;white-space:nowrap">' +
+              '<button class="btn btn-ghost btn-sm" data-ctedit="' + esc(t.id) + '">✏️ ערוך</button> ' +
+              '<button class="btn btn-ghost btn-sm" data-ctcopy="' + esc(t.id) + '">⧉ שכפל</button> ' +
+              (t.is_default ? '' : '<button class="btn btn-ghost btn-sm" data-ctdel="' + esc(t.id) + '">🗑</button>') +
+            '</td></tr>';
+        }).join('') + '</tbody></table>';
+
+      $('ctList').querySelectorAll('[data-ctact]').forEach(function (cb) {
+        cb.addEventListener('change', function () {
+          db.from('contract_templates').update({ active: cb.checked }).eq('id', cb.dataset.ctact)
+            .then(function (u) { if (u.error) alert('שגיאה: ' + u.error.message); ctInvalidate(); ctLoad(); });
+        });
+      });
+      $('ctList').querySelectorAll('[data-ctdef]').forEach(function (b) {
+        b.addEventListener('click', function () {
+          // מסירים קודם ורק אז מסמנים: האינדקס הייחודי מרשה ברירת מחדל אחת,
+          // וסימון לפני הסרה היה נדחה
+          db.from('contract_templates').update({ is_default: false }).neq('id', b.dataset.ctdef).then(function () {
+            db.from('contract_templates').update({ is_default: true, active: true }).eq('id', b.dataset.ctdef)
+              .then(function (u) { if (u.error) alert('שגיאה: ' + u.error.message); ctInvalidate(); ctLoad(); });
+          });
+        });
+      });
+      $('ctList').querySelectorAll('[data-ctedit]').forEach(function (b) {
+        b.addEventListener('click', function () { ctForm(list.filter(function (x) { return x.id === b.dataset.ctedit; })[0]); });
+      });
+      $('ctList').querySelectorAll('[data-ctcopy]').forEach(function (b) {
+        b.addEventListener('click', function () {
+          var t = list.filter(function (x) { return x.id === b.dataset.ctcopy; })[0];
+          ctForm({ name: t.name + ' (עותק)', description: t.description, body: t.body, active: false, sort: (t.sort || 0) + 1 });
+        });
+      });
+      $('ctList').querySelectorAll('[data-ctdel]').forEach(function (b) {
+        b.addEventListener('click', function () {
+          var t = list.filter(function (x) { return x.id === b.dataset.ctdel; })[0];
+          if (!confirm('למחוק את התבנית "' + t.name + '"?\nהסכמים שכבר נחתמו לא ייפגעו — הנוסח שלהם שמור אצלם.')) return;
+          db.from('contract_templates').delete().eq('id', b.dataset.ctdel)
+            .then(function (u) { if (u.error) alert('שגיאה: ' + u.error.message); ctInvalidate(); ctLoad(); });
+        });
+      });
+    });
+  }
+
+  function ctForm(t) {
+    t = t || { name: '', description: '', body: '', active: true, sort: 99 };
+    var isNew = !t.id;
+    $('ctEdit').innerHTML = '<div class="card"><div class="row-between"><h3 style="margin:0">' +
+        (isNew ? 'תבנית חדשה' : 'עריכת ' + esc(t.name)) + '</h3>' +
+        '<button class="btn btn-ghost btn-sm" id="ctClose">✕ סגור</button></div>' +
+      '<div class="grid2" style="margin-top:10px">' +
+        '<div class="field" style="margin:0"><label>שם התבנית</label><input class="inp" id="ct_name" value="' + esc(t.name) + '"></div>' +
+        '<div class="field" style="margin:0"><label>תיאור (למי היא מיועדת)</label><input class="inp" id="ct_desc" value="' + esc(t.description || '') + '"></div>' +
+      '</div>' +
+      '<p class="muted" style="font-size:12.5px;margin:12px 0 4px">שורה שמתחילה ב־<b>##</b> היא כותרת סעיף. שורה ריקה מפרידה בין פסקאות. לחצו על שדה כדי לשתול אותו בטקסט:</p>' +
+      '<div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:8px">' +
+        CT_FIELDS.map(function (f) { return '<button class="btn btn-ghost btn-sm" data-ctf="' + esc(f.k) + '" style="padding:3px 8px;font-size:11.5px">' + esc(f.l) + '</button>'; }).join('') +
+      '</div>' +
+      '<textarea class="inp" id="ct_body" style="width:100%;height:340px;font-family:inherit;line-height:1.7;font-size:13px">' + esc(t.body || '') + '</textarea>' +
+      '<div style="display:flex;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap">' +
+        '<button class="btn btn-sm" id="ct_save">שמור</button>' +
+        '<button class="btn btn-ghost btn-sm" id="ct_prev">👁 תצוגה מקדימה</button>' +
+        '<label style="display:flex;gap:6px;align-items:center;font-size:13px"><input type="checkbox" id="ct_active"' + (t.active ? ' checked' : '') + '> פעילה</label>' +
+        '<span id="ct_msg" class="muted" style="font-size:12.5px"></span>' +
+      '</div><div id="ct_preview" style="margin-top:14px"></div></div>';
+
+    $('ctClose').addEventListener('click', function () { $('ctEdit').innerHTML = ''; });
+    // שתילה במיקום הסמן ולא בסוף — אחרת אי אפשר לשלב שדה באמצע משפט
+    $('ctEdit').querySelectorAll('[data-ctf]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var ta = $('ct_body'), tag = '{{' + b.dataset.ctf + '}}';
+        var a = ta.selectionStart, z = ta.selectionEnd;
+        ta.value = ta.value.slice(0, a) + tag + ta.value.slice(z);
+        ta.focus(); ta.selectionStart = ta.selectionEnd = a + tag.length;
+      });
+    });
+    $('ct_prev').addEventListener('click', function () {
+      var demo = { client_name: 'ישראל ישראלי', client_id: '012345678', phone: '050-0000000',
+        email: 'demo@example.com', address: 'הרצל 1, תל אביב', car: 'דגם לדוגמה',
+        car_price: '₪150,000', monthly: '₪2,500', down_total: '₪20,000', total: '₪150,000',
+        order_no: '1234', date: new Date().toLocaleDateString('he-IL'), brand: 'פרי דרייב',
+        salesperson: (window.C2B && C2B.userName) || 'נציג', company: 'פרי דרייב',
+        legal_entity: LEGAL_ENTITY || '', ownership_statement: 'הצהרת הבעלות תוצג כאן לפי סוג העסקה.' };
+      $('ct_preview').innerHTML = '<div class="card" style="background:#fff;color:#111;padding:26px;direction:rtl">' +
+        renderTemplate($('ct_body').value, demo) + '</div>';
+    });
+    $('ct_save').addEventListener('click', function () {
+      var name = ($('ct_name').value || '').trim();
+      if (!name) { $('ct_msg').style.color = 'var(--danger)'; $('ct_msg').textContent = 'שם חובה'; return; }
+      var row = { name: name, description: ($('ct_desc').value || '').trim() || null,
+                  body: $('ct_body').value, active: $('ct_active').checked };
+      var btn = this; btn.disabled = true; btn.textContent = 'שומר…';
+      var q = isNew ? db.from('contract_templates').insert(Object.assign({ sort: t.sort || 99 }, row))
+                    : db.from('contract_templates').update(row).eq('id', t.id);
+      q.then(function (u) {
+        btn.disabled = false; btn.textContent = 'שמור';
+        if (u.error) { $('ct_msg').style.color = 'var(--danger)'; $('ct_msg').textContent = 'שגיאה: ' + u.error.message; return; }
+        $('ct_msg').style.color = 'var(--ok)'; $('ct_msg').textContent = '✓ נשמר';
+        ctInvalidate(); ctLoad(); if (isNew) $('ctEdit').innerHTML = '';
+      });
+    });
+  }
+  window.C2B_renderContractTemplates = renderContractTemplates;
+
+  // ---------- תבניות הסכמים ----------
+  //  התבניות נטענות פעם אחת לכל טעינת עמוד ונשמרות בזיכרון: ההסכם נבנה
+  //  מחדש בכל הקלדה בטופס, ושאילתה לכל בנייה הייתה מציפה את השרת.
+  var CT_CACHE = null;
+  //  הנוסח שנבחר לעסקה הנוכחית. משתנה יחיד ולא פרמטר בכל קריאה, כי
+  //  contractHTML נקראת מארבעה מקומות — ודי בהחמצה אחת כדי שהלקוח
+  //  יחתום על נוסח שונה ממה שהוצג לו על המסך.
+  var CT_ACTIVE_BODY = '';
+  function loadTemplates(cb) {
+    if (CT_CACHE) return cb(CT_CACHE);
+    db.from('contract_templates').select('*').order('sort').then(function (r) {
+      CT_CACHE = r.data || [];
+      cb(CT_CACHE);
+    });
+  }
+  function ctInvalidate() { CT_CACHE = null; }
+
+  // השדות שאפשר לשתול בגוף התבנית. הרשימה מוצגת גם בעורך ככפתורים.
+  var CT_FIELDS = [
+    { k: 'client_name', l: 'שם הלקוח' }, { k: 'client_id', l: 'ת.ז / ח.פ' },
+    { k: 'phone', l: 'טלפון' }, { k: 'email', l: 'אימייל' }, { k: 'address', l: 'כתובת' },
+    { k: 'car', l: 'הרכב' }, { k: 'car_price', l: 'מחיר הרכב' }, { k: 'monthly', l: 'החזר חודשי' },
+    { k: 'down_total', l: 'מקדמה' }, { k: 'total', l: 'סה״כ' },
+    { k: 'order_no', l: 'מספר הזמנה' }, { k: 'date', l: 'תאריך היום' },
+    { k: 'brand', l: 'מותג' }, { k: 'salesperson', l: 'איש מכירות' },
+    { k: 'company', l: 'שם החברה' }, { k: 'legal_entity', l: 'ח.פ החברה' },
+    { k: 'ownership_statement', l: 'הצהרת בעלות (01/00)' }
+  ];
+
+  //  הגוף הוא טקסט ולא HTML, בכוונה: מנהל שמדביק קטע מאתר אחר לא אמור
+  //  להיות מסוגל להזריק סקריפט למסמך שהלקוח חותם עליו. לכן קודם esc על
+  //  הכל, ורק אחר כך מוסיפים את העיצוב שלנו.
+  function renderTemplate(body, data) {
+    var txt = String(body || '');
+    txt = txt.replace(/\{\{\s*([a-z_]+)\s*\}\}/g, function (m, k) {
+      var v = data[k];
+      return (v == null || v === '') ? '____________' : String(v);
+    });
+    var blocks = txt.split(/\n{2,}/);
+    return blocks.map(function (blk) {
+      var lines = blk.split('\n'), out = '', open = false;
+      lines.forEach(function (ln) {
+        var t = ln.replace(/\s+$/, '');
+        if (/^##\s+/.test(t)) {
+          if (open) { out += '</div>'; open = false; }
+          out += '<div class="c2b-clause" style="margin:0 0 13px;text-align:justify;line-height:1.85;font-size:13px">' +
+                 '<b style="font-size:13.5px"><u>' + esc(t.replace(/^##\s+/, '')) + '</u></b><br>';
+          open = true;
+        } else if (t) {
+          if (!open) {
+            out += '<div class="c2b-clause" style="margin:0 0 13px;text-align:justify;line-height:1.85;font-size:13px">';
+            open = true;
+          } else out += '<br>';
+          out += esc(t);
+        }
+      });
+      if (open) out += '</div>';
+      return out;
+    }).join('');
+  }
+
   // ---------- CONTRACT (auto-filled + browser signature) ----------
-  function contractHTML(d, sig, ownership) {
+  // ממפה עסקה לשדות שהתבנית מכירה. שדה חסר יוצג כקו למילוי ביד
+  // ולא כטקסט "undefined" על מסמך חתום.
+  function tplData(d, own) {
+    var ad = d.addons || {};
+    return {
+      client_name: d.client_name || '', client_id: d.client_id || '',
+      phone: d.client_phone || d.phone || '', email: d.client_email || d.email || '',
+      address: d.client_address || d.address || '',
+      car: d.car || '', car_price: d.car_price ? nis(d.car_price) : '',
+      monthly: (d.monthly || d.monthly_payment) ? nis(d.monthly || d.monthly_payment) : '',
+      down_total: d.down_total ? nis(d.down_total) : '', total: d.total ? nis(d.total) : '',
+      order_no: d.order_no || '', date: new Date().toLocaleDateString('he-IL'),
+      brand: d.brand || 'פרי דרייב', salesperson: d.salesperson || (window.C2B && C2B.userName) || '',
+      company: 'פרי דרייב', legal_entity: LEGAL_ENTITY || '',
+      ownership_statement: (own === '00')
+        ? 'הרכב יירשם על שם הלקוח כרכב פרטי יד ראשונה 00.'
+        : 'הלקוח מצהיר ומסכים כי ידוע לו והובהר לו ע״י החברה כי הרכב יירשם בבעלות חברת ליסינג.',
+      accessories: ad.accessories ? 'כן' : ''
+    };
+  }
+
+  function contractHTML(d, sig, ownership, tplBody) {
+    if (tplBody == null) tplBody = CT_ACTIVE_BODY;
     var today = new Date().toLocaleDateString('he-IL');
     var own = ownership || (d.checklist && d.checklist._ownership) || '01';
     var ad = d.addons || {};
@@ -2246,7 +2459,10 @@
       '<p style="font-size:11.5px;color:#555;margin:0 0 12px">** יובהר כי גובה ההחזר החודשי הסופי ייקבע בהתאם לגובה הריבית שתוסכם בין הגוף המממן ללקוח ולפריסת התשלומים שהוסכמה בין הגוף המממן ללקוח.</p>' +
       '<p style="font-weight:700;margin:8px 0 4px;font-size:13.5px">מפרט הרכב הנמכר ותוספות, ככל וישנן:</p>' +
       '<div style="font-size:12.5px;margin:0 0 14px;page-break-inside:avoid">' + spec('אביזרים נלווים להזמנה', ad.accessories) + spec('עמדת טעינה', ad.charging) + spec('מיגון לפי דרישת ביטוח', ad.armor) + spec(ctype === 'car2buy' ? 'עד 40% הנחה על ביטוח חובה' : '40% הנחה על ביטוח חובה — דרך חברת "הכשרה" בלבד (בכפוף להיעדר תביעות מצד הלקוח)', ad.insurance) + '</div>' +
-      (ctype === 'car2buy' ? car2buyClauses() : (
+      // תבנית פעילה גוברת על הנוסח שבקוד. הנוסח נשאר כגיבוי בלבד —
+      // אם הטבלה ריקה או שהתבנית נמחקה, ההסכם עדיין נוצר במקום להישבר.
+      (tplBody ? renderTemplate(tplBody, tplData(d, own)) :
+       ctype === 'car2buy' ? car2buyClauses() : (
         '<table style="width:100%;border-collapse:collapse;table-layout:fixed;direction:rtl;margin:6px 0 14px">' + C.map(function (t, i) { return '<tr class="c2b-clause"><td style="width:2.3em;vertical-align:top;text-align:right;font-weight:700;line-height:1.85;padding:0 0 11px"><span dir="ltr" style="unicode-bidi:embed;direction:ltr">' + (i + 1) + '</span>.</td><td style="vertical-align:top;text-align:right;line-height:1.85;padding:0 0 11px">' + t + '</td></tr>'; }).join('') + '</table>' +
         '<p style="font-weight:700;margin:16px 0 6px;font-size:14px"><span dir="ltr" style="direction:ltr;unicode-bidi:embed">' + (C.length + 1) + '</span>. כללי:</p>' +
         '<table style="width:100%;border-collapse:collapse;table-layout:fixed;direction:rtl">' + gen.map(function (t, i) { return '<tr class="c2b-clause"><td style="width:2.3em;vertical-align:top;text-align:right;font-weight:700;line-height:1.85;padding:0 0 11px"><span dir="ltr" style="unicode-bidi:embed;direction:ltr">' + String.fromCharCode(97 + i) + '</span>.</td><td style="vertical-align:top;text-align:right;line-height:1.85;padding:0 0 11px">' + t + '</td></tr>'; }).join('') + '</table>' +
@@ -2260,6 +2476,19 @@
       '</div></div>';
   }
   function contractView(lead, deal, justSaved) {
+    // התבניות נטענות פעם אחת; ההסכם נבנה רק אחרי שהנוסח בזיכרון,
+    // אחרת הרינדור הראשון היה יוצא בלי סעיפים ומהבהב כשהם מגיעים.
+    loadTemplates(function (tpls) {
+      var act = (tpls || []).filter(function (t) { return t.active; });
+      var chosen = act.filter(function (t) { return t.id === deal.contract_template_id; })[0]
+                || act.filter(function (t) { return t.is_default; })[0]
+                || act[0] || null;
+      CT_ACTIVE_BODY = chosen ? (chosen.body || '') : '';
+      contractViewInner(lead, deal, justSaved, act, chosen);
+    });
+  }
+
+  function contractViewInner(lead, deal, justSaved, tplList, chosenTpl) {
     // pull the latest signature (esp. after a remote sign) so we can show it
     if (deal.id && !deal._sigLoaded) {
       db.from('deals').select('signature,signed_at').eq('id', deal.id).single().then(function (r) {
@@ -2292,7 +2521,14 @@
     view(
       '<div class="lead-top"><button class="btn btn-ghost btn-sm" id="cBack">→ לעסקה</button><h3 style="margin:0">הסכם' + (deal.brand ? ' · ' + esc(deal.brand) : '') + ' — ' + esc(deal.client_name || '') + (signed ? ' <span class="tag" style="border-color:var(--ok);color:var(--ok);background:rgba(22,163,74,.1)">✅ נחתם</span>' : '') + '</h3>' +
         '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">' +
-          '' +   /* בורר סוג הסכם הוסר — לחברה הסכם אחד */
+          // בורר מוצג רק כשבאמת יש ממה לבחור — כפתור עם אפשרות אחת
+          // הוא רעש שמסיח מהחתימה
+          ((!signed && tplList && tplList.length > 1) ?
+            '<label style="font-size:12.5px;color:var(--muted)">תבנית:</label>' +
+            '<select class="inp" id="cTpl" style="width:auto;padding:5px 8px;font-size:12.5px">' +
+              tplList.map(function (t) {
+                return '<option value="' + esc(t.id) + '"' + (chosenTpl && t.id === chosenTpl.id ? ' selected' : '') + '>' + esc(t.name) + '</option>';
+              }).join('') + '</select>' : '') +
           (signed ? '' : '<label style="font-size:12.5px;color:var(--muted)">בעלות:</label><select class="inp" id="cOwnership" style="width:auto;padding:5px 8px"><option value="01"' + (curOwn === '01' ? ' selected' : '') + '>בעלים 01</option><option value="00"' + (curOwn === '00' ? ' selected' : '') + '>בעלים 00</option></select>') +
           '<button class="btn btn-sm" id="cPrint">📄 הורד PDF</button>' + (signed ? '' : '<button class="btn btn-ghost btn-sm" id="cSend">💾 שמור הסכם</button>') + '</div></div>' +
       (justSaved && !signed ? '<div class="card" style="border:2px solid var(--ok);background:rgba(22,163,74,.07);text-align:center;padding:22px">' +'<div style="font-size:40px;line-height:1">✅</div>' +'<h2 style="margin:10px 0 4px;font-size:22px">ההסכם נוצר בהצלחה' + (deal.order_no ? ' #' + esc(deal.order_no) : '') + '</h2>' +'<p class="muted" style="margin:0;font-size:14px">השלב הבא: שלחו אותו ללקוח לחתימה באחת הדרכים שלמטה.</p></div>' : '') +
@@ -2332,6 +2568,14 @@
     });
     // (בורר סוג ההסכם הוסר — מותג אחד, הסכם אחד)
     // PDF מושלם דרך מנוע ההדפסה של הדפדפן (בדיאלוג בוחרים "שמירה כ-PDF") — bidi עברית ללא פגם
+    if ($('cTpl')) $('cTpl').addEventListener('change', function () {
+      var id = this.value;
+      // נשמר על העסקה מיד: אחרת רענון היה מחזיר לתבנית ברירת המחדל
+      // אחרי שהנציג כבר בחר אחרת, בלי שיבחין
+      if (deal.id) db.from('deals').update({ contract_template_id: id }).eq('id', deal.id).then(function () {});
+      deal.contract_template_id = id;
+      contractView(lead, deal);
+    });
     $('cPrint').addEventListener('click', function () { printContractHtml($('cDoc').innerHTML, 'הסכם פרי דרייב' + (deal.order_no ? ' #' + deal.order_no : '') + ' — ' + (deal.client_name || '')); });
     if (signed) { ensureSignedDoc(lead, deal); return; }   // חתום → שומר עותק HTML לתיק + ציר זמן, ואז צפייה/הדפסה בלבד
     // ---- remote signing: build link + send via email / WhatsApp / SMS ----

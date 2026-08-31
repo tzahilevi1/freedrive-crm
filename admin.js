@@ -293,7 +293,7 @@
   var DEFAULT_VIEWS = {
     // מנהל מערכת רואה הכל — בלי זה C2B.views של אדמין מחושב כ-['dashboard'] בלבד
     admin: ['dashboard','leads','files','accounting','cars','appointments','tasks','analytics',
-            'reports','ai','quotes','documents','whatsapp','emails','sms','automations','users','branches','trash','audit','settings'],
+            'reports','ai','quotes','documents','whatsapp','emails','sms','automations','users','branches','trash','audit','ctemplates','settings'],
     // סוכן מכירות: כל התפעול שלו — בלי כספים, בלי דוחות/אנליטיקס, בלי ערוצי הודעות
     sales: ['dashboard', 'leads', 'files', 'cars', 'appointments', 'tasks', 'ai', 'quotes', 'documents'],
     // מנהלת תיקי לקוחות: דשבורד, תיקי לקוחות, רכבים, יומן, משימות, הצעות מחיר, מסמכים והסכמים
@@ -312,7 +312,7 @@
     ['audit', 'יומן פעולות']
   ];
   // מסכי ניהול שאינם ניתנים להקצאה (מנהל מערכת בלבד) — כאן רק כדי שיוצגו בעברית
-  var ADMIN_ONLY_VIEWS = { users: 'משתמשים והרשאות', settings: 'הגדרות ורשימות', branches: 'סניפים',
+  var ADMIN_ONLY_VIEWS = { users: 'משתמשים והרשאות', settings: 'הגדרות ורשימות', branches: 'סניפים', ctemplates: 'תבניות הסכמים',
                            automations: 'אוטומציות', trash: 'סל מיחזור' };
   function navAllowed(nav, role) {
     if (role === 'admin' || !role) return true;
@@ -387,6 +387,7 @@
     if (nav === 'branches') return window.C2B_renderBranches && window.C2B_renderBranches();
     if (nav === 'trash') return window.C2B_renderTrash && window.C2B_renderTrash();
     if (nav === 'audit') return window.C2B_renderAudit && window.C2B_renderAudit();
+    if (nav === 'ctemplates') return window.C2B_renderContractTemplates && window.C2B_renderContractTemplates();
     if (nav.indexOf('soon:') === 0) return renderSoon(nav.slice(5));
     return window.C2B_renderDashboard && window.C2B_renderDashboard();
   }
