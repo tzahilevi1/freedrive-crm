@@ -37,7 +37,7 @@
 </head>
 <body>
 <div class="wrap">
-  <div class="card"><h1>פרי דרייב</h1><div class="sub">הסכם הזמנת רכב — חתימה דיגיטלית</div></div>
+  <div class="card"><h1>FREE DRIVE</h1><div class="sub">הסכם הזמנת רכב — חתימה דיגיטלית</div></div>
   <div id="content"><div class="card" style="text-align:center;color:var(--muted)">טוען…</div></div>
 </div>
 
@@ -97,9 +97,11 @@
   }
   // הישות המשפטית מגיעה מהתצורה. כשהיא ריקה השורה נעלמת לגמרי —
   // עדיף בלי שורה מאשר עם שם וח.פ של חברה אחרת על מסמך שלקוח חותם עליו.
-  var LEGAL_ENTITY = '';
+  //  פרי דרייב הוא המותג; הצד המתקשר בהסכם הוא החברה שמאחוריו.
+  //  שניהם מהתצורה, כדי שלא יישאר שם של חברה אחרת על מסמך חתום.
+  var LEGAL_ENTITY = 'נ.ש פוקס מוטורס בע"מ ח.פ. 516742731';
   var LEGAL_LINE = LEGAL_ENTITY
-    ? '<p style="text-align:center;color:#444;margin:0 0 8px;font-size:12.5px">'+esc(LEGAL_ENTITY)+'</p>'
+    ? '<p style="text-align:center;color:#444;margin:0 0 10px;font-size:12.5px;line-height:1.6">באמצעות חברת '+esc(LEGAL_ENTITY)+'</p>'
     : '';
 
   // אותו מנוע כמו ב-CRM: "## " פותח סעיף, שורה ריקה מפרידה פסקאות.
@@ -138,7 +140,7 @@
     var ownStmt=(own==='00')?'הרכב יירשם על שם הלקוח כרכב פרטי יד ראשונה 00.':'הלקוח מצהיר ומסכים כי ידוע לו והובהר לו ע״י החברה כי הרכישה מכוח ההסכם הנה במסגרת "עסקת 01" והרכב נרשם במסגרת עסקת ליסינג.';
     var ownBox='<div style="border:1.5px solid #6E8B10;background:#fff7f2;border-radius:8px;padding:10px 14px;margin:10px 0;font-weight:600">'+esc(ownStmt)+'</div>';
     var localBuild = (
-        '<h2 style="text-align:center;color:#6E8B10;margin:0 0 2px;font-size:22px;font-weight:800">פרי דרייב</h2>'+
+        '<h2 style="text-align:center;color:#6E8B10;margin:0 0 2px;font-size:22px;font-weight:800">FREE DRIVE</h2>'+
         LEGAL_LINE+
         '<div class="sub">מספר הזמנה: '+esc(d.order_no||'—')+' · תאריך: '+today+'</div>'+
         '<h3>פרטי הלקוח</h3><table>'+row('שם',esc(d.client_name))+row('ת.ז / ח.פ',esc(d.client_id))+row('טלפון','<span dir="ltr">'+esc(d.client_phone)+'</span>')+row('דוא"ל',esc(d.client_email))+row('כתובת',esc(d.client_address))+'</table>'+

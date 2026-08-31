@@ -258,7 +258,7 @@
   // יש שם אנגלי תקין ב-extra.name_en ("BYD Seal U"). מעדיפים אותו ומנרמלים אותיות.
   // הישות המשפטית שמופיעה בכותרת ההסכם. ריק = לא מוצגת שורה כלל,
   // וזה עדיף על פני הצגת ח.פ של חברה אחרת.
-  var LEGAL_ENTITY = '';
+  var LEGAL_ENTITY = 'נ.ש פוקס מוטורס בע"מ ח.פ. 516742731';
 
   var CAR_ACR = { byd:'BYD', bmw:'BMW', mg:'MG', kia:'KIA', gac:'GAC', gwm:'GWM', ev:'EV', dm:'DM',
                   suv:'SUV', gt:'GT', phev:'PHEV', hev:'HEV', bev:'BEV', fl:'FL', vw:'VW', ds:'DS',
