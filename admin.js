@@ -418,14 +418,75 @@
   document.addEventListener('click', function (e) { if (!e.target.closest('.search')) $('gsres').classList.add('hidden'); });
 
   // ---------- generic field filter (used on leads / files / cars) ----------
-  var OPS = { contains: 'מכיל', eq: 'שווה ל', ne: 'שונה מ', gt: 'גדול מ', lt: 'קטן מ', empty: 'ריק', nempty: 'לא ריק' };
-  // fields: [{key,label,options?:[{v,l}],get?:fn(row)}]  onApply: fn() → caller redraws
+  var OPS = { contains: 'מכיל', eq: 'שווה ל', ne: 'שונה מ', gt: 'גדול מ', lt: 'קטן מ', between: 'בין', empty: 'ריק', nempty: 'לא ריק' };
+  // לשדה תאריך המילים אחרות — "גדול מ־31.8" לא אומר כלום, "אחרי" כן.
+  // "מכיל" נעדר בכוונה: אין לו משמעות על תאריך.
+  var DATE_OPS = { eq: 'הוא', between: 'בין', gt: 'אחרי', lt: 'לפני', ne: 'שונה מ', empty: 'ריק', nempty: 'לא ריק' };
+
+  // תקופות מוכנות, מהקצרה לארוכה. נשמרות כאסימון ולא כתאריך מחושב —
+  // מסנן "היום" חייב להישאר היום גם מחר, ולא להיתקע על התאריך שבו נוצר.
+  var PERIODS = [
+    { v: '@today', l: 'היום' },
+    { v: '@yesterday', l: 'אתמול' },
+    { v: '@last3', l: '3 הימים האחרונים' },
+    { v: '@last7', l: '7 הימים האחרונים' },
+    { v: '@thisweek', l: 'השבוע הנוכחי' },
+    { v: '@last14', l: '14 הימים האחרונים' },
+    { v: '@thismonth', l: 'החודש הנוכחי' },
+    { v: '@last30', l: '30 הימים האחרונים' },
+    { v: '@lastmonth', l: 'החודש שעבר' },
+    { v: '@last90', l: '90 הימים האחרונים' },
+    { v: '@thisyear', l: 'השנה' },
+    { v: '@custom', l: 'תאריך מסוים…' }
+  ];
+  var PERIOD_LBL = {}; PERIODS.forEach(function (p) { PERIOD_LBL[p.v] = p.l; });
+
+  var DAY_MS = 86400000;
+  function startOfToday() { var d = new Date(); d.setHours(0, 0, 0, 0); return d.getTime(); }
+  // כל תקופה מוחזרת כטווח [מ, עד) בזמן מקומי — הגבול העליון פתוח,
+  // כדי שרשומה בשנייה האחרונה של היום לא תיפול בין הכיסאות.
+  function periodRange(v) {
+    var t0 = startOfToday(), n = new Date();
+    if (v === '@today') return [t0, t0 + DAY_MS];
+    if (v === '@yesterday') return [t0 - DAY_MS, t0];
+    if (v === '@last3') return [t0 - 2 * DAY_MS, t0 + DAY_MS];
+    if (v === '@last7') return [t0 - 6 * DAY_MS, t0 + DAY_MS];
+    if (v === '@last14') return [t0 - 13 * DAY_MS, t0 + DAY_MS];
+    if (v === '@last30') return [t0 - 29 * DAY_MS, t0 + DAY_MS];
+    if (v === '@last90') return [t0 - 89 * DAY_MS, t0 + DAY_MS];
+    if (v === '@thisweek') return [t0 - new Date(t0).getDay() * DAY_MS, t0 + DAY_MS];
+    if (v === '@thismonth') return [new Date(n.getFullYear(), n.getMonth(), 1).getTime(), t0 + DAY_MS];
+    if (v === '@lastmonth') return [new Date(n.getFullYear(), n.getMonth() - 1, 1).getTime(), new Date(n.getFullYear(), n.getMonth(), 1).getTime()];
+    if (v === '@thisyear') return [new Date(n.getFullYear(), 0, 1).getTime(), t0 + DAY_MS];
+    return null;
+  }
+
+  // fields: [{key,label,options?:[{v,l}],type?:'date',get?:fn(row)}]  onApply: fn() → caller redraws
   function makeFilter(fields, onApply) {
     var byKey = {}; fields.forEach(function (f) { byKey[f.key] = f; });
     var state = [];
-    function valCtl(f) {
+
+    function opsOf(f) { return (f && f.type === 'date') ? DATE_OPS : OPS; }
+    function opSel(f, cur) {
+      var o = opsOf(f);
+      return '<select id="fbOp">' + Object.keys(o).map(function (k) {
+        return '<option value="' + k + '"' + (k === cur ? ' selected' : '') + '>' + esc(o[k]) + '</option>';
+      }).join('') + '</select>';
+    }
+    function valCtl(f, op) {
+      if (op === 'empty' || op === 'nempty') return '<span id="fbVal" data-noval></span>';
       if (f && f.options) return '<select id="fbVal">' + f.options.map(function (o) { return '<option value="' + esc(o.v) + '">' + esc(o.l) + '</option>'; }).join('') + '</select>';
-      if (f && f.type === 'date') return '<input id="fbVal" type="date" style="width:150px">';
+      if (f && f.type === 'date') {
+        if (op === 'between') return '<input id="fbVal" type="date" style="width:140px"> <span class="muted" style="font-size:12px">עד</span> <input id="fbVal2" type="date" style="width:140px">';
+        if (op === 'eq' || op === 'ne') {
+          // בורר התקופות; "תאריך מסוים" חושף שדה תאריך לצידו במקום להחליף אותו,
+          // כדי שאפשר יהיה לחזור לתקופה בלי לאבד את הבחירה
+          return '<select id="fbVal">' + PERIODS.map(function (p) { return '<option value="' + p.v + '">' + esc(p.l) + '</option>'; }).join('') + '</select>' +
+                 '<input id="fbValD" type="date" class="hidden" style="width:140px">';
+        }
+        return '<input id="fbVal" type="date" style="width:150px">';
+      }
+      if (op === 'between') return '<input id="fbVal" placeholder="מ…" style="width:90px"> <input id="fbVal2" placeholder="עד…" style="width:90px">';
       return '<input id="fbVal" placeholder="ערך…" style="width:150px">';
     }
     //  תאריך נשמר כ-timestamp מלא. השוואה מתבצעת על גבולות היום המקומי,
@@ -433,48 +494,87 @@
     function dayRange(v) {
       var d = new Date(v + 'T00:00:00');
       if (isNaN(d)) return null;
-      return [d.getTime(), d.getTime() + 86400000];
+      return [d.getTime(), d.getTime() + DAY_MS];
     }
+    function heDate(v) { var d = new Date(v + 'T00:00:00'); return isNaN(d) ? v : d.toLocaleDateString('he-IL'); }
     function get(f, row) { var d = byKey[f.field]; return d && d.get ? d.get(row) : row[f.field]; }
+
+    function chipText(f) {
+      var d = byKey[f.field];
+      if (d && d.type === 'date') {
+        if (f.op === 'between') return heDate(f.val) + ' — ' + heDate(f.val2);
+        if (PERIOD_LBL[f.val]) return PERIOD_LBL[f.val];
+        return heDate(f.val);
+      }
+      if (f.op === 'between') return f.val + ' — ' + f.val2;
+      if (d && d.options) return (d.options.filter(function (o) { return String(o.v) === String(f.val); })[0] || {}).l || f.val;
+      return f.val;
+    }
+
     var api = {
       render: function () {
+        var f0 = fields[0], first0 = Object.keys(opsOf(f0))[0];
         var chips = state.map(function (f, i) {
-          var d = byKey[f.field];
-          var shown = d && d.options ? ((d.options.filter(function (o) { return String(o.v) === String(f.val); })[0] || {}).l || f.val) : f.val;
-          if (d && d.type === 'date' && f.val) { var dd = new Date(f.val + 'T00:00:00'); if (!isNaN(dd)) shown = dd.toLocaleDateString('he-IL'); }
-          return '<span class="chip">' + esc(d ? d.label : f.field) + ' ' + OPS[f.op] + ' ' + esc(shown || '') + ' <b data-rmf="' + i + '">✕</b></span>';
+          var d = byKey[f.field], o = opsOf(d);
+          return '<span class="chip">' + esc(d ? d.label : f.field) + ' ' + esc(o[f.op] || f.op) + ' ' +
+            esc(chipText(f) || '') + ' <b data-rmf="' + i + '">✕</b></span>';
         }).join('');
         return '<div class="filterbar" id="fbar"><span class="muted" style="font-size:12px">🧲 סינון לפי שדה:</span>' +
           '<select id="fbField">' + fields.map(function (f) { return '<option value="' + f.key + '">' + esc(f.label) + '</option>'; }).join('') + '</select>' +
-          '<select id="fbOp">' + Object.keys(OPS).map(function (k) { return '<option value="' + k + '">' + OPS[k] + '</option>'; }).join('') + '</select>' +
-          valCtl(fields[0]) +
+          '<span id="fbCtl">' + opSel(f0, first0) + ' ' + valCtl(f0, first0) + '</span>' +
           '<button class="btn btn-sm" id="fbAdd">+ הוסף</button>' +
           (state.length ? '<button class="btn btn-ghost btn-sm" id="fbClear">נקה הכל</button>' : '') + chips + '</div>';
       },
       bind: function () {
-        var add = $('fbAdd'); if (!add) return;
-        $('fbField').addEventListener('change', function () { var f = byKey[this.value]; var holder = $('fbVal'); if (holder) holder.outerHTML = valCtl(f); });
-        add.addEventListener('click', function () {
-          var field = $('fbField').value, op = $('fbOp').value, val = ($('fbVal') && $('fbVal').value || '').trim();
-          if (op !== 'empty' && op !== 'nempty' && !val) return;
-          state.push({ field: field, op: op, val: val }); onApply();
+        var bar = $('fbar'); if (!bar || !$('fbAdd')) return;
+        // האזנה על המיכל: הפקדים נבנים מחדש בכל שינוי שדה או אופרטור,
+        // ומאזין ישיר עליהם היה הולך לאיבוד ברינדור השני
+        bar.addEventListener('change', function (e) {
+          var f = byKey[$('fbField').value];
+          if (e.target.id === 'fbField') {
+            var first = Object.keys(opsOf(f))[0];
+            $('fbCtl').innerHTML = opSel(f, first) + ' ' + valCtl(f, first);
+          } else if (e.target.id === 'fbOp') {
+            var keep = e.target.value;
+            $('fbCtl').innerHTML = opSel(f, keep) + ' ' + valCtl(f, keep);
+          } else if (e.target.id === 'fbVal' && $('fbValD')) {
+            $('fbValD').classList.toggle('hidden', e.target.value !== '@custom');
+          }
+        });
+        $('fbAdd').addEventListener('click', function () {
+          var field = $('fbField').value, op = $('fbOp').value, f = byKey[field];
+          var el = $('fbVal'), val = (el && !el.hasAttribute('data-noval') && el.value || '').trim();
+          if (val === '@custom') val = ($('fbValD') && $('fbValD').value || '').trim();
+          var val2 = ($('fbVal2') && $('fbVal2').value || '').trim();
+          if (op === 'empty' || op === 'nempty') val = '';
+          else if (!val || (op === 'between' && !val2)) return;
+          // טווח הפוך הוא טעות הקלדה ולא כוונה — מסדרים במקום להחזיר רשימה ריקה
+          if (op === 'between' && f && f.type === 'date' && val > val2) { var tmp = val; val = val2; val2 = tmp; }
+          state.push({ field: field, op: op, val: val, val2: val2 }); onApply();
         });
         if ($('fbClear')) $('fbClear').addEventListener('click', function () { state = []; onApply(); });
-        $('fbar').querySelectorAll('[data-rmf]').forEach(function (b) { b.addEventListener('click', function () { state.splice(+b.dataset.rmf, 1); onApply(); }); });
+        bar.querySelectorAll('[data-rmf]').forEach(function (b) { b.addEventListener('click', function () { state.splice(+b.dataset.rmf, 1); onApply(); }); });
       },
       match: function (row) {
         return state.every(function (f) {
           var raw = get(f, row); var s = (raw == null ? '' : String(raw)).toLowerCase(), q = String(f.val).toLowerCase();
           var def = byKey[f.field];
           if (def && def.type === 'date' && f.op !== 'empty' && f.op !== 'nempty') {
-            var r = dayRange(f.val), t = raw ? new Date(raw).getTime() : NaN;
-            if (!r || isNaN(t)) return false;
+            var t = raw ? new Date(raw).getTime() : NaN;
+            if (isNaN(t)) return false;
+            var r = periodRange(f.val) || dayRange(f.val);
+            if (f.op === 'between') {
+              var r2 = dayRange(f.val2);
+              if (!r || !r2) return false;
+              return t >= r[0] && t < r2[1];
+            }
+            if (!r) return false;
             if (f.op === 'eq') return t >= r[0] && t < r[1];
             if (f.op === 'ne') return !(t >= r[0] && t < r[1]);
             if (f.op === 'gt') return t >= r[1];    // אחרי אותו יום במלואו
             if (f.op === 'lt') return t < r[0];
-            if (f.op === 'contains') return t >= r[0] && t < r[1];
           }
+          if (f.op === 'between') { var n = parseFloat(raw); return n >= parseFloat(f.val) && n <= parseFloat(f.val2); }
           if (f.op === 'contains') return s.indexOf(q) >= 0;
           if (f.op === 'eq') return s === q;
           if (f.op === 'ne') return s !== q;
