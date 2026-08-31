@@ -52,7 +52,13 @@
       $('view').querySelectorAll('[data-qstatus]').forEach(function (sel) {
         sel.addEventListener('change', function () {
           var id = sel.dataset.qstatus, st = sel.value;
-          db.from('deals').update({ status: st }).eq('id', id).then(function (rr) {
+          //  status ו-stage הם שני מימדים נפרדים, אבל ביטול והזמנה הם מצב סופי
+          //  שחייב להשתקף גם בפייפליין: בלי זה עסקה מבוטלת נשארה תלויה
+          //  ב"ממתין לחתימה" אצל מנהלת תיקי הלקוחות.
+          var patch = { status: st };
+          if (st === 'cancelled') patch.stage = 'cancelled';
+          else if (st === 'ordered') patch.stage = 'ordered';
+          db.from('deals').update(patch).eq('id', id).then(function (rr) {
             if (rr.error) return alert('שגיאה: ' + rr.error.message);
             var d = rows.filter(function (x) { return String(x.id) === String(id); })[0];
             if (d && d.lead_id) { var ns = st === 'ordered' ? 'won' : (st === 'cancelled' ? 'lost' : 'quote_sent'); db.from('leads').update({ status: ns }).eq('id', d.lead_id); }

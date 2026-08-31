@@ -2721,7 +2721,12 @@
     loading(); selectedDeals = {};
     db.from('deals').select('id,lead_id,order_no,brand,stage,status,client_name,client_phone,car_make,car_model,total,commission,salesperson,created_at,updated_at,checklist,cancel_reason,acct_status,has_contract,has_signature').is('deleted_at', null).order('created_at', { ascending: false }).limit(2000).then(function (r) {
       if (r.error) return errBox(r.error.message);
-      var deals = r.data || [];
+      //  עסקה מבוטלת שייכת לשלב "בוטל" גם אם השלב עצמו לא עודכן — כך
+      //  עסקאות שבוטלו לפני התיקון לא נשארות תקועות בטאב הלא נכון.
+      var deals = (r.data || []).map(function (d) {
+        if (d.status === 'cancelled') d.stage = 'cancelled';
+        return d;
+      });
       var counts = { all: deals.length }; DEAL_STAGES.forEach(function (s) { counts[s.k] = 0; });
       deals.forEach(function (d) { var st = d.stage || 'initial'; counts[st] = (counts[st] || 0) + 1; });
       var f = stageFilter || 'all';
