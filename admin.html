@@ -76,7 +76,9 @@
   .topbar .sp{margin-inline-start:auto}
   .icon-btn{background:var(--surface-2);border:1px solid var(--line);border-radius:10px;width:38px;height:38px;font-size:16px;color:var(--txt);display:inline-flex;align-items:center;justify-content:center}
   .who{color:var(--muted);font-size:13px}
-  .content{padding:22px;max-width:1340px;width:100%;margin:0 auto}
+  /* רוחב התוכן: טבלת לידים רווחית צריכה את כל המסך הזמין,
+     אחרת עמודות נדחקות והערכים נחתכים */
+  .content{padding:22px;max-width:1680px;width:100%;margin:0 auto}
   .bell-badge{position:absolute;top:-4px;inset-inline-start:-4px;background:var(--danger);color:#fff;font-size:10px;font-weight:800;min-width:16px;height:16px;border-radius:999px;display:flex;align-items:center;justify-content:center;padding:0 3px}
   .bell-menu{position:absolute;top:46px;inset-inline-start:0;width:330px;max-height:400px;overflow:auto;background:var(--surface);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);z-index:40;padding:6px}
   .bell-menu .bt{padding:10px 12px;border-radius:10px;display:flex;gap:8px;align-items:flex-start;cursor:pointer}
@@ -154,6 +156,9 @@
   .rz-drag{cursor:col-resize;user-select:none}
   th{color:var(--muted);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.03em}
   tbody tr{transition:background .1s}tbody tr:hover{background:var(--surface-2)}
+  /* תא עם תוכן לטיני/מספרי: בלי זה, בהקשר RTL ה-ellipsis נופל
+     על תחילת המחרוזת — "+972524528606" הוצג כ-"…4528606+" */
+  td.ltr{direction:ltr;text-align:right}
   td.wrap{white-space:normal;max-width:280px}
   .table-scroll{overflow-x:auto}
   .tag{display:inline-flex;align-items:center;gap:5px;padding:3px 11px;border-radius:999px;font-size:12.5px;font-weight:600;background:var(--surface-2);border:1px solid var(--line);color:var(--muted);cursor:default}
@@ -365,8 +370,8 @@
 <div id="drawer"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js" integrity="sha384-0w2KAL2YHP6wKOkUDzkCDGgVvfmHnj02DHeQ6XcHOgTfFsGyonKOpShMH1x6nk9o" crossorigin="anonymous"></script>
-<script src="admin.js?v=202608310848"></script>
-<script src="admin-crm.js?v=202608310848"></script>
-<script src="admin-modules.js?v=202608310848"></script>
+<script src="admin.js?v=202608310855"></script>
+<script src="admin-crm.js?v=202608310855"></script>
+<script src="admin-modules.js?v=202608310855"></script>
 </body>
 </html>

@@ -359,24 +359,24 @@
   var cache = [], profiles = {}, orderIds = [], curFilter = null, curDeals = [], leadFilter = null, selectedLeads = {};
   // configurable columns for the leads table (show/hide/reorder via the column chooser)
   var LEAD_COLS = [
-    { key: 'name', label: 'שם לקוח', fixed: true, cell: function (l) { return '<td style="cursor:pointer" data-open="1"><span class="avatar" style="margin-inline-end:8px">' + esc(initials(l.name)) + '</span><b>' + esc(l.name) + '</b></td>'; } },
-    { key: 'phone', label: 'טלפון ראשי', cell: function (l) { return '<td>' + (l.phone ? '<a class="call-ic" data-call="' + esc(l.phone) + '" data-lead="' + l.id + '" title="חייג" style="cursor:pointer;margin-inline-end:6px;text-decoration:none">📞</a>' + esc(l.phone) : '—') + '</td>'; } },
-    { key: 'whatsapp', label: 'וואטסאפ', sortable: false, cell: function (l) { var wa = waLink(l.phone); return '<td>' + (wa ? '<a class="wa-ic" href="' + wa + '" target="_blank" rel="noopener" title="פתח וואטסאפ" onclick="event.stopPropagation()">💬</a>' : '—') + '</td>'; } },
-    { key: 'assigned', label: 'מנהל מכירות', sort: function (l) { return profiles[l.assigned_to] || ''; }, cell: function (l) { return '<td>' + assignChip(l) + '</td>'; } },
-    { key: 'status', label: 'סטטוס לקוח', cell: function (l) { return '<td>' + badge(l.status || 'new', true, l.id) + '</td>'; } },
-    { key: 'source', label: 'מקור הגעה', cell: function (l) { return '<td>' + (l.source ? '<span class="tag">' + esc(l.source) + '</span>' : '—') + '</td>'; } },
-    { key: 'car', label: 'רכב', cell: function (l) { return '<td>' + esc(l.car || '—') + '</td>'; } },
-    { key: 'updated', label: 'עדכון אחרון', sort: function (l) { return l.updated_at || l.status_changed_at || l.created_at || ''; }, cell: function (l) { return '<td class="muted">' + fmt(l.updated_at || l.status_changed_at || l.created_at) + '</td>'; } },
-    { key: 'brand', label: 'מותג', def: false, cell: function (l) { return '<td>' + esc(l.brand || '—') + '</td>'; } },
-    { key: 'city', label: 'עיר', def: false, cell: function (l) { return '<td>' + esc(l.city || '—') + '</td>'; } },
-    { key: 'email', label: 'אימייל', def: false, cell: function (l) { return '<td class="muted">' + esc(l.email || '—') + '</td>'; } },
-    { key: 'id_num', label: 'ת.ז / ח.פ', def: false, cell: function (l) { return '<td class="muted">' + esc(l.id_num || '—') + '</td>'; } },
-    { key: 'utm_campaign', label: 'utm_campaign', def: false, cell: function (l) { return '<td class="muted">' + esc(l.utm_campaign || '—') + '</td>'; } },
-    { key: 'utm_source', label: 'utm_source', def: false, cell: function (l) { return '<td class="muted">' + esc(l.utm_source || '—') + '</td>'; } },
-    { key: 'marketing_company', label: 'חברת שיווק', def: false, cell: function (l) { return '<td class="muted">' + esc(l.marketing_company || '—') + '</td>'; } },
-    { key: 'message', label: 'תיאור / הודעה', def: false, cell: function (l) { return '<td class="muted" style="max-width:220px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + esc(l.message || '—') + '</td>'; } },
-    { key: 'lead_no', label: 'מספר לקוח', def: false, sort: function (l) { return l.lead_no || l.id || ''; }, cell: function (l) { return '<td class="muted">' + esc(l.lead_no || l.id || '—') + '</td>'; } },
-    { key: 'created', label: 'נוצר בתאריך', def: false, sort: function (l) { return l.created_at || ''; }, cell: function (l) { return '<td class="muted">' + fmt(l.created_at) + '</td>'; } }
+    { key: 'name', label: 'שם לקוח', w: 200, cell: function (l) { return '<td style="cursor:pointer" data-open="1"><span class="avatar" style="margin-inline-end:8px">' + esc(initials(l.name)) + '</span><b>' + esc(l.name) + '</b></td>'; } },
+    { key: 'phone', label: 'טלפון ראשי', w: 160, cell: function (l) { return '<td title="' + esc(l.phone || '') + '">' + (l.phone ? '<a class="call-ic" data-call="' + esc(l.phone) + '" data-lead="' + l.id + '" title="חייג" style="cursor:pointer;margin-inline-end:6px;text-decoration:none">📞</a><bdi>' + esc(l.phone) + '</bdi>' : '—') + '</td>'; } },
+    { key: 'whatsapp', label: 'וואטסאפ', w: 84, sortable: false, cell: function (l) { var wa = waLink(l.phone); return '<td>' + (wa ? '<a class="wa-ic" href="' + wa + '" target="_blank" rel="noopener" title="פתח וואטסאפ" onclick="event.stopPropagation()">💬</a>' : '—') + '</td>'; } },
+    { key: 'assigned', label: 'מנהל מכירות', w: 170, sort: function (l) { return profiles[l.assigned_to] || ''; }, cell: function (l) { return '<td>' + assignChip(l) + '</td>'; } },
+    { key: 'status', label: 'סטטוס לקוח', w: 130, cell: function (l) { return '<td>' + badge(l.status || 'new', true, l.id) + '</td>'; } },
+    { key: 'source', label: 'מקור הגעה', w: 130, cell: function (l) { return '<td>' + (l.source ? '<span class="tag">' + esc(l.source) + '</span>' : '—') + '</td>'; } },
+    { key: 'car', label: 'רכב', w: 260, cell: function (l) { return '<td class="ltr" title="' + esc(l.car || '') + '">' + esc(l.car || '—') + '</td>'; } },
+    { key: 'updated', label: 'עדכון אחרון', w: 150, sort: function (l) { return l.updated_at || l.status_changed_at || l.created_at || ''; }, cell: function (l) { return '<td class="muted">' + fmt(l.updated_at || l.status_changed_at || l.created_at) + '</td>'; } },
+    { key: 'brand', label: 'מותג', w: 120, def: false, cell: function (l) { return '<td>' + esc(l.brand || '—') + '</td>'; } },
+    { key: 'city', label: 'עיר', w: 110, def: false, cell: function (l) { return '<td>' + esc(l.city || '—') + '</td>'; } },
+    { key: 'email', label: 'אימייל', w: 210, def: false, cell: function (l) { return '<td class="muted ltr" title="' + esc(l.email || '') + '">' + esc(l.email || '—') + '</td>'; } },
+    { key: 'id_num', label: 'ת.ז / ח.פ', w: 130, def: false, cell: function (l) { return '<td class="muted ltr" title="' + esc(l.id_num || '') + '">' + esc(l.id_num || '—') + '</td>'; } },
+    { key: 'utm_campaign', label: 'utm_campaign', w: 190, def: false, cell: function (l) { return '<td class="muted ltr" title="' + esc(l.utm_campaign || '') + '">' + esc(l.utm_campaign || '—') + '</td>'; } },
+    { key: 'utm_source', label: 'utm_source', w: 130, def: false, cell: function (l) { return '<td class="muted ltr" title="' + esc(l.utm_source || '') + '">' + esc(l.utm_source || '—') + '</td>'; } },
+    { key: 'marketing_company', label: 'חברת שיווק', w: 150, def: false, cell: function (l) { return '<td class="muted">' + esc(l.marketing_company || '—') + '</td>'; } },
+    { key: 'message', label: 'תיאור / הודעה', w: 260, def: false, cell: function (l) { return '<td class="muted" style="max-width:220px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + esc(l.message || '—') + '</td>'; } },
+    { key: 'lead_no', label: 'מספר לקוח', w: 130, def: false, sort: function (l) { return l.lead_no || l.id || ''; }, cell: function (l) { return '<td class="muted">' + esc(l.lead_no || l.id || '—') + '</td>'; } },
+    { key: 'created', label: 'נוצר בתאריך', w: 140, def: false, sort: function (l) { return l.created_at || ''; }, cell: function (l) { return '<td class="muted">' + fmt(l.created_at) + '</td>'; } }
   ];
   // שדות שניתן לעדכן קבוצתית ב"שדה נוסף" (מעבר ל-4 המהירים) — כל שדה רוחבי ב-CRM
   var BULK_FIELDS = [
@@ -401,13 +401,35 @@
       cache = res[0].data || [];
       profiles = {}; (res[1].data || []).forEach(function (p) { profiles[p.user_id] = p.full_name; });
       leadFilter = C.makeFilter([
+        // פרטי הלקוח
         { key: 'name', label: 'שם לקוח' }, { key: 'phone', label: 'טלפון' }, { key: 'email', label: 'אימייל' },
-        { key: 'car', label: 'רכב' }, { key: 'brand', label: 'מותג', options: listOpts('brand') },
+        { key: 'id_num', label: 'תעודת זהות' }, { key: 'city', label: 'עיר' },
+        { key: 'car', label: 'רכב' }, { key: 'message', label: 'הודעה / פרטים נוספים' },
+        // סטטוס וטיפול
         { key: 'status', label: 'סטטוס', options: STATUSES.map(function (s) { return { v: s.k, l: s.label }; }) },
-        { key: 'source', label: 'מקור הגעה', options: listOpts('source') }, { key: 'marketing_company', label: 'חברת שיווק', options: listOpts('marketing_company') },
-        { key: 'utm_source', label: 'utm_source', options: listOpts('utm_source') }, { key: 'utm_campaign', label: 'utm_campaign' }, { key: 'utm_medium', label: 'utm_medium' },
-        { key: 'ad_group', label: 'ad_group' }, { key: 'city', label: 'עיר' },
-        { key: 'assigned', label: 'איש מכירות', get: function (l) { return profiles[l.assigned_to] || ''; } }
+        { key: 'assigned', label: 'איש מכירות', get: function (l) { return profiles[l.assigned_to] || ''; } },
+        { key: 'close_reason', label: 'סיבת סגירה' },
+        // תאריכים
+        { key: 'created_at', label: 'נוצר בתאריך', type: 'date' },
+        { key: 'status_changed_at', label: 'שינוי סטטוס אחרון', type: 'date' },
+        { key: 'first_response_at', label: 'מענה ראשון', type: 'date' },
+        { key: 'updated_at', label: 'עודכן בתאריך', type: 'date' },
+        // מיתוג ושיווק
+        { key: 'brand', label: 'מותג', options: listOpts('brand') },
+        { key: 'source', label: 'מקור הגעה', options: listOpts('source') },
+        { key: 'marketing_company', label: 'חברת שיווק', options: listOpts('marketing_company') },
+        { key: 'campaign', label: 'שם קמפיין' },
+        { key: 'adset_name', label: 'שם סדרה' },
+        { key: 'ad_name', label: 'שם מודעה' },
+        // פרוטקול UTM מלא
+        { key: 'utm_source', label: 'utm_source', options: listOpts('utm_source') },
+        { key: 'utm_medium', label: 'utm_medium' }, { key: 'utm_campaign', label: 'utm_campaign' },
+        { key: 'utm_content', label: 'utm_content' }, { key: 'utm_term', label: 'utm_term' },
+        { key: 'medium', label: 'medium' }, { key: 'ad_group', label: 'ad_group' },
+        // מזהים טכניים — לאיתור ליד בודד מול פייסבוק
+        { key: 'ad_id', label: 'מזהה מודעה' }, { key: 'form_id', label: 'מזהה טופס' },
+        { key: 'external_id', label: 'מזהה ליד (פייסבוק)' },
+        { key: 'page_url', label: 'כתובת הדף' }, { key: 'ip', label: 'כתובת IP' }
       ], draw);
       if (!leadCols) leadCols = C.colPicker('leads', LEAD_COLS, draw, { resizable: true, sortable: true });
       var title = statusFilter ? stDef(statusFilter).label : 'כל הלידים';

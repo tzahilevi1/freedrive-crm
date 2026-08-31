@@ -425,7 +425,15 @@
     var state = [];
     function valCtl(f) {
       if (f && f.options) return '<select id="fbVal">' + f.options.map(function (o) { return '<option value="' + esc(o.v) + '">' + esc(o.l) + '</option>'; }).join('') + '</select>';
+      if (f && f.type === 'date') return '<input id="fbVal" type="date" style="width:150px">';
       return '<input id="fbVal" placeholder="ערך…" style="width:150px">';
+    }
+    //  תאריך נשמר כ-timestamp מלא. השוואה מתבצעת על גבולות היום המקומי,
+    //  אחרת "שווה ל-31.8" היה מפספס כל ליד שלא נוצר בדיוק בחצות.
+    function dayRange(v) {
+      var d = new Date(v + 'T00:00:00');
+      if (isNaN(d)) return null;
+      return [d.getTime(), d.getTime() + 86400000];
     }
     function get(f, row) { var d = byKey[f.field]; return d && d.get ? d.get(row) : row[f.field]; }
     var api = {
@@ -433,6 +441,7 @@
         var chips = state.map(function (f, i) {
           var d = byKey[f.field];
           var shown = d && d.options ? ((d.options.filter(function (o) { return String(o.v) === String(f.val); })[0] || {}).l || f.val) : f.val;
+          if (d && d.type === 'date' && f.val) { var dd = new Date(f.val + 'T00:00:00'); if (!isNaN(dd)) shown = dd.toLocaleDateString('he-IL'); }
           return '<span class="chip">' + esc(d ? d.label : f.field) + ' ' + OPS[f.op] + ' ' + esc(shown || '') + ' <b data-rmf="' + i + '">✕</b></span>';
         }).join('');
         return '<div class="filterbar" id="fbar"><span class="muted" style="font-size:12px">🧲 סינון לפי שדה:</span>' +
@@ -456,6 +465,16 @@
       match: function (row) {
         return state.every(function (f) {
           var raw = get(f, row); var s = (raw == null ? '' : String(raw)).toLowerCase(), q = String(f.val).toLowerCase();
+          var def = byKey[f.field];
+          if (def && def.type === 'date' && f.op !== 'empty' && f.op !== 'nempty') {
+            var r = dayRange(f.val), t = raw ? new Date(raw).getTime() : NaN;
+            if (!r || isNaN(t)) return false;
+            if (f.op === 'eq') return t >= r[0] && t < r[1];
+            if (f.op === 'ne') return !(t >= r[0] && t < r[1]);
+            if (f.op === 'gt') return t >= r[1];    // אחרי אותו יום במלואו
+            if (f.op === 'lt') return t < r[0];
+            if (f.op === 'contains') return t >= r[0] && t < r[1];
+          }
           if (f.op === 'contains') return s.indexOf(q) >= 0;
           if (f.op === 'eq') return s === q;
           if (f.op === 'ne') return s !== q;
@@ -610,7 +629,10 @@
       resize: initResize,
       sortRows: sortRows,
       thead: function () { return visible().map(function (c) {
-        var extra = c.th || '', stW = resizable && state.widths[c.key] ? 'width:' + state.widths[c.key] + 'px' : '';
+        //  בלי רוחב מוצהר, table-layout:fixed מחלק את הרוחב שווה בשווה
+        //  — ואז טלפון ושם רכב נחתכים בעוד "סטטוס" מבזבז מקום.
+        var wDef = resizable ? (state.widths[c.key] || c.w) : null;
+        var extra = c.th || '', stW = wDef ? 'width:' + wDef + 'px' : '';
         var canSort = sortable && c.sortable !== false;
         var cursor = canSort ? 'cursor:pointer;user-select:none' : '';
         var mstyle = [stW, cursor].filter(Boolean).join(';');
