@@ -2145,6 +2145,7 @@
 
   // ---------- מסך ניהול תבניות ההסכמים ----------
   function renderContractTemplates() {
+    var $ = C.$;
     if (C.role !== 'admin') return view('<div class="card"><p class="muted">המסך פתוח למנהל מערכת בלבד.</p></div>');
     ctInvalidate();
     view('<div class="card"><h3 style="margin:0 0 4px">📜 תבניות הסכמים</h3>' +
@@ -2157,6 +2158,7 @@
   }
 
   function ctLoad() {
+    var $ = C.$;
     db.from('contract_templates').select('*').order('sort').then(function (r) {
       if (r.error) { $('ctList').innerHTML = '<p class="muted" style="color:var(--warn)">שגיאה: ' + esc(r.error.message) + ' — הריצו contract-templates.sql</p>'; return; }
       var list = r.data || [];
@@ -2213,6 +2215,7 @@
   }
 
   function ctForm(t) {
+    var $ = C.$;
     t = t || { name: '', description: '', body: '', active: true, sort: 99 };
     var isNew = !t.id;
     $('ctEdit').innerHTML = '<div class="card"><div class="row-between"><h3 style="margin:0">' +
