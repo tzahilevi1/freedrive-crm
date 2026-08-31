@@ -1879,7 +1879,7 @@
       host.innerHTML = '<div class="card"><div class="row-between"><h3 style="margin:0">🔌 חיבורים · מקורות לידים</h3><span class="muted" style="font-size:12px">Google · Taboola · Outbrain · קישורית · Webhook</span></div>' +
         '<p class="muted" style="font-size:13px;margin:6px 0 14px">כל חיבור מקבל כתובת ייחודית שקולטת לידים ישירות ל-CRM. תומך בריבוי חשבונות — הוסיפו כמה שתרצו. <b>פייסבוק</b> — בקרוב עם משיכת טפסים ובחירה.</p>' +
         rows +
-        '<div id="fbSection" style="border-top:1px solid var(--line);margin-top:12px;padding-top:12px"><div class="row-between"><b style="font-size:13.5px">📘 פייסבוק · טפסי לידים <span class="muted" style="font-weight:400;font-size:12px">(כל חשבונות ה-BM)</span></b><button class="btn btn-sm" id="fbLoad">🔄 טען טפסים מפייסבוק</button></div><div id="fbForms" style="margin-top:8px"></div></div>' +
+        '<div id="fbSection" style="border-top:1px solid var(--line);margin-top:12px;padding-top:12px"><div class="row-between"><b style="font-size:13.5px">📘 פייסבוק · טפסי לידים <span class="muted" style="font-weight:400;font-size:12px">(הדפים של המותג בלבד)</span></b><button class="btn btn-sm" id="fbLoad">🔄 טען טפסים מפייסבוק</button></div><div id="fbForms" style="margin-top:8px"></div></div>' +
         '<div style="border-top:1px solid var(--line);margin-top:12px;padding-top:12px"><b style="font-size:13.5px">➕ הוספת חיבור</b>' +
           '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:8px">' +
             '<select class="inp" id="niPlat" style="width:150px"><option value="google">🔍 Google Ads</option><option value="taboola">🟠 Taboola</option><option value="website">🌐 אתר / דף נחיתה</option><option value="outbrain">🔵 Outbrain</option><option value="kishurit">🟢 קישורית</option><option value="webhook">🔗 Webhook כללי</option></select>' +
@@ -1914,6 +1914,14 @@
           pages.forEach(function (p) { p.forms.forEach(function (f) { totalForms++; var s = campState(f); if (s === 'active') totalActive++; else if (s === 'inactive' || s === 'none') totalNoCamp++; }); });
           var summary = '<div style="font-size:12.5px;margin-bottom:8px;padding:8px 10px;background:var(--surface-2);border-radius:8px">מתוך <b>' + totalForms + '</b> טפסים · <b style="color:var(--ok)">' + totalActive + '</b> עם קמפיין פעיל 🟢 · <b style="color:var(--warn)">' + totalNoCamp + '</b> ללא קמפיין פעיל ⚪ (הפעל רק את הרלוונטיים)</div>';
           box.innerHTML = summary + pages.map(function (p) {
+            // דף שהוגדר למותג אך הטוקן לא מגיע אליו — הסיבה מוצגת במפורש,
+            // אחרת המסך נראה תקין בזמן שהלידים בכלל לא נמשכים.
+            if (p.no_access) {
+              return '<div style="margin:6px 0;border:1px solid var(--warn);border-radius:10px;padding:10px 12px;background:rgba(240,180,40,.06)">' +
+                '<b style="font-size:13px">' + esc(p.page_name) + '</b> <span class="muted" style="font-size:11.5px">· ' + esc(p.page_id) + '</span>' +
+                '<div style="font-size:12px;color:var(--warn);margin-top:4px">⚠️ אין הרשאה לדף — לא ניתן לקרוא ממנו טפסים או לידים.</div>' +
+                '<div class="muted" style="font-size:11.5px;margin-top:2px">שייכו את משתמש המערכת לדף בהגדרות הביזנס (הרשאת ניהול דף / גישה ללידים).</div></div>';
+            }
             var conn = p.forms.filter(function (f) { return f.connected; }).length;
             var noCamp = p.forms.filter(function (f) { var s = campState(f); return s === 'inactive' || s === 'none'; }).length;
             return '<details style="margin:6px 0;border:1px solid var(--line);border-radius:10px;padding:8px 12px"><summary style="cursor:pointer;font-weight:700;font-size:13px">' + esc(p.page_name) + ' <span class="muted" style="font-weight:400;font-size:11.5px">· ' + p.forms.length + ' טפסים' + (conn ? ' · ' + conn + ' מחוברים ✓' : '') + (noCamp ? ' · <span style="color:var(--warn)">' + noCamp + ' ללא קמפיין</span>' : '') + '</span></summary><div style="margin-top:8px">' +

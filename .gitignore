@@ -1,0 +1,10 @@
+# רק קבצי הווב נדחפים. dist/ מכיל גם סודות (_setup-vault.local.sql),
+# גיבויי נתונים וסכמות SQL — לריפו ציבורי הם לא נכנסים לעולם.
+*
+!.gitignore
+!_headers
+!*.html
+!admin.js
+!admin-crm.js
+!admin-modules.js
+!*.png
