@@ -980,6 +980,60 @@
     return html + '</div>';
   }
   // TAB 2 — marketing / source attribution (opens on the "שיווק" tab)
+  // תרגום כפתורי ה-CTA של פייסבוק — נציג לא אמור לפגוש LEARN_MORE
+  var CTA_HE = {
+    LEARN_MORE: 'לפרטים נוספים', SIGN_UP: 'הרשמו', GET_QUOTE: 'קבלת הצעת מחיר',
+    APPLY_NOW: 'הגישו עכשיו', CONTACT_US: 'צרו קשר', BOOK_TRAVEL: 'הזמנה',
+    DOWNLOAD: 'הורדה', GET_OFFER: 'קבלת הצעה', SUBSCRIBE: 'הרשמה',
+    SEND_MESSAGE: 'שלחו הודעה', WHATSAPP_MESSAGE: 'וואטסאפ', CALL_NOW: 'התקשרו עכשיו'
+  };
+
+  //  מציג את המודעה עצמה בתוך המערכת. קודם היה רק קישור
+  //  לספריית המודעות — שמוציא את הנציג מה-CRM, דורש התחברות,
+  //  ולא מוצא מודעות שהופסקו.
+  function showAdModal(adId) {
+    var bg = document.createElement('div');
+    bg.className = 'adm-bg';
+    bg.innerHTML = '<div class="adm"><div class="adm-hd"><h3>טוען את המודעה…</h3>' +
+      '<button class="adm-x" data-admx title="סגור">✕</button></div>' +
+      '<div class="adm-body muted">רגע…</div></div>';
+    document.body.appendChild(bg);
+    function close() { bg.remove(); document.removeEventListener('keydown', onKey); }
+    function onKey(e) { if (e.key === 'Escape') close(); }
+    document.addEventListener('keydown', onKey);
+    bg.addEventListener('click', function (e) { if (e.target === bg || e.target.closest('[data-admx]')) close(); });
+
+    db.functions.invoke('fb-ad', { body: { ad_id: String(adId) } }).then(function (r) {
+      var d = (r && r.data) || {};
+      var card = bg.querySelector('.adm');
+      if ((r && r.error) || d.error || !d.ad) {
+        card.innerHTML = '<div class="adm-hd"><h3>המודעה לא נטענה</h3><button class="adm-x" data-admx>✕</button></div>' +
+          '<div class="adm-body">' + esc(d.error || (r.error && r.error.message) || 'שגיאה לא ידועה') + '</div>' +
+          '<div class="adm-meta"><span>מזהה מודעה: ' + esc(adId) + '</span></div>';
+        return;
+      }
+      var a = d.ad;
+      var st = a.status === 'ACTIVE' ? '<span style="color:var(--ok)">● פעילה</span>'
+             : '<span class="muted">● ' + esc(a.status || '—') + '</span>';
+      card.innerHTML =
+        '<div class="adm-hd"><h3>' + esc(a.name || 'המודעה') + '</h3>' + st +
+          '<button class="adm-x" data-admx title="סגור">✕</button></div>' +
+        (a.message ? '<div class="adm-body">' + esc(a.message) + '</div>' : '') +
+        (a.image_url ? '<img class="adm-img" src="' + esc(a.image_url) + '" alt="' + esc(a.name || '') + '" loading="lazy">' : '') +
+        ((a.title || a.cta) ?
+          '<div class="adm-link"><div class="t">' +
+            (a.title ? '<b>' + esc(a.title) + '</b>' : '') +
+            (a.description ? '<span>' + esc(a.description) + '</span>' : '') +
+          '</div>' +
+          (a.cta ? '<span class="adm-cta">' + esc(CTA_HE[a.cta] || a.cta) + '</span>' : '') +
+          '</div>' : '') +
+        '<div class="adm-meta"><span>מזהה: ' + esc(a.id) + '</span>' +
+          (a.created_time ? '<span>נוצרה: ' + esc(fmt(a.created_time)) + '</span>' : '') +
+          '<a href="https://www.facebook.com/ads/library/?id=' + esc(a.id) + '" target="_blank" rel="noopener noreferrer">ספריית המודעות »</a></div>';
+    });
+  }
+  window.C2B_showAd = showAdModal;
+
   function leadMkt(lead) {
     var pageUrl = safeHttpUrl(lead.page_url);
     // מקור הגעה נערך מתוך רשימת "מקור הגעה" שבהגדרות ורשימות (field_options.source)
@@ -1003,7 +1057,11 @@
       lf('סדרת מודעות (שם)', esc(lead.adset_name)) +
       lf('שם מודעה', esc(lead.ad_name)) +
       lf('IP', esc(lead.ip)) +
-      lf('קישור למודעה / עמוד', pageUrl ? '<a href="' + esc(pageUrl) + '" target="_blank" rel="noopener noreferrer" title="' + esc(pageUrl) + '">' + (/ads\/library/.test(pageUrl) ? '📢 צפה במודעה »' : 'פתח »') + '</a>' : '') +
+      // יש מזהה מודעה → פותחים את הקרייטיב עצמו במערכת;
+      // נפילה לקישור חיצוני רק כשאין מזהה (ליד מאתר או מקור אחר)
+      lf('המודעה שהביאה את הליד',
+        lead.ad_id ? '<button class="btn btn-ghost btn-sm" data-showad="' + esc(lead.ad_id) + '" style="padding:4px 10px;font-size:12.5px">📢 צפייה במודעה</button>'
+        : (pageUrl ? '<a href="' + esc(pageUrl) + '" target="_blank" rel="noopener noreferrer" title="' + esc(pageUrl) + '">פתח »</a>' : '')) +
       lf('lead_id', '<span class="muted" style="font-size:10.5px">' + esc(lead.id) + '</span>') +
       '</div>';
   }
@@ -1289,6 +1347,13 @@
       });
     });
     setupCarPicker(lead);   // cascading brand→model→trim from inventory
+    // צפייה במודעה — האזנה על המיכל ולא על הכפתור:
+    // בלוק השיווק מוסתר בהתחלה ומצויר מחדש במעבר בין הלשוניות.
+    var mktBox = $('ldMkt');
+    if (mktBox) mktBox.addEventListener('click', function (e) {
+      var b = e.target.closest('[data-showad]'); if (!b) return;
+      showAdModal(b.dataset.showad);
+    });
     // details tabs: פרטים ⇄ שיווק ומקורות
     var ldt = $('ldTabs');
     if (ldt) ldt.addEventListener('click', function (e) { var b = e.target.closest('[data-ld]'); if (!b) return; ldt.querySelectorAll('button').forEach(function (x) { x.classList.toggle('active', x === b); }); $('ldInfo').classList.toggle('hidden', b.dataset.ld !== 'info'); $('ldMkt').classList.toggle('hidden', b.dataset.ld !== 'mkt'); });
