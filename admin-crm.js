@@ -1094,10 +1094,17 @@
   function buildFeed(acts, tasks, docs, deals, pays, urls, audits) {
     var items = [];
     // שינויי שדות מהיומן — "מי שינה את המחיר" מופיע בציר הזמן ולא רק במסך נפרד
+    //  שינוי סטטוס ושיוך כבר נכתבים כפעילות (status_change / system), ולכן
+    //  שורת היומן עליהם הופיעה כאירוע שני על אותו שינוי. מסתירים אותם כאן
+    //  בלבד — מסך "יומן פעולות" ממשיך להציג את התיעוד המלא.
+    var FEED_SKIP = { status: 1, assigned_to: 1 };
     (audits || []).forEach(function (e) {
       var ch = e.changes || {};
       if (ch._created || ch._deleted) return;                 // יצירה כבר מופיעה כאירוע נפרד
-      var txt = C.auditLine ? C.auditLine(e) : '';
+      var rest = {}, n = 0;
+      Object.keys(ch).forEach(function (k) { if (!FEED_SKIP[k]) { rest[k] = ch[k]; n++; } });
+      if (!n) return;                                          // רק סטטוס/שיוך — כבר בציר הזמן
+      var txt = C.auditLine ? C.auditLine({ changes: rest }) : '';
       if (!txt) return;
       items.push({ ts: e.at, icon: '✏️', who: e.actor_name, tag: 'שינוי', cls: 'audit',
                    html: '<span class="muted" style="font-size:12.5px">' + esc(txt) + '</span>' });
