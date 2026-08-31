@@ -365,7 +365,7 @@
     { key: 'assigned', label: 'מנהל מכירות', w: 170, sort: function (l) { return profiles[l.assigned_to] || ''; }, cell: function (l) { return '<td>' + assignChip(l) + '</td>'; } },
     { key: 'status', label: 'סטטוס לקוח', w: 130, cell: function (l) { return '<td>' + badge(l.status || 'new', true, l.id) + '</td>'; } },
     { key: 'source', label: 'מקור הגעה', w: 130, cell: function (l) { return '<td>' + (l.source ? '<span class="tag">' + esc(l.source) + '</span>' : '—') + '</td>'; } },
-    { key: 'car', label: 'רכב', w: 260, cell: function (l) { return '<td class="ltr" title="' + esc(l.car || '') + '">' + esc(l.car || '—') + '</td>'; } },
+    { key: 'car', label: 'רכב', w: 280, cell: function (l) { return '<td class="ltr wrap2" title="' + esc(l.car || '') + '">' + esc(l.car || '—') + '</td>'; } },
     { key: 'updated', label: 'עדכון אחרון', w: 150, sort: function (l) { return l.updated_at || l.status_changed_at || l.created_at || ''; }, cell: function (l) { return '<td class="muted">' + fmt(l.updated_at || l.status_changed_at || l.created_at) + '</td>'; } },
     { key: 'brand', label: 'מותג', w: 120, def: false, cell: function (l) { return '<td>' + esc(l.brand || '—') + '</td>'; } },
     { key: 'city', label: 'עיר', w: 110, def: false, cell: function (l) { return '<td>' + esc(l.city || '—') + '</td>'; } },
