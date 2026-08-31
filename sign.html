@@ -13,7 +13,7 @@
 <title>פרי דרייב · חתימה על הסכם</title>
 <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;600;700;800&display=swap" rel="stylesheet">
 <style>
-  :root{--brand:#8CA818;--brand-deep:#D14E0C;--line:#e5e7eb;--muted:#6b7280;--ok:#16a34a;--danger:#e2555a}
+  :root{--brand:#6E8B10;--brand-deep:#4F6608;--line:#e5e7eb;--muted:#6b7280;--ok:#16a34a;--danger:#e2555a}
   *{box-sizing:border-box}
   body{margin:0;font-family:"Heebo",Arial,sans-serif;background:#f4f5f7;color:#1c2430;padding:16px}
   .wrap{max-width:760px;margin:0 auto}
@@ -37,7 +37,7 @@
 </head>
 <body>
 <div class="wrap">
-  <div class="card"><h1>Car<span style="color:#1c2430">2</span>Buy</h1><div class="sub">הסכם הזמנת רכב — חתימה דיגיטלית</div></div>
+  <div class="card"><h1>פרי דרייב</h1><div class="sub">הסכם הזמנת רכב — חתימה דיגיטלית</div></div>
   <div id="content"><div class="card" style="text-align:center;color:var(--muted)">טוען…</div></div>
 </div>
 
@@ -95,6 +95,38 @@
     return '<table style="width:100%;border-collapse:collapse;direction:rtl;margin:6px 0 12px;font-size:12.5px">'+C.map(function(t,i){return '<tr><td style=\"width:2.2em;vertical-align:top;text-align:right;font-weight:700;line-height:1.75;padding:0 0 8px\"><span dir=\"ltr\" style=\"unicode-bidi:embed;direction:ltr\">'+(i+1)+'</span>.</td><td style=\"vertical-align:top;text-align:right;line-height:1.75;padding:0 0 8px\">'+esc(t)+'</td></tr>';}).join('')+'</table>'+
       '<p style="font-weight:700;margin:10px 0 4px"><span dir="ltr" style="unicode-bidi:embed;direction:ltr">17</span>. כללי:</p><table style="width:100%;border-collapse:collapse;direction:rtl;font-size:12.5px">'+gen.map(function(t,i){return '<tr><td style=\"width:2.2em;vertical-align:top;text-align:right;font-weight:700;line-height:1.75;padding:0 0 8px\"><span dir=\"ltr\" style=\"unicode-bidi:embed;direction:ltr\">'+String.fromCharCode(97+i)+'</span>.</td><td style=\"vertical-align:top;text-align:right;line-height:1.75;padding:0 0 8px\">'+esc(t)+'</td></tr>';}).join('')+'</table>';
   }
+  // הישות המשפטית מגיעה מהתצורה. כשהיא ריקה השורה נעלמת לגמרי —
+  // עדיף בלי שורה מאשר עם שם וח.פ של חברה אחרת על מסמך שלקוח חותם עליו.
+  var LEGAL_ENTITY = '';
+  var LEGAL_LINE = LEGAL_ENTITY
+    ? '<p style="text-align:center;color:#444;margin:0 0 8px;font-size:12.5px">'+esc(LEGAL_ENTITY)+'</p>'
+    : '';
+
+  // אותו מנוע כמו ב-CRM: "## " פותח סעיף, שורה ריקה מפרידה פסקאות.
+  // הכל עובר esc לפני העיצוב — גוף התבנית הוא טקסט, לא HTML.
+  function renderTemplate(body, data){
+    var txt = String(body||'').replace(/\{\{\s*([a-z_]+)\s*\}\}/g, function(m,k){
+      var v = data[k]; return (v==null||v==='') ? '____________' : String(v);
+    });
+    return txt.split(/\n{2,}/).map(function(blk){
+      var out='', open=false;
+      blk.split('\n').forEach(function(ln){
+        var t=ln.replace(/\s+$/,'');
+        if(/^##\s+/.test(t)){
+          if(open){out+='</div>';open=false;}
+          out+='<div style="margin:0 0 12px;text-align:justify;line-height:1.8;font-size:12.5px"><b><u>'+esc(t.replace(/^##\s+/,''))+'</u></b><br>';
+          open=true;
+        } else if(t){
+          if(!open){out+='<div style="margin:0 0 12px;text-align:justify;line-height:1.8;font-size:12.5px">';open=true;}
+          else out+='<br>';
+          out+=esc(t);
+        }
+      });
+      if(open) out+='</div>';
+      return out;
+    }).join('');
+  }
+
   function render(d){
     var today=new Date().toLocaleDateString('he-IL');
     // "מחיר הרכב בנוסף על התשלום הראשוני" = מחיר הרכב + יתרת המקדמה שנותרה לתשלום (זהה למוצג בהסכם ה-CRM)
@@ -104,10 +136,10 @@
     // אחרת (עסקאות ישנות) — בונים תצוגה מקומית תואמת, כולל סעיף הבעלות.
     var own=(d.ownership||'01');
     var ownStmt=(own==='00')?'הרכב יירשם על שם הלקוח כרכב פרטי יד ראשונה 00.':'הלקוח מצהיר ומסכים כי ידוע לו והובהר לו ע״י החברה כי הרכישה מכוח ההסכם הנה במסגרת "עסקת 01" והרכב נרשם במסגרת עסקת ליסינג.';
-    var ownBox='<div style="border:1.5px solid #8CA818;background:#fff7f2;border-radius:8px;padding:10px 14px;margin:10px 0;font-weight:600">'+esc(ownStmt)+'</div>';
+    var ownBox='<div style="border:1.5px solid #6E8B10;background:#fff7f2;border-radius:8px;padding:10px 14px;margin:10px 0;font-weight:600">'+esc(ownStmt)+'</div>';
     var localBuild = (
-        '<h2 style="text-align:center;color:#8CA818;margin:0 0 2px;font-size:22px;font-weight:800">קליק אנד דרייב</h2>'+
-        '<p style="text-align:center;color:#444;margin:0 0 8px;font-size:12.5px">באמצעות חברת גלובל דרייב בע״מ ח.פ 516685898 (להלן: "גלובל דרייב")</p>'+
+        '<h2 style="text-align:center;color:#6E8B10;margin:0 0 2px;font-size:22px;font-weight:800">פרי דרייב</h2>'+
+        LEGAL_LINE+
         '<div class="sub">מספר הזמנה: '+esc(d.order_no||'—')+' · תאריך: '+today+'</div>'+
         '<h3>פרטי הלקוח</h3><table>'+row('שם',esc(d.client_name))+row('ת.ז / ח.פ',esc(d.client_id))+row('טלפון','<span dir="ltr">'+esc(d.client_phone)+'</span>')+row('דוא"ל',esc(d.client_email))+row('כתובת',esc(d.client_address))+'</table>'+
         '<h3>פרטי הרכב</h3><table>'+row('יצרן ודגם',esc(((d.car_make||'')+' '+(d.car_model||'')).trim())+' '+esc(d.car_trim||''))+row('שנה',esc(d.car_year||''))+row('צבע',esc(d.car_color||''))+row('מנוע',esc(d.car_engine||''))+row('תיבת הילוכים',esc(d.car_gearbox||''))+'</table>'+
@@ -115,7 +147,19 @@
         '<p style="font-size:12px;margin:8px 0;text-align:right">מחיר התשלום הראשוני לא יורד ממחיר הרכב. עסקה בת 36–60 חודשים — תלוי חברת מימון וכפוף לאישורה. בתום התקופה מספר אופציות: (1) החזרת הרכב; (2) החלפת הרכב לחדש ללא תשלום ראשוני נוסף בעסקה הבאה; (3) פריסה נוספת של היתרה עד 60 תשלומים נוספים; (4) מכירת הרכב עצמאית ופירעון המימון. (כפוף לתקנון ותנאי מחירון לוי יצחק.)</p>'+
         ownBox+
         (d.spec?'<h3>מפרט והערות</h3><p>'+esc(d.spec)+'</p>':'')+
-        '<h3>תנאי ההזמנה וההסכם</h3>'+clausesHtml(d)+
+        // נוסח התבנית הפעילה קודם לכל; clausesHtml נשאר רק למקרה
+        // שאין אף תבנית פעילה — עדיף נוסח ישן מעל מסמך ריק.
+        '<h3>תנאי ההזמנה וההסכם</h3>'+
+        (d.template_body ? renderTemplate(d.template_body, {
+            client_name:d.client_name, client_id:d.client_id, phone:d.client_phone,
+            email:d.client_email, address:d.client_address,
+            car:((d.car_make||'')+' '+(d.car_model||'')).trim(),
+            car_price:nis(d.car_price), monthly:nis(d.monthly),
+            down_total:nis(d.down_total), total:nis(d.total),
+            order_no:d.order_no, date:today, brand:'פרי דרייב',
+            company:'פרי דרייב', legal_entity:LEGAL_ENTITY,
+            ownership_statement:ownStmt
+          }) : clausesHtml(d))+
         '<p class="note">ההחזר החודשי משוער בלבד וכפוף לאישור גוף מימון, נתוני הלקוח וזמינות הרכב במלאי. חתימת הלקוח מהווה אישור להזמנה בכפוף לתנאים ולכל הסעיפים לעיל.</p>'
     );
     // ה-contract_html מוזרק רק לאחר סניטציה (DOMPurify) למניעת XSS. אם הספרייה לא נטענה — בונים מקומית מנתונים מובְנים (בטוח, ללא HTML גולמי).
@@ -140,7 +184,7 @@
       'body{margin:0;background:#fff;color:#111;font-family:Arial,\'Segoe UI\',sans-serif;direction:rtl;text-align:right;line-height:1.7;font-size:13px}'+
       '.sheet{max-width:820px;margin:0 auto;padding:4px 8px}'+
       'table{width:100%;border-collapse:collapse;margin:0 0 12px}td{padding:7px 10px;border-bottom:1px solid #eee}'+
-      'h2{text-align:center;color:#8CA818;margin:0 0 2px}h3{margin:16px 0 6px;color:#111}'+
+      'h2{text-align:center;color:#6E8B10;margin:0 0 2px}h3{margin:16px 0 6px;color:#111}'+
       '.c2b-clause{page-break-inside:avoid}.note,.sub{color:#666;font-size:12px}'+
       '</style></head><body><div class="sheet">'+doc.innerHTML+'</div></body></html>');
     w.document.close(); w.focus();
