@@ -218,6 +218,15 @@
   .task-open{display:inline-flex;align-items:center;gap:4px;border:1px solid var(--warn);color:var(--warn);font-size:11px;font-weight:700;padding:1px 9px;border-radius:999px}
 
   /* consolidated action bar (above the timeline) */
+  /* אזור גרירת מסמכים — גרירה, הדבקה או בחירה מהמחשב */
+  .dropz{margin-top:6px;border:2px dashed var(--line);border-radius:12px;padding:18px 14px;text-align:center;
+         cursor:pointer;background:var(--surface-2);transition:border-color .15s,background .15s}
+  .dropz:hover,.dropz:focus-visible{border-color:var(--brand);outline:none}
+  .dropz.over{border-color:var(--brand);background:color-mix(in srgb,var(--brand) 10%,var(--surface-2));border-style:solid}
+  .dropz-in{display:flex;flex-direction:column;align-items:center;gap:3px;font-size:13px;pointer-events:none}
+  .dropz-ico{font-size:22px;line-height:1;opacity:.65}
+  /* גרירה אל תוך רשימת המסמכים הקיימת בכרטיס העסקה */
+  .dz-over{outline:2px dashed var(--brand);outline-offset:4px;border-radius:10px}
   .qa2{display:flex;gap:5px;flex-wrap:wrap}
   .qa2 .btn{background:var(--surface-2);padding:6px 9px;font-size:12.5px;gap:4px}
   .qa2 .btn:hover{border-color:var(--brand);color:var(--brand);background:var(--surface-2)}
@@ -356,8 +365,8 @@
 <div id="drawer"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js" integrity="sha384-0w2KAL2YHP6wKOkUDzkCDGgVvfmHnj02DHeQ6XcHOgTfFsGyonKOpShMH1x6nk9o" crossorigin="anonymous"></script>
-<script src="admin.js?v=202608310805"></script>
-<script src="admin-crm.js?v=202608310805"></script>
-<script src="admin-modules.js?v=202608310805"></script>
+<script src="admin.js?v=202608310848"></script>
+<script src="admin-crm.js?v=202608310848"></script>
+<script src="admin-modules.js?v=202608310848"></script>
 </body>
 </html>

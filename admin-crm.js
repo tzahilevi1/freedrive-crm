@@ -725,6 +725,92 @@
     var safe = String(name || 'file').replace(/[^A-Za-z0-9._-]+/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '').slice(0, 60) || 'file';
     return leadId + '/' + Date.now() + '_' + Math.random().toString(36).slice(2, 7) + '_' + safe;
   }
+  // ---- העלאת מסמכים: גרירה, הדבקה, או בחירה מהמחשב ----
+  //  שלוש הדרכים מגיעות לאותו קוד. ההדבקה (Ctrl+V) חשובה במיוחד: צילום מסך
+  //  יושב בלוח ואין לו קובץ על הדיסק, אז בלעדיה צריך קודם לשמור אותו ידנית.
+  var DOC_MAX_MB = 25;
+
+  function docZoneHtml(id, hint) {
+    return '<div class="dropz" id="' + id + '" tabindex="0">' +
+        '<div class="dropz-in">' +
+          '<span class="dropz-ico">⬆</span>' +
+          '<b>גררו קבצים לכאן</b>' +
+          '<span class="muted">או <u>בחרו מהמחשב</u> · אפשר גם להדביק צילום מסך (Ctrl+V)</span>' +
+          (hint ? '<span class="muted" style="font-size:11.5px">' + hint + '</span>' : '') +
+        '</div>' +
+        '<input type="file" id="' + id + '_i" multiple style="display:none">' +
+      '</div>';
+  }
+
+  // מחזירה פונקציה לניקוי המאזינים — בלי זה מאזין ה-paste היה נשאר על המסמך
+  // אחרי שהאזור נסגר, ותמונה מודבקת הייתה נשלחת לליד הלא נכון.
+  function wireDocZone(id, onFiles) {
+    var z = document.getElementById(id); if (!z) return function () {};
+    var input = document.getElementById(id + '_i'), depth = 0;
+    function take(list) {
+      var files = Array.prototype.slice.call(list || []);
+      if (!files.length) return;
+      var big = files.filter(function (f) { return f.size > DOC_MAX_MB * 1024 * 1024; });
+      if (big.length) {
+        alert('הקבצים הבאים גדולים מ-' + DOC_MAX_MB + 'MB ולא יועלו:\n• ' +
+              big.map(function (f) { return f.name; }).join('\n• '));
+        files = files.filter(function (f) { return big.indexOf(f) < 0; });
+      }
+      if (files.length) onFiles(files);
+    }
+    z.addEventListener('click', function () { input.click(); });
+    z.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); input.click(); } });
+    input.addEventListener('change', function () { take(this.files); this.value = ''; });
+    // dragover חייב preventDefault, אחרת הדפדפן פותח את הקובץ במקום לתת לנו אותו
+    ['dragenter', 'dragover'].forEach(function (ev) {
+      z.addEventListener(ev, function (e) {
+        e.preventDefault(); e.stopPropagation();
+        if (ev === 'dragenter') depth++;
+        z.classList.add('over');
+      });
+    });
+    z.addEventListener('dragleave', function (e) {
+      e.preventDefault(); e.stopPropagation();
+      if (--depth <= 0) { depth = 0; z.classList.remove('over'); }   // מונה, אחרת מעבר מעל אלמנט פנימי מכבה את ההדגשה
+    });
+    z.addEventListener('drop', function (e) {
+      e.preventDefault(); e.stopPropagation();
+      depth = 0; z.classList.remove('over');
+      take(e.dataTransfer && e.dataTransfer.files);
+    });
+    function onPaste(e) {
+      if (!document.body.contains(z)) { document.removeEventListener('paste', onPaste); return; }
+      var f = e.clipboardData && e.clipboardData.files;
+      if (f && f.length) { e.preventDefault(); take(f); }
+    }
+    document.addEventListener('paste', onPaste);
+    return function () { document.removeEventListener('paste', onPaste); };
+  }
+
+  // העלאה בפועל: קובץ לאחסון + שורה בטבלה. מדווחת על כל כישלון בנפרד
+  // ולא עוצרת את השאר — קובץ פגום אחד לא מפיל העלאה של עשרה.
+  function uploadDocs(leadId, files, onProgress, onDone) {
+    var done = 0, ok = 0, errs = [];
+    function step() {
+      if (onProgress) onProgress(done, files.length);
+      if (done < files.length) return;
+      if (ok) logActivity(leadId, 'document', ok === 1 ? 'הועלה מסמך: ' + files[0].name : 'הועלו ' + ok + ' מסמכים');
+      if (errs.length) alert('חלק מהקבצים נכשלו:\n• ' + errs.join('\n• '));
+      onDone(ok, errs);
+    }
+    files.forEach(function (file) {
+      var path = safeStoragePath(leadId, file.name);
+      db.storage.from('lead-docs').upload(path, file, { contentType: file.type || undefined, upsert: false }).then(function (u) {
+        if (u.error) { errs.push(file.name + ': ' + u.error.message); done++; return step(); }
+        db.from('lead_documents').insert({ lead_id: leadId, name: file.name, storage_path: path }).then(function (ir) {
+          if (ir.error) errs.push(file.name + ' (רשומה): ' + ir.error.message); else ok++;
+          done++; step();
+        });
+      });
+    });
+    step();
+  }
+
   // only allow http(s) links — page_url comes from anon lead inserts (untrusted),
   // so reject javascript:/data:/vbscript: before it reaches an href sink.
   function safeHttpUrl(u) { try { var p = new URL(u); return (p.protocol === 'http:' || p.protocol === 'https:') ? p.href : ''; } catch (e) { return ''; } }
@@ -1222,11 +1308,14 @@
     if (k === 'car') return carPicker(lead);
     var box = $('lpForm');
     if (k === 'doc') {
-      box.innerHTML = '<label class="muted" style="font-size:12px">העלה מסמך / תמונה — תוצג מיד פתוחה בציר הזמן</label><input type="file" id="lpUp" style="margin-top:6px;display:block">';
-      $('lpUp').addEventListener('change', function () {
-        var file = this.files[0]; if (!file) return; var path = safeStoragePath(lead.id, file.name);
-        box.innerHTML = '<p class="muted">מעלה…</p>';
-        db.storage.from('lead-docs').upload(path, file).then(function (u) { if (u.error) { box.innerHTML = ''; return alert('העלאה נכשלה: ' + u.error.message); } db.from('lead_documents').insert({ lead_id: lead.id, name: file.name, storage_path: path }).then(function () { logActivity(lead.id, 'document', 'הועלה מסמך: ' + file.name); window.C2B_openLeadCard(lead.id); }); });
+      box.innerHTML = '<label class="muted" style="font-size:12px">העלה מסמך / תמונה — תוצג מיד פתוחה בציר הזמן</label>' +
+        docZoneHtml('lpUp', 'עד ' + DOC_MAX_MB + 'MB לקובץ · כל פורמט · אפשר כמה קבצים יחד');
+      var stop = wireDocZone('lpUp', function (files) {
+        stop();
+        box.innerHTML = '<p class="muted">מעלה ' + files.length + ' קבצים…</p>';
+        uploadDocs(lead.id, files,
+          function (d, n) { if (d < n) box.innerHTML = '<p class="muted">מעלה… ' + d + '/' + n + '</p>'; },
+          function () { window.C2B_openLeadCard(lead.id); });
       });
       return;
     }
@@ -1438,7 +1527,7 @@
     var recordCard = '<div class="card"><h3>🗂️ סיכום עסקה והעלאת מסמכים</h3>' + grid(row('מספר הזמנה', esc(deal.order_no || '—')) + row('נוצר', deal.created_at ? fmt(deal.created_at) : '—') + row('שלב תיק', '<span id="dlRecStage">' + stageBadge(curStage) + '</span>') + row('מזהה עסקה', '<span class="muted" style="font-size:11px">' + esc(deal.id || '—') + '</span>')) +
       '<div id="dlCancelRow" style="margin-top:8px;font-size:12.5px">' + (deal.cancel_reason ? '<b style="color:#ef4444">סיבת ביטול:</b> ' + esc(deal.cancel_reason) : '') + '</div>' +
       '<hr style="border:none;border-top:1px solid var(--line);margin:16px 0">' +
-      '<div class="row-between"><h3 style="margin:0">📁 מסמכי הלקוח</h3>' + (lead.id ? '<label class="btn btn-sm" style="cursor:pointer">⬆ העלה מסמכים<input type="file" id="dlDocUp" multiple style="display:none"></label>' : '') + '</div><p class="muted" style="font-size:12px;margin:4px 0 10px">ת"ז (שני צדדים + ספח) · רישיון נהיגה · אישור ניהול חשבון בנק · כרטיס אשראי (שני צדדים) · כל פורמט</p><div id="dlDocs">' + (lead.id ? 'טוען…' : 'שמרו את התיק תחילה כדי לצרף מסמכים') + '</div></div>';
+      '<div class="row-between"><h3 style="margin:0">📁 מסמכי הלקוח</h3>' + (lead.id ? '<label class="btn btn-sm" style="cursor:pointer">⬆ העלה מסמכים<input type="file" id="dlDocUp" multiple style="display:none"></label>' : '') + '</div><p class="muted" style="font-size:12px;margin:4px 0 10px">ת"ז (שני צדדים + ספח) · רישיון נהיגה · אישור ניהול חשבון בנק · כרטיס אשראי (שני צדדים) · כל פורמט · אפשר לגרור קבצים לכאן</p><div id="dlDocs">' + (lead.id ? 'טוען…' : 'שמרו את התיק תחילה כדי לצרף מסמכים') + '</div></div>';
     var paymentsCard = '<div class="card"><h3>תשלומים / קבלות / חשבוניות</h3><div id="dlPayList">' + (deal.id ? 'טוען…' : '<p class="muted">שמרו את העסקה כדי לנהל תשלומים</p>') + '</div>' +
       (deal.id ? '<form id="dlPayForm" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px"><select class="inp" name="kind"><option value="payment">תשלום</option><option value="receipt">קבלה</option><option value="invoice">חשבונית</option></select><input class="inp" name="amount" type="number" placeholder="סכום ₪" style="width:120px"><select class="inp" name="method" style="width:160px"><option value="">אמצעי תשלום…</option><option>אשראי</option><option>העברה בנקאית</option><option>מזומן</option><option>צ׳ק</option><option>הוראת קבע</option><option>ביט</option><option>אחר</option></select><input class="inp" name="ref" placeholder="אסמכתא" style="width:130px"><button class="btn btn-sm">+ הוסף</button></form>' : '') + '</div>';
     // notes area for the file manager — write client notes to help manage leads from here
@@ -1541,6 +1630,22 @@
         });
       };
       loadDocs();
+      // גרירה לתוך רשימת המסמכים עצמה — זה המקום שאליו מסתכלים,
+      // ולא סביר לדרוש לכוון דווקא לכפתור הקטן שלמעלה.
+      if (lead.id && $('dlDocs')) {
+        var dz = $('dlDocs'), dzDepth = 0;
+        function dzUpload(list) {
+          var files = Array.prototype.slice.call(list || []).filter(function (f) { return f.size <= DOC_MAX_MB * 1024 * 1024; });
+          if (!files.length) return;
+          dz.innerHTML = '<p class="muted">מעלה ' + files.length + ' קבצים…</p>';
+          uploadDocs(lead.id, files, null, function () { loadDocs(); });
+        }
+        ['dragenter', 'dragover'].forEach(function (ev) {
+          dz.addEventListener(ev, function (e) { e.preventDefault(); if (ev === 'dragenter') dzDepth++; dz.classList.add('dz-over'); });
+        });
+        dz.addEventListener('dragleave', function (e) { e.preventDefault(); if (--dzDepth <= 0) { dzDepth = 0; dz.classList.remove('dz-over'); } });
+        dz.addEventListener('drop', function (e) { e.preventDefault(); dzDepth = 0; dz.classList.remove('dz-over'); dzUpload(e.dataTransfer && e.dataTransfer.files); });
+      }
       if ($('dlDocUp')) $('dlDocUp').addEventListener('change', function () {
         var files = Array.prototype.slice.call(this.files); if (!files.length) return;
         $('dlDocs').innerHTML = '<p class="muted">מעלה ' + files.length + ' קבצים…</p>';
