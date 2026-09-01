@@ -178,6 +178,9 @@
     // דרך RPC (security definer) — מאפשר העברה גם כשהמעביר מאבד גישה לליד; הטריגר מתעד אוטומטית
     db.rpc('transfer_leads', { p_leads: [leadId], p_to: uid || null }).then(function (r) {
       if (r.error) return alert('שגיאה בשיוך: ' + r.error.message);
+      // הפונקציה מחזירה כמה לידים באמת הועברו. 0 בלי שגיאה היה נראה
+      // בדיוק כמו הצלחה — המסך התרענן ושום דבר לא השתנה.
+      if (r.data === 0) return alert('השיוך לא בוצע. רעננו את הדף ונסו שוב, ואם זה חוזר — פנו למנהל המערכת.');
       window.C2B_renderLeads(curFilter);
     });
   }
