@@ -195,8 +195,14 @@
   document.addEventListener('click', function (e) { if (!e.target.closest('#bell') && !e.target.closest('#bellMenu')) $('bellMenu').classList.add('hidden'); });
 
   // ---------- auth ----------
-  function showLogin() { $('login').classList.remove('hidden'); $('app').classList.add('hidden'); }
+  function showLogin() { appStartedFor = null; $('login').classList.remove('hidden'); $('app').classList.add('hidden'); }
+  //  showApp נקראה פעמיים: פעם מטופס ההתחברות, ופעם מ-getSession של טעינת
+  //  העמוד שהבטחתו נפתרת אחרי ההתחברות ומוצאת סשן קיים. התוצאה הייתה 24
+  //  קריאות למסד במקום 12 — כל שאילתת פתיחה רצה כפול.
+  var appStartedFor = null;
   function showApp(session) {
+    if (appStartedFor === session.user.id) return;
+    appStartedFor = session.user.id;
     $('login').classList.add('hidden'); $('app').classList.remove('hidden'); $('whoami').textContent = session.user.email;
     window.C2B.userId = session.user.id;
     window.C2B.userName = session.user.email;
