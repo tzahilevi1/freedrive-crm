@@ -880,6 +880,20 @@
     { key: 'brand', label: 'מותג', cell: function (a) { return '<td><select class="inp" data-appt-brand="' + a.id + '" onclick="event.stopPropagation()" style="width:120px;font-size:12.5px">' + window.C2B.selOpts((window.C2B.marketingBrands || []), a.brand, '— מותג —') + '</select></td>'; } },
     { key: 'note', label: 'הערות', cell: function (a) { return '<td><input class="inp" data-appt-note="' + a.id + '" value="' + esc(a.note || '') + '" placeholder="הערות…" onclick="event.stopPropagation()" style="width:100%;min-width:150px;font-size:12.5px"></td>'; } },
     { key: 'type', label: 'עניין', def: false, cell: function (a) { return '<td>' + esc(a.type || '—') + '</td>'; } },
+    //  כל שאר שדות הפגישה — מוסתרים כברירת מחדל כדי שהמסך הקיים
+    //  לא ישתנה לאף אחד, ומי שצריך מדליק אותם בבורר העמודות.
+    { key: 'email', label: 'אימייל', def: false, w: 210,
+      cell: function (a) { return '<td class="muted ltr" title="' + esc(a.email || '') + '">' + esc(a.email || '—') + '</td>'; } },
+    { key: 'branch', label: 'סניף', def: false, w: 130,
+      cell: function (a) { return '<td>' + esc(a.branch || '—') + '</td>'; } },
+    { key: 'created', label: 'נקבעה בתאריך', def: false, w: 150,
+      sort: function (a) { return a.created_at || ''; },
+      cell: function (a) { return '<td class="muted">' + esc(a.created_at ? fmt(a.created_at) : '—') + '</td>'; } },
+    { key: 'lead', label: 'קשור לליד', def: false, w: 110,
+      sort: function (a) { return a._lid ? 1 : 0; },
+      cell: function (a) { return '<td>' + (a._lid ? '<span class="tag">✓ מקושר</span>' : '<span class="muted">—</span>') + '</td>'; } },
+    { key: 'appt_id', label: 'מזהה פגישה', def: false, w: 130, sortable: false,
+      cell: function (a) { return '<td class="muted ltr" style="font-size:11px;user-select:all">' + esc(String(a.id).slice(0, 8)) + '</td>'; } },
     { key: 'action', label: 'פעולה', cell: function (a) { return '<td><button class="btn btn-sm ' + (a._handled ? 'btn-ghost' : '') + '" data-appt="' + a.id + '" data-to="' + (a._handled ? 'new' : 'handled') + '" onclick="event.stopPropagation()">' + (a._handled ? 'החזר' : 'סמן כבוצעה') + '</button></td>'; } }
   ];
   var apptCols = null;
