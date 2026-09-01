@@ -2115,6 +2115,60 @@
     });
   }
 
+  //  הורדת ההסכם כקובץ — נוחת ב"הורדות" של Chrome וניתן לגרירה לוואטסאפ.
+  //  window.print() לא מתאים לזה: הוא פותח דיאלוג, והקובץ שנוצר שייך לדפדפן
+  //  ולא לנו, אז הוא לא מופיע ברשימת ההורדות.
+  //
+  //  הספריות נטענות רק בלחיצה ולא בטעינת העמוד — הן כבדות, ורוב הכניסות
+  //  ל-CRM לא נוגעות בהסכם בכלל.
+  var PDF_LIBS = [
+    'https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js',
+    'https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js'
+  ];
+  var pdfLibsReady = null;
+  function loadPdfLibs() {
+    if (pdfLibsReady) return pdfLibsReady;
+    pdfLibsReady = Promise.all(PDF_LIBS.map(function (src) {
+      return new Promise(function (res, rej) {
+        var el = document.createElement('script');
+        el.src = src; el.onload = res; el.onerror = function () { rej(new Error('טעינת ' + src + ' נכשלה')); };
+        document.head.appendChild(el);
+      });
+    }));
+    return pdfLibsReady;
+  }
+
+  function downloadContractPdf(el, title, btn) {
+    var old = btn ? btn.textContent : '';
+    if (btn) { btn.disabled = true; btn.textContent = 'מכין קובץ…'; }
+    function done(err) {
+      if (btn) { btn.disabled = false; btn.textContent = old; }
+      if (err) { console.warn(err); alert('הכנת ה-PDF נכשלה: ' + (err.message || err) + '\n\nאפשר להשתמש בכפתור ההדפסה.'); }
+    }
+    loadPdfLibs().then(function () {
+      // רקע לבן מפורש: ברקע שקוף html2canvas מייצר PDF עם רקע שחור
+      return window.html2canvas(el, { scale: 2, backgroundColor: '#ffffff', useCORS: true, logging: false });
+    }).then(function (canvas) {
+      var JsPDF = (window.jspdf && window.jspdf.jsPDF) || window.jsPDF;
+      if (!JsPDF) throw new Error('jsPDF לא נטען');
+      var pdf = new JsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+      var pw = pdf.internal.pageSize.getWidth(), ph = pdf.internal.pageSize.getHeight();
+      var m = 8, iw = pw - m * 2;
+      var ih = canvas.height * iw / canvas.width;      // גובה התמונה כולה במ"מ
+      var img = canvas.toDataURL('image/jpeg', 0.92);  // JPEG ולא PNG: קובץ קטן פי כמה, ובמסמך טקסט ההבדל לא נראה
+      // חיתוך לעמודים: מזיזים את התמונה כלפי מעלה ומגבילים בחלון העמוד
+      var pageH = ph - m * 2, left = ih, y = 0;
+      while (left > 0.5) {
+        pdf.addImage(img, 'JPEG', m, m - y, iw, ih);
+        left -= pageH; y += pageH;
+        if (left > 0.5) pdf.addPage();
+      }
+      var name = (title || 'הסכם').replace(/[\/:*?"<>|]/g, '-').slice(0, 80) + '.pdf';
+      pdf.save(name);      // ← יוצר הורדה רגילה, ולכן מופיע ברשימת ההורדות
+      done();
+    }).catch(done);
+  }
+
   // מנוע ההדפסה המקורי של הדפדפן (Chrome) — bidi עברית מושלם, טקסט וקטורי אמיתי, בלי האקים.
   // הוכח מול html2canvas ששבר RTL (היפוך מספרים, בליעת רווחים) — לכן זה הנתיב היחיד ל-PDF יפה.
   // הורדת ההסכם כקובץ בלחיצה אחת (בלי דיאלוג הדפסה).
@@ -2543,7 +2597,8 @@
                 return '<option value="' + esc(t.id) + '"' + (chosenTpl && t.id === chosenTpl.id ? ' selected' : '') + '>' + esc(t.name) + '</option>';
               }).join('') + '</select>' : '') +
           (signed ? '' : '<label style="font-size:12.5px;color:var(--muted)">בעלות:</label><select class="inp" id="cOwnership" style="width:auto;padding:5px 8px"><option value="01"' + (curOwn === '01' ? ' selected' : '') + '>בעלים 01</option><option value="00"' + (curOwn === '00' ? ' selected' : '') + '>בעלים 00</option></select>') +
-          '<button class="btn btn-sm" id="cPrint">📄 הורד PDF</button>' + (signed ? '' : '<button class="btn btn-ghost btn-sm" id="cSend">💾 שמור הסכם</button>') + '</div></div>' +
+          '<button class="btn btn-sm" id="cPdf">⬇ הורד PDF</button>' +
+          '<button class="btn btn-ghost btn-sm" id="cPrint" title="פותח את חלון ההדפסה של הדפדפן — איכות טקסט מיטבית">🖨 הדפסה</button>' + (signed ? '' : '<button class="btn btn-ghost btn-sm" id="cSend">💾 שמור הסכם</button>') + '</div></div>' +
       (justSaved && !signed ? '<div class="card" style="border:2px solid var(--ok);background:rgba(22,163,74,.07);text-align:center;padding:22px">' +'<div style="font-size:40px;line-height:1">✅</div>' +'<h2 style="margin:10px 0 4px;font-size:22px">ההסכם נוצר בהצלחה' + (deal.order_no ? ' #' + esc(deal.order_no) : '') + '</h2>' +'<p class="muted" style="margin:0;font-size:14px">השלב הבא: שלחו אותו ללקוח לחתימה באחת הדרכים שלמטה.</p></div>' : '') +
       (signed ? '<div class="card" style="border:1px solid var(--ok);background:rgba(22,163,74,.06)"><b style="color:var(--ok)">✅ ההסכם נחתם על ידי הלקוח' + (deal.signed_at ? ' בתאריך ' + fmt(deal.signed_at) : '') + '</b><span class="muted"> — למטה ההסכם המלא עם חתימת הלקוח.</span></div>' : '') +
       // תצוגה כ"דף A4" ממורכז — בדיוק כפי שהלקוח והמסמך המודפס נראים; overflow-x מונע גלישת טקסט מחוץ למסמך
@@ -2588,6 +2643,9 @@
       if (deal.id) db.from('deals').update({ contract_template_id: id }).eq('id', deal.id).then(function () {});
       deal.contract_template_id = id;
       contractView(lead, deal);
+    });
+    $('cPdf').addEventListener('click', function () {
+      downloadContractPdf($('cDoc'), 'הסכם פרי דרייב' + (deal.order_no ? ' ' + deal.order_no : ''), this);
     });
     $('cPrint').addEventListener('click', function () { printContractHtml($('cDoc').innerHTML, 'הסכם פרי דרייב' + (deal.order_no ? ' #' + deal.order_no : '') + ' — ' + (deal.client_name || '')); });
     if (signed) { ensureSignedDoc(lead, deal); return; }   // חתום → שומר עותק HTML לתיק + ציר זמן, ואז צפייה/הדפסה בלבד
