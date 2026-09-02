@@ -2932,7 +2932,7 @@
     loading();
     var since = days ? new Date(Date.now() - days * 864e5).toISOString() : null;
     var leadsQ = db.from('leads').select('id,name,phone,car,brand,status,source,created_at,first_response_at,assigned_to,marketing_company,city,utm_source,utm_campaign').is('deleted_at', null);
-    var dealsQ = db.from('deals').select('id,lead_id,client_name,car_make,car_model,total,stage,created_at');
+    var dealsQ = db.from('deals').select('id,lead_id,client_name,car_make,car_model,total,stage,status,created_at,signed_at,has_signature');
     if (since) { leadsQ = leadsQ.gte('created_at', since); dealsQ = dealsQ.gte('created_at', since); }
     Promise.all([
       leadsQ, db.from('tasks').select('done'), db.from('appointments').select('status'),
@@ -2947,15 +2947,29 @@
   };
   function fbtn(k) { return '<button class="btn btn-ghost btn-sm" id="flt_' + k + '">' + fltLabel(blockR[k]) + '</button>'; }
   function fbtn2(k) { return '<button class="btn btn-ghost btn-sm" id="fltf_' + k + '" title="סינון לפי שדה וערך">' + fieldBtnLabel(blockF[k]) + '</button>'; }
+  //  עסקה = הלקוח חתם על ההסכם, ולא בוטלה. הצעת מחיר, טיוטה ועסקה
+  //  שבוטלה אינן עסקה — הן היו נספרות כאן וניפחו את המספר מול הדוחות,
+  //  שם ההגדרה הזו כבר נאכפה.
+  function isDeal(d) { return !!d.has_signature && d.status !== 'cancelled' && d.stage !== 'cancelled'; }
+  //  נספרת לפי מועד החתימה ולא לפי מועד הפתיחה: עסקה שנפתחה בחודש שעבר
+  //  ונחתמה היום היא עסקה של היום.
+  function dealAt(d) { return d.signed_at || d.created_at; }
+
   function drawDashboard() {
     var allLeads = dashAll.leads, allDeals = dashAll.deals, tasks = dashAll.tasks;
+    var signed = allDeals.filter(isDeal);
     var leads = allLeads.filter(function (l) { return inRange(l.created_at, dashRange); });
-    var deals = allDeals.filter(function (d) { return inRange(d.created_at, dashRange); });
+    var deals = signed.filter(function (d) { return inRange(dealAt(d), dashRange); });
+    var openQuotes = allDeals.filter(function (d) {
+      return !d.has_signature && d.status !== 'cancelled' && d.stage !== 'cancelled';
+    }).length;
     var todayS = periodStart('today');
     var todayN = allLeads.filter(function (l) { return new Date(l.created_at || 0).getTime() >= todayS; }).length;
-    var dealsTodayN = allDeals.filter(function (d) { return new Date(d.created_at || 0).getTime() >= todayS; }).length;
+    var dealsTodayN = signed.filter(function (d) { return new Date(dealAt(d) || 0).getTime() >= todayS; }).length;
     var by = {}; STATUSES.forEach(function (s) { by[s.k] = 0; }); leads.forEach(function (l) { by[l.status || 'new'] = (by[l.status || 'new'] || 0) + 1; });
-    var won = by.won || 0, lost = by.lost || 0, conv = (won + lost) ? Math.round(won / (won + lost) * 100) : 0;
+    //  אחוז הסגירה נמדד מול הלידים בטווח, בדיוק כמו במסך הדוחות.
+    //  קודם הוא חושב מסטטוס הליד (won/lost) והציג מספר אחר מהדוחות.
+    var conv = leads.length ? Math.round(deals.length / leads.length * 100) : 0;
     var rts = leads.filter(function (l) { return l.first_response_at; }).map(function (l) { return (new Date(l.first_response_at) - new Date(l.created_at)) / 60000; });
     var avgRt = rts.length ? Math.round(rts.reduce(function (a, b) { return a + b; }, 0) / rts.length) : 0;
     var openTasks = tasks.filter(function (t) { return !t.done; }).length;
@@ -2966,10 +2980,10 @@
     view(
       pTabs +
       '<div class="cards" style="margin-top:14px">' +
-        C.stat('לידים חדשים היום', todayN, true) + C.stat('עסקאות היום', dealsTodayN, true) +
-        C.stat('סה"כ לידים', leads.length) + C.stat('סה"כ עסקאות', deals.length) +
+        C.stat('לידים חדשים היום', todayN, true) + C.stat('נחתמו היום', dealsTodayN, true) +
+        C.stat('סה"כ לידים', leads.length) + C.stat('עסקאות חתומות', deals.length) +
         C.stat('פגישות נקבעו', by.meeting_set || 0) +
-        C.stat('עסקאות שנסגרו', won) + C.stat('אחוז סגירה', conv + '%') +
+        C.stat('הצעות פתוחות', openQuotes) + C.stat('אחוז סגירה', conv + '%') +
         C.stat('זמן תגובה', avgRt ? avgRt + ' דק\'' : '—') + C.stat('משימות פתוחות', openTasks) +
       '</div>' +
       '<div class="grid2">' +
