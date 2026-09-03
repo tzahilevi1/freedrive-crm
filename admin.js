@@ -1125,8 +1125,13 @@
 
       // ---- deal-side aggregates ----
       // עסקה נחשבת "עסקה" רק לאחר חתימת הלקוח — הצעות/טיוטות לא-חתומות אינן נספרות בדאשבורד
-      var deals = allDeals.filter(function (d) { return d.status !== 'cancelled' && !!d.has_signature; });
-      var cancelled = allDeals.filter(function (d) { return d.status === 'cancelled'; }).length;
+      //  ביטול יכול להירשם בסטטוס או בשלב — עסקה שבוטלה בכרטיס העסקה
+      //  מקבלת stage='cancelled' בעוד הסטטוס נשאר 'quote'. בדיקה על
+      //  סטטוס בלבד ספרה אותה כעסקה והציגה הכנסה שלא קיימת.
+      var deals = allDeals.filter(function (d) {
+        return !!d.has_signature && d.status !== 'cancelled' && d.stage !== 'cancelled';
+      });
+      var cancelled = allDeals.filter(function (d) { return d.status === 'cancelled' || d.stage === 'cancelled'; }).length;
       function isDone(d) { return d.status === 'ordered' || !!d.has_signature; }
       var doneDeals = deals.filter(isDone);
       //  הכנסה = מחיר הרכב. total כולל תוספות, מקדמה והנחות, ולכן הוא
