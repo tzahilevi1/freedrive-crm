@@ -1348,21 +1348,26 @@
       //  שמירה אחת לכל השורות: upsert לכל נציג שיש לו לפחות ערך אחד.
       //  שדה ריק נשמר כ-null ולא כאפס, אחרת "אין יעד" היה נראה כיעד 0
       //  ואחוז העמידה היה קופץ ל-100% על כלום.
-      if ($('tgtSave')) $('tgtSave').addEventListener('click', function () {
+      //  האזנה מואצלת: הלשוניות המשניות מחליפות את תוכן repPanel, ומאזין
+      //  ישיר על הכפתור נמחק ברגע שעוברים ללשונית "יעדים" — הכפתור נראה
+      //  ולא עשה כלום.
+      $('repPanel').addEventListener('click', function (e) {
+        var btn = e.target.closest('#tgtSave'); if (!btn) return;
         var byU = {};
         $('repPanel').querySelectorAll('.tgt-in').forEach(function (i) {
           var u = i.dataset.tu; byU[u] = byU[u] || { user_id: u, deals: null, revenue: null, profit: null };
           var v = i.value.trim();
+          //  שדה ריק נשמר כ-null ולא כאפס: "אין יעד" מול "יעד אפס" הם
+          //  שני דברים שונים, ואפס היה מקפיץ את אחוז העמידה ל-100% על כלום.
           byU[u][i.dataset.tf] = v === '' ? null : Number(v);
         });
         var rows = Object.keys(byU).map(function (u) { return byU[u]; });
-        var b = this; b.disabled = true; b.textContent = 'שומר…';
+        btn.disabled = true; btn.textContent = 'שומר…';
         db.from('agent_targets').upsert(rows, { onConflict: 'user_id' }).then(function (r) {
-          b.disabled = false; b.textContent = 'שמור יעדים';
+          btn.disabled = false; btn.textContent = 'שמור יעדים';
           var m = $('tgtMsg'); if (!m) return;
           if (r.error) { m.style.color = 'var(--danger)'; m.textContent = 'שגיאה: ' + r.error.message; return; }
           m.style.color = 'var(--ok)'; m.textContent = '✓ נשמר';
-          setTimeout(function () { renderReports(); }, 700);
         });
       });
       if ($('mkRange')) $('mkRange').addEventListener('click', function (e) {
@@ -1371,7 +1376,7 @@
         $('mkRange').querySelectorAll('button').forEach(function (x) { x.classList.toggle('active', x === b); });
         loadAdMetrics();
       });
-      $('repTabs').addEventListener('click', function (e) { var b = e.target.closest('button[data-rep]'); if (!b) return; repTab = b.dataset.rep; $('repTabs').querySelectorAll('button').forEach(function (x) { x.classList.toggle('active', x.dataset.rep === repTab); }); $('repPanel').innerHTML = panels[repTab]; });
+      $('repTabs').addEventListener('click', function (e) { var b = e.target.closest('button[data-rep]'); if (!b) return; repTab = b.dataset.rep; $('repTabs').querySelectorAll('button').forEach(function (x) { x.classList.toggle('active', x.dataset.rep === repTab); }); $('repPanel').innerHTML = panels[repTab];  loadAdMetrics(); });
       // sales sub-tab switching (delegated on the persistent repPanel)
       $('repPanel').addEventListener('click', function (e) { var b = e.target.closest('button[data-ssub]'); if (!b) return; salesSub = b.dataset.ssub; var nav = $('repSalesTabs'); if (nav) nav.querySelectorAll('button').forEach(function (x) { x.classList.toggle('active', x.dataset.ssub === salesSub); }); var sp = $('repSalesPanel'); if (sp) sp.innerHTML = salesPanels[salesSub]; });
     }).catch(function (e) { errBox(e.message || e); });
