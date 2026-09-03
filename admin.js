@@ -1254,7 +1254,9 @@
       // targets
       //  היעד נשמר לפי משתמש, ולכן הטבלה נבנית מרשימת אנשי הצוות ולא
       //  מאלה שכבר יש להם ביצועים — אחרת אי אפשר לקבוע יעד לנציג חדש.
-      var canEditTargets = C.role === 'admin' || C.role === 'branch';
+      // ב-admin.js אין משתנה C — העוזרים יושבים על window.C2B
+      var myRole = (window.C2B && window.C2B.role) || '';
+      var canEditTargets = myRole === 'admin' || myRole === 'branch';
       var pct = function (act, goal) {
         if (!goal) return '<span class="muted">—</span>';
         var p = Math.round(act / goal * 100);
