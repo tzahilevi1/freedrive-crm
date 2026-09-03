@@ -1453,7 +1453,10 @@
       var bySrcName = attrBy(function (l) { return l.source; });
       var byPartner = attrBy(function (l) { return l.source; }, isPartner);
       var byPlatform = attrBy(function (l) { return l.utm_source; }, isPaid);
-      var byMedium = attrBy(function (l) { return l.utm_medium || l.medium; }, isPaid);
+      //  סוג התנועה מלא לכל הלידים ולא רק לפרסום: ליד שאינו ממומן מקבל
+      //  'seo' אוטומטית בטריגר (organic-medium.sql), ולכן הגרף מראה את
+      //  התמהיל האמיתי — cpc מול seo — ולא רק את הצד הממומן.
+      var byMedium = attrBy(function (l) { return l.utm_medium || l.medium; });
       var byPlacement = attrBy(function (l) { var t = String(l.utm_term || '').toLowerCase(); return PLACEMENTS[t] || l.utm_term; }, isPaid);
       var byMktCo = attrBy(function (l) { return l.marketing_company; });
       var byCampName = attrBy(function (l) { return l.campaign || l.utm_campaign; }, isPaid);
