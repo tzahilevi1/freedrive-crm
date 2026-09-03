@@ -1101,7 +1101,7 @@
       db.from('events').select('type,session_id'),
       db.from('tasks').select('done'),
       db.from('profiles').select('user_id,full_name'),
-      db.from('deals').select('id,lead_id,brand,stage,status,car_make,car_model,total,commission,discount_amt,salesperson,created_at,financing,tradein,has_signature').is('deleted_at', null),
+      db.from('deals').select('id,lead_id,brand,stage,status,car_make,car_model,total,car_price,commission,discount_amt,salesperson,created_at,financing,tradein,has_signature').is('deleted_at', null),
       db.from('payments').select('amount,kind,deal_id'),
       db.from('agent_targets').select('user_id,deals,revenue,profit')
     ]).then(function (res) {
@@ -1129,7 +1129,9 @@
       var cancelled = allDeals.filter(function (d) { return d.status === 'cancelled'; }).length;
       function isDone(d) { return d.status === 'ordered' || !!d.has_signature; }
       var doneDeals = deals.filter(isDone);
-      var revenue = deals.reduce(function (a, d) { return a + (+d.total || 0); }, 0);
+      //  הכנסה = מחיר הרכב. total כולל תוספות, מקדמה והנחות, ולכן הוא
+      //  מספר שלא מייצג את מה שנכנס על הרכב עצמו.
+      var revenue = deals.reduce(function (a, d) { return a + (+d.car_price || 0); }, 0);
       var profit = deals.reduce(function (a, d) { return a + (+d.commission || 0); }, 0);
       var doneProfit = doneDeals.reduce(function (a, d) { return a + (+d.commission || 0); }, 0);
       var collected = pays.filter(function (p) { return p.kind !== 'invoice'; }).reduce(function (a, p) { return a + (+p.amount || 0); }, 0);
@@ -1158,7 +1160,7 @@
         var model = ((d.car_make || '') + ' ' + (d.car_model || '')).trim() || '—';
         var company = d.brand || l.marketing_company || 'ללא';
         var mk = new Date(d.created_at); var mkey = mk.getFullYear() * 12 + mk.getMonth();
-        var rev = +d.total || 0, pf = +d.commission || 0, dn = isDone(d) ? 1 : 0;
+        var rev = +d.car_price || 0, pf = +d.commission || 0, dn = isDone(d) ? 1 : 0;
         bump(byBrand, brand, function (o) { o.count++; o.revenue += rev; o.profit += pf; o.done += dn; });
         bump(byAgent, agent, function (o) { o.count++; o.revenue += rev; o.profit += pf; o.done += dn; });
         bump(byMaker, maker, function (o) { o.count++; o.revenue += rev; });
@@ -1173,7 +1175,12 @@
         var agent = prof[l.assigned_to] || 'לא שויך';
         bump(byAgent, agent, function (o) { o.leads++; });
         var s = l.source || 'לא ידוע'; bump(bySource, s, function (o) { o.leads++; if (l.status === 'won') o.done++; });
-        var camp = l.utm_campaign || l.marketing_company; if (camp) bump(byCampaign, camp, function (o) { o.leads++; if (l.status === 'won') o.done++; });
+        //  שם הקמפיין לפני המזהה: utm_campaign מכיל את מזהה הקמפיין
+        //  בפייסבוק (120251728118780071), ואי אפשר לזהות לפיו כלום.
+        //  חברת השיווק היא נפילה אחרונה — היא לא קמפיין, אבל עדיף
+        //  לשייך ליד ידני אליה מאשר לאבד אותו מהטבלה.
+        var camp = l.campaign || l.utm_campaign || l.marketing_company;
+        if (camp) bump(byCampaign, camp, function (o) { o.leads++; if (l.status === 'won') o.done++; });
       });
       // attribute deal revenue back to source / campaign
       deals.forEach(function (d) { var l = leadById[d.lead_id] || {}; var s = l.source || 'לא ידוע'; bump(bySource, s, function (o) { o.revenue += (+d.total || 0); o.count++; }); var camp = l.utm_campaign || l.marketing_company; if (camp) bump(byCampaign, camp, function (o) { o.revenue += (+d.total || 0); o.count++; }); });
@@ -1187,16 +1194,16 @@
       var mgrTopBrands = rankRows(repTop(byBrand, 'profit', 5), M, function (i) { return i.o.count + ' עסקאות'; });
       var managerPanel =
         '<div class="cards">' +
-          kpi('רווחיות כוללת', M(profit), 'סכום עמלות/רווח מכל העסקאות', true) +
-          kpi('רווח ממוצע לעסקה', M(avgProfit), doneDeals.length + ' עסקאות שהושלמו') +
+          kpi('סה״כ עמלות סוכן', M(profit), 'סכום שדה "עמלת סוכן" בעסקאות החתומות', true) +
+          kpi('עמלה ממוצעת לעסקה', M(avgProfit), doneDeals.length + ' עסקאות חתומות') +
           kpi('סה״כ עסקאות', deals.length, cancelled + ' בוטלו') +
           kpi('נגבה בפועל', M(collected), 'מתוך ' + M(revenue) + ' שווי עסקאות') +
         '</div>' +
-        (profit === 0 ? '<div class="sec-note">💡 טיפ: כדי שהרווחיות תשקף את המציאות, ודאו שדה <b>עמלת סוכן</b> מלא בעסקאות (מתמלא אוטומטית מהמלאי בבחירת רכב).</div>' : '') +
+        (profit === 0 ? '<div class="sec-note">💡 טיפ: כדי שהעמלות ישקפו את המציאות, ודאו שדה <b>עמלת סוכן</b> מלא בעסקאות (מתמלא אוטומטית מהמלאי בבחירת רכב).</div>' : '') +
         '<div class="rep-grid">' +
-          secCard('📈 רווחיות לפי חודש', mgrProfitMonths) +
-          secCard('🏆 הנציגים המובילים ברווחיות', mgrTopAgents) +
-          secCard('🚗 המותגים המובילים ברווחיות', mgrTopBrands) +
+          secCard('📈 עמלות סוכן לפי חודש', mgrProfitMonths) +
+          secCard('🏆 הנציגים המובילים בעמלות', mgrTopAgents) +
+          secCard('🚗 המותגים המובילים בעמלות', mgrTopBrands) +
           secCard('💰 תמונת מצב שיווק', '<div class="cards" style="margin:0">' + kpi('הכנסות מעסקאות', M(revenue)) + kpi('הוצאות שיווק', M(0), 'יתחבר עם Facebook Ads') + kpi('דלתא (רווח מול הוצאה)', M(revenue), null, true) + '</div>') +
         '</div>';
 
@@ -1208,7 +1215,7 @@
           kpi('סה״כ עסקאות', deals.length) +
           kpi('עסקאות שהושלמו', doneDeals.length) +
           kpi('אחוז סגירה', P1(closeRate), doneDeals.length + ' / ' + leads.length + ' לידים') +
-          kpi('רווח עסקה ממוצע', M(avgProfit)) +
+          kpi('עמלה ממוצעת לעסקה', M(avgProfit)) +
           kpi('זמן ממוצע לסגירה', (Math.round(avgTtc * 10) / 10) + ' ימים') +
         '</div>' +
         '<div class="rep-grid">' +
@@ -1220,10 +1227,10 @@
         '</div>';
       // trends
       var salesTrends =
-        '<div class="cards">' + kpi('סה״כ הכנסות', M(revenue), null, true) + kpi('סה״כ רווחיות', M(profit)) + kpi('עסקאות שהושלמו', doneDeals.length) + kpi('זמן ממוצע לסגירה', (Math.round(avgTtc * 10) / 10) + ' ימים') + '</div>' +
+        '<div class="cards">' + kpi('סה״כ הכנסות', M(revenue), null, true) + kpi('סה״כ עמלות סוכן', M(profit)) + kpi('עסקאות שהושלמו', doneDeals.length) + kpi('זמן ממוצע לסגירה', (Math.round(avgTtc * 10) / 10) + ' ימים') + '</div>' +
         '<div class="rep-grid">' +
           secCard('📈 הכנסות לפי חודש', barRows(months.map(function (m) { return { label: m.label, v: m.revenue }; }), M)) +
-          secCard('💎 רווחיות לפי חודש', barRows(months.map(function (m) { return { label: m.label, v: m.profit }; }), M)) +
+          secCard('💎 עמלות סוכן לפי חודש', barRows(months.map(function (m) { return { label: m.label, v: m.profit }; }), M)) +
           secCard('✅ עסקאות שהושלמו לפי חודש', barRows(months.map(function (m) { return { label: m.label, v: m.done }; }), function (v) { return v; })) +
         '</div>';
       // agents
@@ -1284,15 +1291,15 @@
         '<div class="cards">' +
           kpi('עסקאות בפועל', doneDeals.length, sumT.deals ? 'יעד ' + sumT.deals : null) +
           kpi('הכנסות בפועל', M(revenue), sumT.revenue ? 'יעד ' + M(sumT.revenue) : null, true) +
-          kpi('רווחיות בפועל', M(profit), sumT.profit ? 'יעד ' + M(sumT.profit) : null) +
+          kpi('עמלות סוכן בפועל', M(profit), sumT.profit ? 'יעד ' + M(sumT.profit) : null) +
         '</div>' +
         '<div class="sec-note">🎯 ' + (canEditTargets
           ? 'הקלידו יעד בשדות ולחצו <b>שמור יעדים</b>. שדה ריק = ללא יעד.'
           : 'היעדים נקבעים ע״י מנהל מערכת או מנהל סניף.') +
-          ' <b>רווחיות</b> = סכום שדה "עמלת סוכן" בעסקאות החתומות.</div>' +
+          ' <b>הכנסות</b> = סכום מחיר הרכב בעסקאות החתומות · <b>עמלת סוכן</b> = סכום שדה העמלה שהוזן בעסקה.</div>' +
         secCard('📊 ביצועים מול יעד לפי נציג',
           '<div class="table-scroll"><table><thead><tr>' +
-            ['שם נציג', 'עסקאות', 'יעד עסקאות', '% עמידה', 'הכנסות', 'יעד הכנסות', '% עמידה', 'רווחיות', 'יעד רווחיות', '% עמידה']
+            ['שם נציג', 'עסקאות', 'יעד עסקאות', '% עמידה', 'הכנסות', 'יעד הכנסות', '% עמידה', 'עמלת סוכן', 'יעד עמלות', '% עמידה']
               .map(function (h) { return '<th>' + h + '</th>'; }).join('') +
           '</tr></thead><tbody>' + (tgtRows || '<tr><td colspan="10" class="muted">אין אנשי צוות</td></tr>') + '</tbody></table></div>' +
           (canEditTargets ? '<div style="margin-top:12px;display:flex;gap:10px;align-items:center">' +
@@ -1319,7 +1326,7 @@
         return allDeals.reduce(function (a, d) {
           if (!d.has_signature || d.status === 'cancelled' || d.stage === 'cancelled') return a;
           var t = new Date(d.signed_at || d.created_at || 0).getTime();
-          return t >= from ? a + (+d.total || 0) : a;
+          return t >= from ? a + (+d.car_price || 0) : a;
         }, 0);
       };
       //  המדדים מ-Meta נטענים אחרי הציור (קריאה חיצונית), ולכן כאן רק
@@ -1349,9 +1356,9 @@
         '<div class="rep-grid">' +
           secCard('📣 לידים לפי מקור', barRows(repTop(bySource, 'leads', 12), function (v) { return v; })) +
           secCard('🏆 חמשת המותגים המובילים בהכנסות', rankRows(netByBrand, M, function (i) { return i.o.count + ' עסקאות'; })) +
-          secCard('🌐 צפיות / מבקרים באתר', '<div class="cards" style="margin:0">' + kpi('צפיות בעמודים', pv.toLocaleString('en-US')) + kpi('מבקרים ייחודיים', Object.keys(sess).length.toLocaleString('en-US')) + '</div>') +
+          secCard('🌐 צפיות באתר הציבורי <span class="muted" style="font-size:12px;font-weight:400">· tzahilevi1.github.io</span>', '<div class="cards" style="margin:0">' + kpi('צפיות בעמודים', pv.toLocaleString('en-US')) + kpi('מבקרים ייחודיים', Object.keys(sess).length.toLocaleString('en-US')) + '</div>') +
         '</div>' +
-        secCard('📋 ביצועי קמפיינים (ייחוס מה-CRM)', repTable(['קמפיין', 'לידים', 'עסקאות', 'נסגרו', 'הכנסה', 'המרה', 'הוצאה', 'CPL'], campRows));
+        secCard('📋 ביצועי קמפיינים <span class="muted" style="font-size:12px;font-weight:400">· ייחוס מה-CRM: כל ליד משויך לקמפיין שממנו הגיע, ולידים ידניים לחברת השיווק</span>', repTable(['קמפיין', 'לידים', 'עסקאות', 'נסגרו', 'הכנסה', 'המרה', 'הוצאה', 'CPL'], campRows));
 
       var panels = { manager: managerPanel, sales: salesPanel, marketing: marketingPanel };
       function tab(k, label) { return '<button data-rep="' + k + '"' + (repTab === k ? ' class="active"' : '') + '>' + label + '</button>'; }
@@ -1384,10 +1391,12 @@
           m.style.color = 'var(--ok)'; m.textContent = '✓ נשמר';
         });
       });
-      if ($('mkRange')) $('mkRange').addEventListener('click', function (e) {
+      //  אותה מלכודת כמו כפתור היעדים: בורר הטווח נבנה מחדש בכל מעבר
+      //  לשונית, ומאזין ישיר עליו נמחק — הכפתורים נראו ולא הגיבו.
+      $('repPanel').addEventListener('click', function (e) {
         var b = e.target.closest('button[data-mkr]'); if (!b) return;
         adPreset = b.dataset.mkr;
-        $('mkRange').querySelectorAll('button').forEach(function (x) { x.classList.toggle('active', x === b); });
+        b.parentElement.querySelectorAll('button').forEach(function (x) { x.classList.toggle('active', x === b); });
         loadAdMetrics();
       });
       $('repTabs').addEventListener('click', function (e) { var b = e.target.closest('button[data-rep]'); if (!b) return; repTab = b.dataset.rep; $('repTabs').querySelectorAll('button').forEach(function (x) { x.classList.toggle('active', x.dataset.rep === repTab); }); $('repPanel').innerHTML = panels[repTab];  loadAdMetrics(); });
