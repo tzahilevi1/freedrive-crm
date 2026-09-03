@@ -1420,38 +1420,51 @@
             '<span id="tgtMsg" class="muted" style="font-size:12.5px"></span></div>' : ''));
 
       // ---------- מקורות הגעה ----------
-      //  מסע ההגעה של הליד: מקור ← פלטפורמה ← קמפיין ← קבוצת מודעות ← מודעה.
-      //  כל רמה נספרת מהלידים, וההכנסה מיוחסת מהעסקה החתומה חזרה לליד שממנו
-      //  היא נולדה. "עסקה" כאן היא בהגדרה של המערכת: חתומה ולא מבוטלת.
+      //  מסע ההגעה נקרא מלמעלה למטה: ערוץ ← מקור ← קמפיין ← קבוצת מודעות ← מודעה.
+      //  רובד ה"ערוץ" הוא התוספת המהותית: בלעדיו כל ליד שאינו מפרסום נפל
+      //  ל"ללא ייחוס" בטבלת הקמפיינים, וזה ערבב שני דברים הפוכים — ליד
+      //  ששותף עסקי הביא (מקור ידוע לחלוטין) וליד שהמקור שלו באמת אבד.
+      //  שותף אינו קמפיין, ולכן הוא לא אמור להופיע בטבלת הקמפיינים בכלל.
       var UNATTR = 'ללא ייחוס';
       //  utm_term מגיע מפייסבוק כקוד מיקום ולא כשם קריא
       var PLACEMENTS = { fb: 'פייסבוק', ig: 'אינסטגרם', an: 'Audience Network', msg: 'מסנג\u05f3ר', fb_ig: 'פייסבוק + אינסטגרם' };
-      function attrBy(get) {
+      //  הערכים האלה מתארים איך הליד נכנס למערכת ולא מאיפה הוא הגיע, ולכן
+      //  אינם נחשבים מקור. כל ערך אחר ברשימת "מקור הגעה" שבהגדרות נחשב
+      //  מקור אמיתי — כך שהוספת שותף חדש שם נכנסת לדוח מעצמה.
+      var NO_ORIGIN = { 'ידני': 1, 'ייבוא / קובץ': 1, 'ייבוא': 1, 'לא ידוע': 1, 'אחר': 1 };
+      var CH_PAID = 'פרסום ממומן', CH_PARTNER = 'שותפים והפניות', CH_NONE = 'ללא מקור מתועד';
+      function namedSource(l) { var v = String((l && l.source) || '').trim(); return v && !NO_ORIGIN[v] ? v : ''; }
+      function isPaid(l) { return !!(l && (l.utm_source || l.campaign || l.utm_campaign)); }
+      function isPartner(l) { return !isPaid(l) && !!namedSource(l); }
+      function channelOf(l) { return isPaid(l) ? CH_PAID : (namedSource(l) ? CH_PARTNER : CH_NONE); }
+
+      //  only — מסננת אופציונלית, כדי שטבלאות הפרסום יכילו רק לידים מפרסום
+      function attrBy(get, only) {
         var m = {};
         function cell(l) { var k = String(get(l) || '').trim() || UNATTR; m[k] = m[k] || { leads: 0, count: 0, revenue: 0 }; return m[k]; }
-        leads.forEach(function (l) { cell(l).leads++; });
+        leads.forEach(function (l) { if (only && !only(l)) return; cell(l).leads++; });
         deals.forEach(function (d) {
-          var l = leadById[d.lead_id]; if (!l) return;
+          var l = leadById[d.lead_id]; if (!l || (only && !only(l))) return;
           var o = cell(l); o.count++; o.revenue += (+d.car_price || 0);
         });
         return m;
       }
+      var byChannel = attrBy(channelOf);
       var bySrcName = attrBy(function (l) { return l.source; });
-      var byPlatform = attrBy(function (l) { return l.utm_source; });
-      var byMedium = attrBy(function (l) { return l.utm_medium || l.medium; });
-      var byPlacement = attrBy(function (l) { var t = String(l.utm_term || '').toLowerCase(); return PLACEMENTS[t] || l.utm_term; });
+      var byPartner = attrBy(function (l) { return l.source; }, isPartner);
+      var byPlatform = attrBy(function (l) { return l.utm_source; }, isPaid);
+      var byMedium = attrBy(function (l) { return l.utm_medium || l.medium; }, isPaid);
+      var byPlacement = attrBy(function (l) { var t = String(l.utm_term || '').toLowerCase(); return PLACEMENTS[t] || l.utm_term; }, isPaid);
       var byMktCo = attrBy(function (l) { return l.marketing_company; });
-      var byCampName = attrBy(function (l) { return l.campaign || l.utm_campaign; });
-      var byAdset = attrBy(function (l) { return l.adset_name || l.ad_group; });
-      var byAdName = attrBy(function (l) { return l.ad_name; });
+      var byCampName = attrBy(function (l) { return l.campaign || l.utm_campaign; }, isPaid);
+      var byAdset = attrBy(function (l) { return l.adset_name || l.ad_group; }, isPaid);
+      var byAdName = attrBy(function (l) { return l.ad_name; }, isPaid);
 
-      function isPaid(l) { return !!(l && (l.utm_source || l.campaign || l.utm_campaign)); }
-      var tracked = leads.filter(isPaid).length;
+      var chSum = function (ch, k) { return (byChannel[ch] || {})[k] || 0; };
+      var tracked = chSum(CH_PAID, 'leads'), partnerLeads = chSum(CH_PARTNER, 'leads'), noneLeads = chSum(CH_NONE, 'leads');
       var paidDeals = deals.filter(function (d) { return isPaid(leadById[d.lead_id]); });
-      var paidRev = paidDeals.reduce(function (a, d) { return a + (+d.car_price || 0); }, 0);
+      var paidRev = chSum(CH_PAID, 'revenue'), partnerRev = chSum(CH_PARTNER, 'revenue');
 
-      //  טבלה גנרית לכל רמת ייחוס: כמה לידים נכנסו, כמה מהם הפכו לעסקה
-      //  חתומה, כמה הכנסה נכנסה ומה אחוז ההמרה בפועל.
       //  אותה טבלה משרתת שתי שאלות: השיווק שואל כמה לידים המקור הביא,
       //  והמכירות שואלות כמה כסף הוא סגר. לכן המיון וסדר העמודות משתנים
       //  לפי המצב, והנתונים עצמם זהים.
@@ -1475,8 +1488,8 @@
         var l = leadById[d.lead_id] || {};
         var pl = String(l.utm_term || '').toLowerCase();
         return { t: new Date(d.signed_at || d.created_at || 0).getTime(),
-          h: '<tr><td><b>' + esc(l.name || '\u2014') + '</b></td><td>' + esc(l.source || UNATTR) + '</td><td>' +
-             esc(l.utm_source || '\u2014') + '</td><td>' + esc(l.campaign || l.utm_campaign || '\u2014') + '</td><td>' +
+          h: '<tr><td><b>' + esc(l.name || '\u2014') + '</b></td><td>' + esc(channelOf(l)) + '</td><td>' +
+             esc(l.source || UNATTR) + '</td><td>' + esc(l.campaign || l.utm_campaign || '\u2014') + '</td><td>' +
              esc(l.adset_name || '\u2014') + '</td><td>' + esc(l.ad_name || '\u2014') + '</td><td>' +
              esc(PLACEMENTS[pl] || l.utm_term || '\u2014') + '</td><td>' + M(+d.car_price || 0) + '</td></tr>' };
       }).sort(function (a, b) { return b.t - a.t; }).map(function (x) { return x.h; }).join('');
@@ -1486,16 +1499,17 @@
       function sourcesPanel(mode) {
         var byDeals = mode === 'deals';
         var avgDeal = deals.length ? revenue / deals.length : 0;
+        var pctOf = function (n, tot) { return tot ? P1(n / tot * 100) : null; };
         var kpis = byDeals
           ? kpi('סה\u05f4כ הכנסות', M(revenue), 'לפי מחיר הרכב בעסקאות החתומות', true) +
             kpi('עסקאות חתומות', deals.length, 'לא כולל מבוטלות') +
-            kpi('עסקאות ממקור פרסומי', paidDeals.length, deals.length ? P1(paidDeals.length / deals.length * 100) + ' מהעסקאות' : null) +
-            kpi('הכנסות ממקור פרסומי', M(paidRev), revenue ? P1(paidRev / revenue * 100) + ' מההכנסות' : null) +
+            kpi('הכנסות מפרסום ממומן', M(paidRev), pctOf(paidRev, revenue) ? pctOf(paidRev, revenue) + ' מההכנסות · ' + paidDeals.length + ' עסקאות' : null) +
+            kpi('הכנסות משותפים והפניות', M(partnerRev), pctOf(partnerRev, revenue) ? pctOf(partnerRev, revenue) + ' מההכנסות · ' + chSum(CH_PARTNER, 'count') + ' עסקאות' : null) +
             kpi('הכנסה ממוצעת לעסקה', M(avgDeal))
           : kpi('סה\u05f4כ לידים', leads.length.toLocaleString('en-US'), null, true) +
-            kpi('לידים עם ייחוס פרסומי', tracked, leads.length ? P1(tracked / leads.length * 100) + ' מכלל הלידים' : null) +
-            kpi('לידים ללא ייחוס', leads.length - tracked, 'הוקלדו ידנית או ללא UTM') +
-            kpi('עסקאות ממקור פרסומי', paidDeals.length, deals.length + ' עסקאות חתומות בסה\u05f4כ') +
+            kpi('מפרסום ממומן', tracked, pctOf(tracked, leads.length)) +
+            kpi('משותפים והפניות', partnerLeads, pctOf(partnerLeads, leads.length)) +
+            kpi('ללא מקור מתועד', noneLeads, 'הוקלדו ידנית בלי לציין מקור') +
             kpi('הכנסות מיוחסות לפרסום', M(paidRev), 'לפי מחיר הרכב');
         //  הגרפים מודדים את מה שהלשונית שואלת עליו: כסף במכירות, פניות בשיווק
         var bar = function (title, map) {
@@ -1504,29 +1518,31 @@
             : secCard(title, barRows(repTop(map, 'leads', 12), function (v) { return v; }));
         };
         var grid = byDeals
-          ? bar('\ud83d\udcb0 הכנסות לפי מקור הליד', bySrcName) +
+          ? bar('\ud83e\udded הכנסות לפי ערוץ', byChannel) +
+            bar('\ud83d\udcb0 הכנסות לפי מקור הליד', bySrcName) +
             secCard('\ud83e\udd1d עסקאות לפי מקור הליד', barRows(repTop(bySrcName, 'count', 12), function (v) { return v; })) +
             bar('\ud83c\udf10 הכנסות לפי פלטפורמה', byPlatform) +
             bar('\ud83d\udce3 הכנסות לפי קמפיין', byCampName) +
-            bar('\ud83d\uddbc\ufe0f הכנסות לפי מודעה', byAdName) +
-            bar('\ud83c\udfe2 הכנסות לפי חברת שיווק', byMktCo)
-          : bar('\ud83d\udce5 מקור הליד', bySrcName) +
+            bar('\ud83d\uddbc\ufe0f הכנסות לפי מודעה', byAdName)
+          : bar('\ud83e\udded ערוצי הגעה', byChannel) +
+            bar('\ud83d\udce5 מקור הליד', bySrcName) +
             bar('\ud83c\udf10 פלטפורמה (utm_source)', byPlatform) +
-            bar('\ud83e\udded סוג תנועה (utm_medium)', byMedium) +
             bar('\ud83d\udccd מיקום הצגה (utm_term)', byPlacement) +
-            bar('\ud83c\udfe2 חברת שיווק', byMktCo) +
+            bar('\ud83e\udded סוג תנועה (utm_medium)', byMedium) +
             secCard('\ud83d\udcb0 הכנסות לפי מקור', barRows(repTop(bySrcName, 'revenue', 12), M));
         var note = byDeals
           ? 'כל עסקה חתומה נספרת למקור של הליד שממנו נולדה, גם אם הליד נפתח לפני הטווח שנבחר. ההכנסה נמדדת לפי <b>מחיר הרכב</b>, ועסקה מבוטלת אינה נספרת.'
-          : 'הייחוס נשמר על הליד ברגע הקליטה מפייסבוק (מקור, קמפיין, קבוצת מודעות ומודעה). ליד שהוקלד ידנית מופיע כ\u05f4' + UNATTR + '\u05f4. ההכנסה מיוחסת לפי <b>מחיר הרכב</b> בעסקה החתומה.';
+          : 'הייחוס נשמר על הליד ברגע הקליטה מפייסבוק (מקור, קמפיין, קבוצת מודעות ומודעה). ההכנסה מיוחסת לפי <b>מחיר הרכב</b> בעסקה החתומה.';
         return '<div class="cards">' + kpis + '</div>' +
           '<div class="rep-grid">' + grid + '</div>' +
-          secCard('\ud83d\udce3 קמפיינים', attrTable(byCampName, 'קמפיין', byDeals)) +
+          secCard('\ud83e\udded ערוצי הגעה', attrTable(byChannel, 'ערוץ', byDeals)) +
+          secCard('\ud83e\udd1d שותפים ומקורות שאינם פרסום', attrTable(byPartner, 'מקור', byDeals)) +
+          secCard('\ud83d\udce3 קמפיינים <span class="muted" style="font-size:12px;font-weight:400">\u00b7 פרסום ממומן בלבד</span>', attrTable(byCampName, 'קמפיין', byDeals)) +
           secCard('\ud83c\udf9b\ufe0f קבוצות מודעות', attrTable(byAdset, 'קבוצת מודעות', byDeals)) +
           secCard('\ud83d\uddbc\ufe0f מודעות', attrTable(byAdName, 'מודעה', byDeals)) +
           secCard('\ud83e\uddfe מסלול ההגעה של העסקאות החתומות',
-            repTable(['לקוח', 'מקור', 'פלטפורמה', 'קמפיין', 'קבוצת מודעות', 'מודעה', 'מיקום', 'הכנסה'], journeyRows)) +
-          '<div class="sec-note">\u2139\ufe0f ' + note + '</div>';
+            repTable(['לקוח', 'ערוץ', 'מקור', 'קמפיין', 'קבוצת מודעות', 'מודעה', 'מיקום', 'הכנסה'], journeyRows)) +
+          '<div class="sec-note">\u2139\ufe0f ' + note + ' טבלאות הפרסום מכילות <b>רק</b> לידים שהגיעו מקמפיין; שותפים והפניות מרוכזים בטבלה נפרדת, ולידים שהוקלדו בלי מקור נספרים כ\u05f4' + CH_NONE + '\u05f4. רשימת המקורות נערכת ב<b>הגדרות ורשימות \u2190 מקור הגעה</b>, וכל מקור חדש שתוסיפו שם נכנס לדוח מעצמו.</div>';
       }
       var dealSources = sourcesPanel('deals'), leadSources = sourcesPanel('leads');
 
