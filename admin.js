@@ -1102,11 +1102,15 @@
       db.from('tasks').select('done'),
       db.from('profiles').select('user_id,full_name'),
       db.from('deals').select('id,lead_id,brand,stage,status,car_make,car_model,total,commission,discount_amt,salesperson,created_at,financing,tradein,has_signature').is('deleted_at', null),
-      db.from('payments').select('amount,kind,deal_id')
+      db.from('payments').select('amount,kind,deal_id'),
+      db.from('agent_targets').select('user_id,deals,revenue,profit')
     ]).then(function (res) {
       var leads = res[0].data || [], appts = res[1].data || [], events = res[2].data || [], tasks = res[3].data || [];
       var prof = {}; (res[4].data || []).forEach(function (p) { prof[p.user_id] = p.full_name; });
       var allDeals = res[5].data || [], pays = (res[6] && res[6].data) || [];
+      //  יעדים לנציג. טבלה חסרה או ללא הרשאה מחזירה שגיאה — ואז פשוט
+      //  אין יעדים, ולא נופלים על כל הדוח.
+      var tgt = {}; ((res[7] && res[7].data) || []).forEach(function (t) { tgt[t.user_id] = t; });
       var ST = window.C2B_STATUSES || [], bdg = window.C2B_badge || function (k) { return k; };
       var leadById = {}; leads.forEach(function (l) { leadById[l.id] = l; });
 
@@ -1248,11 +1252,50 @@
           secCard('🏦 פילוח לפי סוג עסקת מימון', barRows(Object.keys(finTracks).map(function (k) { return { label: k, v: finTracks[k] }; }).sort(function (a, b) { return b.v - a.v; }), function (v) { return v; })) +
         '</div>';
       // targets
-      var tgtRows = repTop(byAgent, 'revenue', 200).map(function (i) { var o = i.o; return '<tr><td><b>' + esc(i.label) + '</b></td><td>' + o.done + '</td><td class="muted">—</td><td class="muted">—</td><td>' + M(o.revenue) + '</td><td class="muted">—</td><td class="muted">—</td><td style="color:var(--ok)">' + M(o.profit) + '</td><td class="muted">—</td><td class="muted">—</td></tr>'; }).join('');
+      //  היעד נשמר לפי משתמש, ולכן הטבלה נבנית מרשימת אנשי הצוות ולא
+      //  מאלה שכבר יש להם ביצועים — אחרת אי אפשר לקבוע יעד לנציג חדש.
+      var canEditTargets = C.role === 'admin' || C.role === 'branch';
+      var pct = function (act, goal) {
+        if (!goal) return '<span class="muted">—</span>';
+        var p = Math.round(act / goal * 100);
+        var col = p >= 100 ? 'var(--ok)' : p >= 70 ? 'var(--warn)' : 'var(--danger)';
+        return '<b style="color:' + col + '">' + p + '%</b>';
+      };
+      var tin = function (uid, f, v) {
+        return canEditTargets
+          ? '<input class="inp tgt-in" data-tu="' + esc(uid) + '" data-tf="' + f + '" type="number" min="0" ' +
+            'value="' + (v == null ? '' : esc(String(v))) + '" placeholder="—" style="width:104px;padding:5px 8px;font-size:13px">'
+          : '<span class="muted">' + (v == null ? '—' : Number(v).toLocaleString('en-US')) + '</span>';
+      };
+      var tgtRows = Object.keys(prof).map(function (uid) {
+        var o = byAgent[prof[uid]] || { done: 0, revenue: 0, profit: 0 };
+        var t = tgt[uid] || {};
+        return '<tr><td><b>' + esc(prof[uid]) + '</b></td>' +
+          '<td>' + (o.done || 0) + '</td><td>' + tin(uid, 'deals', t.deals) + '</td><td>' + pct(o.done || 0, t.deals) + '</td>' +
+          '<td>' + M(o.revenue || 0) + '</td><td>' + tin(uid, 'revenue', t.revenue) + '</td><td>' + pct(o.revenue || 0, t.revenue) + '</td>' +
+          '<td>' + M(o.profit || 0) + '</td><td>' + tin(uid, 'profit', t.profit) + '</td><td>' + pct(o.profit || 0, t.profit) + '</td></tr>';
+      }).join('');
+      var sumT = Object.keys(tgt).reduce(function (a, k) {
+        return { deals: a.deals + (+tgt[k].deals || 0), revenue: a.revenue + (+tgt[k].revenue || 0), profit: a.profit + (+tgt[k].profit || 0) };
+      }, { deals: 0, revenue: 0, profit: 0 });
       var salesTargets =
-        '<div class="cards">' + kpi('עסקאות בפועל', doneDeals.length) + kpi('הכנסות בפועל', M(revenue), null, true) + kpi('רווחיות בפועל', M(profit)) + '</div>' +
-        '<div class="sec-note">🎯 יעדים לנציג טרם הוגדרו. אפשר להוסיף טבלת <b>יעדי נציג</b> (עסקאות/הכנסות/רווחיות) ואז עמודות ה-% יתמלאו אוטומטית. כרגע מוצגים הביצועים בפועל.</div>' +
-        secCard('📊 ביצועים לפי נציג', repTable(['שם נציג', 'עסקאות', 'יעד עסקאות', '% עמידה', 'הכנסות', 'יעד הכנסות', '% עמידה', 'רווחיות', 'יעד רווחיות', '% עמידה'], tgtRows));
+        '<div class="cards">' +
+          kpi('עסקאות בפועל', doneDeals.length, sumT.deals ? 'יעד ' + sumT.deals : null) +
+          kpi('הכנסות בפועל', M(revenue), sumT.revenue ? 'יעד ' + M(sumT.revenue) : null, true) +
+          kpi('רווחיות בפועל', M(profit), sumT.profit ? 'יעד ' + M(sumT.profit) : null) +
+        '</div>' +
+        '<div class="sec-note">🎯 ' + (canEditTargets
+          ? 'הקלידו יעד בשדות ולחצו <b>שמור יעדים</b>. שדה ריק = ללא יעד.'
+          : 'היעדים נקבעים ע״י מנהל מערכת או מנהל סניף.') +
+          ' <b>רווחיות</b> = סכום שדה "עמלת סוכן" בעסקאות החתומות.</div>' +
+        secCard('📊 ביצועים מול יעד לפי נציג',
+          '<div class="table-scroll"><table><thead><tr>' +
+            ['שם נציג', 'עסקאות', 'יעד עסקאות', '% עמידה', 'הכנסות', 'יעד הכנסות', '% עמידה', 'רווחיות', 'יעד רווחיות', '% עמידה']
+              .map(function (h) { return '<th>' + h + '</th>'; }).join('') +
+          '</tr></thead><tbody>' + (tgtRows || '<tr><td colspan="10" class="muted">אין אנשי צוות</td></tr>') + '</tbody></table></div>' +
+          (canEditTargets ? '<div style="margin-top:12px;display:flex;gap:10px;align-items:center">' +
+            '<button class="btn btn-sm" id="tgtSave">שמור יעדים</button>' +
+            '<span id="tgtMsg" class="muted" style="font-size:12.5px"></span></div>' : ''));
 
       var salesPanels = { overview: salesOverview, trends: salesTrends, agents: salesAgents, cars: salesCars, quality: salesQuality, targets: salesTargets };
       var salesSubs = [['overview', 'סקירה כללית'], ['trends', 'מגמות מכירות'], ['agents', 'חברה ונציגים'], ['cars', 'ניתוח רכבים'], ['quality', 'איכות עסקאות'], ['targets', 'יעדים']];
@@ -1262,18 +1305,31 @@
       // ---------- MARKETING ----------
       var netByBrand = repTop(byBrand, 'revenue', 5);
       var campRows = repTop(byCampaign, 'revenue', 60).map(function (i) { var o = i.o; var cr = o.leads ? Math.round(o.done / o.leads * 100) : 0; return '<tr><td><b>' + esc(i.label) + '</b></td><td>' + o.leads + '</td><td>' + (o.count || 0) + '</td><td>' + o.done + '</td><td>' + M(o.revenue) + '</td><td>' + cr + '%</td><td class="muted">—</td><td class="muted">—</td></tr>'; }).join('');
+      revenueForAds = revenue;   // ל-ROAS: הכנסה מעסקאות חתומות מול הוצאת הפרסום
+      //  המדדים מ-Meta נטענים אחרי הציור (קריאה חיצונית), ולכן כאן רק
+      //  מקומות שמורים. הכנסה, לידים ופגישות מגיעים מה-CRM ומוצגים מיד.
       var marketingPanel =
-        '<div class="cards">' +
-          kpi('הכנסה (מעסקאות)', M(revenue), 'כל ההיסטוריה ב-CRM', true) +
-          kpi('הוצאה', M(0), 'יתחבר עם Facebook Ads') +
-          kpi('נטו', M(revenue), 'הכנסה פחות הוצאה') +
-          kpi('ROAS', '—', 'הכנסה / הוצאה') +
-          kpi('אחוז המרה', P1(closeRate), doneDeals.length + ' סגירות') +
-          kpi('לידים', leads.length.toLocaleString('en-US'), wonL + ' נסגרו') +
-          kpi('עלות לפנייה (CPL)', '—', 'דורש חיבור הוצאות') +
+        '<div class="row-between" style="margin-bottom:8px"><span class="muted" style="font-size:12.5px">טווח נתוני הפרסום:</span>' +
+          '<nav class="tabs" id="mkRange">' +
+            [['today', 'היום'], ['last_7d', '7 ימים'], ['last_30d', '30 יום'], ['last_90d', '90 יום'], ['maximum', 'הכל']]
+              .map(function (p) { return '<button data-mkr="' + p[0] + '"' + (adPreset === p[0] ? ' class="active"' : '') + '>' + p[1] + '</button>'; }).join('') +
+          '</nav></div>' +
+        '<div class="cards" id="mktKpis">' +
+          kpi('הכנסה (מעסקאות)', M(revenue), 'עסקאות חתומות', true) +
+          kpi('הוצאת פרסום', '<span id="mkSpend">…</span>', 'Meta · הטווח הנבחר') +
+          kpi('ROAS', '<span id="mkRoas">…</span>', 'הכנסה / הוצאה') +
+          kpi('עלות לליד (CPL)', '<span id="mkCpl">…</span>', '<span id="mkLeadsFb">—</span> לידים מ-Meta') +
+          kpi('CTR', '<span id="mkCtr">…</span>', 'הקלקות / חשיפות') +
+          kpi('CPC', '<span id="mkCpc">…</span>', 'עלות להקלקה') +
+          kpi('CPM', '<span id="mkCpm">…</span>', 'עלות ל-1,000 חשיפות') +
+          kpi('קמפיינים פעילים', '<span id="mkActive">…</span>') +
+          kpi('אחוז המרה', P1(closeRate), doneDeals.length + ' עסקאות חתומות') +
+          kpi('לידים ב-CRM', leads.length.toLocaleString('en-US'), wonL + ' נסגרו') +
           kpi('פגישות שנקבעו', appts.length) +
         '</div>' +
-        '<div class="sec-note">📡 מדדי הפרסום (הוצאה, ROAS, CPL, CTR, CPC, CPM, קמפיינים פעילים) יתמלאו לאחר חיבור <b>Facebook Ads / Meta</b>. בינתיים מוצגים כל הנתונים מצד ה-CRM: הכנסות, לידים, המרות וייחוס לפי קמפיין.</div>' +
+        '<div class="sec-note" id="mkNote">📡 טוען מדדים מ-Meta…</div>' +
+        secCard('📣 קמפיינים ב-Meta <span class="muted" style="font-size:12px;font-weight:400">· לצפייה בלבד</span>',
+                '<div id="mkCamps" class="muted" style="font-size:13px">טוען…</div>') +
         '<div class="rep-grid">' +
           secCard('📣 לידים לפי מקור', barRows(repTop(bySource, 'leads', 12), function (v) { return v; })) +
           secCard('🏆 חמשת המותגים המובילים בהכנסות', rankRows(netByBrand, M, function (i) { return i.o.count + ' עסקאות'; })) +
@@ -1286,11 +1342,106 @@
       view('<h2 style="margin:0 0 4px">📊 דוחות וניתוח</h2><p class="muted" style="margin:0 0 16px;font-size:13px">שלוש תצוגות: מנהל · מכירות · שיווק — מבוססות על נתוני ה-CRM שלכם</p>' +
         '<nav class="tabs" id="repTabs">' + tab('manager', '👔 מנהל') + tab('sales', '💼 מכירות') + tab('marketing', '📣 שיווק') + '</nav>' +
         '<div id="repPanel">' + panels[repTab] + '</div>');
+      loadAdMetrics();
+      //  שמירה אחת לכל השורות: upsert לכל נציג שיש לו לפחות ערך אחד.
+      //  שדה ריק נשמר כ-null ולא כאפס, אחרת "אין יעד" היה נראה כיעד 0
+      //  ואחוז העמידה היה קופץ ל-100% על כלום.
+      if ($('tgtSave')) $('tgtSave').addEventListener('click', function () {
+        var byU = {};
+        $('repPanel').querySelectorAll('.tgt-in').forEach(function (i) {
+          var u = i.dataset.tu; byU[u] = byU[u] || { user_id: u, deals: null, revenue: null, profit: null };
+          var v = i.value.trim();
+          byU[u][i.dataset.tf] = v === '' ? null : Number(v);
+        });
+        var rows = Object.keys(byU).map(function (u) { return byU[u]; });
+        var b = this; b.disabled = true; b.textContent = 'שומר…';
+        db.from('agent_targets').upsert(rows, { onConflict: 'user_id' }).then(function (r) {
+          b.disabled = false; b.textContent = 'שמור יעדים';
+          var m = $('tgtMsg'); if (!m) return;
+          if (r.error) { m.style.color = 'var(--danger)'; m.textContent = 'שגיאה: ' + r.error.message; return; }
+          m.style.color = 'var(--ok)'; m.textContent = '✓ נשמר';
+          setTimeout(function () { renderReports(); }, 700);
+        });
+      });
+      if ($('mkRange')) $('mkRange').addEventListener('click', function (e) {
+        var b = e.target.closest('button[data-mkr]'); if (!b) return;
+        adPreset = b.dataset.mkr;
+        $('mkRange').querySelectorAll('button').forEach(function (x) { x.classList.toggle('active', x === b); });
+        loadAdMetrics();
+      });
       $('repTabs').addEventListener('click', function (e) { var b = e.target.closest('button[data-rep]'); if (!b) return; repTab = b.dataset.rep; $('repTabs').querySelectorAll('button').forEach(function (x) { x.classList.toggle('active', x.dataset.rep === repTab); }); $('repPanel').innerHTML = panels[repTab]; });
       // sales sub-tab switching (delegated on the persistent repPanel)
       $('repPanel').addEventListener('click', function (e) { var b = e.target.closest('button[data-ssub]'); if (!b) return; salesSub = b.dataset.ssub; var nav = $('repSalesTabs'); if (nav) nav.querySelectorAll('button').forEach(function (x) { x.classList.toggle('active', x.dataset.ssub === salesSub); }); var sp = $('repSalesPanel'); if (sp) sp.innerHTML = salesPanels[salesSub]; });
     }).catch(function (e) { errBox(e.message || e); });
   }
+  //  ---------- מדדי הפרסום מ-Meta (קריאה בלבד) ----------
+  //  נטענים בנפרד מהדוח: זו קריאה חיצונית לגרף של Meta, ואין סיבה
+  //  להשהות את כל המסך בגללה. המדדים נכנסים למקומות השמורים כשהם מגיעים.
+  var AD_PRESET = { today: 'today', '7': 'last_7d', '30': 'last_30d', '90': 'last_90d',
+                    quarter: 'last_90d', month: 'this_month', year: 'maximum', all: 'maximum' };
+  var adCache = {};
+  function loadAdMetrics() {
+    if (!$('mkCamps')) return;                       // לא בלשונית השיווק
+    var key = String(repDays === null ? 'all' : repDays);
+    var preset = AD_PRESET[key] || 'last_30d';
+    var setAll = function (v) {
+      ['mkSpend', 'mkRoas', 'mkCpl', 'mkCtr', 'mkCpc', 'mkCpm', 'mkActive'].forEach(function (id) {
+        if ($(id)) $(id).textContent = v;
+      });
+    };
+    var paint = function (d) {
+      if (!$('mkCamps')) return;
+      if (!d || d.error) {
+        setAll('—');
+        if ($('mkNote')) $('mkNote').innerHTML = '📡 לא ניתן לטעון מדדים מ-Meta: ' + esc((d && d.error) || 'שגיאה');
+        $('mkCamps').innerHTML = '<span class="muted">אין נתונים להצגה.</span>';
+        return;
+      }
+      var t = d.totals || {}, sp = t.spend || 0;
+      var nis0 = function (n) { return '₪' + Math.round(n || 0).toLocaleString('en-US'); };
+      if ($('mkSpend')) $('mkSpend').textContent = nis0(sp);
+      if ($('mkRoas')) $('mkRoas').textContent = sp ? (Math.round(revenueForAds / sp * 10) / 10) + 'x' : '—';
+      if ($('mkCpl')) $('mkCpl').textContent = t.cpl ? nis0(t.cpl) : '—';
+      if ($('mkLeadsFb')) $('mkLeadsFb').textContent = (t.leads || 0).toLocaleString('en-US');
+      if ($('mkCtr')) $('mkCtr').textContent = (Math.round((t.ctr || 0) * 100) / 100) + '%';
+      if ($('mkCpc')) $('mkCpc').textContent = t.cpc ? '₪' + (Math.round(t.cpc * 100) / 100) : '—';
+      if ($('mkCpm')) $('mkCpm').textContent = t.cpm ? nis0(t.cpm) : '—';
+      if ($('mkActive')) $('mkActive').textContent = t.active || 0;
+      if ($('mkNote')) $('mkNote').innerHTML = '📡 הנתונים מ-Meta · חשבון ' + esc(d.account || '') +
+        ' · ' + (t.impressions || 0).toLocaleString('en-US') + ' חשיפות · ' +
+        (t.clicks || 0).toLocaleString('en-US') + ' הקלקות · <b>לצפייה בלבד</b> — שינוי תקציב או סטטוס נעשה ב-Meta.';
+
+      var rows = (d.campaigns || []).map(function (c) {
+        var st = c.status === 'ACTIVE'
+          ? '<span style="color:var(--ok);font-weight:600">● פעיל</span>'
+          : '<span class="muted">● ' + esc(c.status || '—') + '</span>';
+        return '<tr>' +
+          '<td><b>' + esc(c.name || '—') + '</b></td>' +
+          '<td>' + st + '</td>' +
+          '<td class="muted">' + (c.budget ? nis0(c.budget) + ' ' + esc(c.budget_kind || '') : '—') + '</td>' +
+          '<td>' + nis0(c.spend) + '</td>' +
+          '<td>' + (c.impressions || 0).toLocaleString('en-US') + '</td>' +
+          '<td>' + (c.clicks || 0).toLocaleString('en-US') + '</td>' +
+          '<td>' + (Math.round((c.ctr || 0) * 100) / 100) + '%</td>' +
+          '<td>' + (c.cpc ? '₪' + (Math.round(c.cpc * 100) / 100) : '—') + '</td>' +
+          '<td>' + (c.leads || 0) + '</td>' +
+          '<td>' + (c.cpl ? nis0(c.cpl) : '—') + '</td></tr>';
+      }).join('');
+      $('mkCamps').innerHTML = rows
+        ? '<div class="table-scroll"><table><thead><tr>' +
+            ['קמפיין', 'סטטוס', 'תקציב', 'הוצאה', 'חשיפות', 'הקלקות', 'CTR', 'CPC', 'לידים', 'CPL']
+              .map(function (h) { return '<th>' + h + '</th>'; }).join('') +
+          '</tr></thead><tbody>' + rows + '</tbody></table></div>'
+        : '<span class="muted">אין קמפיינים בטווח שנבחר.</span>';
+    };
+    if (adCache[preset]) return paint(adCache[preset]);
+    setAll('…');
+    db.functions.invoke('fb-insights', { body: { preset: preset } }).then(function (r) {
+      var d = (r && r.data) || { error: (r && r.error && r.error.message) || 'שגיאה' };
+      adCache[preset] = d; paint(d);
+    }, function (e) { paint({ error: (e && e.message) || 'שגיאה' }); });
+  }
+
   var repTab = 'manager', salesSub = 'overview';
 
   // ---------- USERS & ROLES (admin only) ----------
