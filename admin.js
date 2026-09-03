@@ -1379,13 +1379,12 @@
   //  ---------- מדדי הפרסום מ-Meta (קריאה בלבד) ----------
   //  נטענים בנפרד מהדוח: זו קריאה חיצונית לגרף של Meta, ואין סיבה
   //  להשהות את כל המסך בגללה. המדדים נכנסים למקומות השמורים כשהם מגיעים.
-  var AD_PRESET = { today: 'today', '7': 'last_7d', '30': 'last_30d', '90': 'last_90d',
-                    quarter: 'last_90d', month: 'this_month', year: 'maximum', all: 'maximum' };
-  var adCache = {};
+  //  adPreset — הטווח שנבחר בלוח השיווק; revenueForAds — ההכנסה מהעסקאות
+  //  החתומות, לחישוב ה-ROAS מול הוצאת הפרסום.
+  var adCache = {}, adPreset = 'last_30d', revenueForAds = 0;
   function loadAdMetrics() {
     if (!$('mkCamps')) return;                       // לא בלשונית השיווק
-    var key = String(repDays === null ? 'all' : repDays);
-    var preset = AD_PRESET[key] || 'last_30d';
+    var preset = adPreset || 'last_30d';
     var setAll = function (v) {
       ['mkSpend', 'mkRoas', 'mkCpl', 'mkCtr', 'mkCpc', 'mkCpm', 'mkActive'].forEach(function (id) {
         if ($(id)) $(id).textContent = v;
