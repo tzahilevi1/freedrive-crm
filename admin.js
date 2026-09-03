@@ -1325,7 +1325,7 @@
       // overview
       var salesOverview =
         '<div class="cards">' +
-          kpi('סה״כ לידים', leads.length.toLocaleString('en-US'), null, true) +
+          kpi('סה״כ הכנסות', M(revenue), 'לפי מחיר הרכב בעסקאות החתומות', true) +
           kpi('סה״כ עסקאות', deals.length) +
           kpi('עסקאות שהושלמו', doneDeals.length) +
           kpi('אחוז סגירה', P1(closeRate), doneDeals.length + ' / ' + leads.length + ' לידים') +
@@ -1337,7 +1337,6 @@
           secCard('📊 עסקאות לפי חודש', barRows(months.map(function (m) { return { label: m.label, v: m.count }; }), function (v) { return v; })) +
           secCard('🔀 עסקאות לפי שלב', barRows(Object.keys(byStage).map(function (k) { var sd = (window.C2B_stageDef && window.C2B_stageDef(k)) || { label: k }; return { label: sd.label || k, v: byStage[k] }; }).sort(function (a, b) { return b.v - a.v; }), function (v) { return v; })) +
           secCard('🏢 הכנסות לפי חברה/מותג', barRows(repTop(byCompany, 'revenue', 10), M)) +
-          secCard('📥 לידים לפי מקור', barRows(repTop(bySource, 'leads', 12), function (v) { return v; })) +
         '</div>';
       // trends
       var salesTrends =
@@ -1496,8 +1495,8 @@
           repTable(['לקוח', 'מקור', 'פלטפורמה', 'קמפיין', 'קבוצת מודעות', 'מודעה', 'מיקום', 'הכנסה'], journeyRows)) +
         '<div class="sec-note">\u2139\ufe0f הייחוס נשמר על הליד ברגע הקליטה מפייסבוק (מקור, קמפיין, קבוצת מודעות ומודעה). ליד שהוקלד ידנית מופיע כ\u05f4' + UNATTR + '\u05f4. ההכנסה מיוחסת לפי <b>מחיר הרכב</b> בעסקה החתומה, ועסקה נספרת למקור של הליד שלה גם אם הליד נפתח לפני הטווח שנבחר.</div>';
 
-      var salesPanels = { overview: salesOverview, trends: salesTrends, sources: salesSources, agents: salesAgents, cars: salesCars, quality: salesQuality, targets: salesTargets };
-      var salesSubs = [['overview', 'סקירה כללית'], ['trends', 'מגמות מכירות'], ['sources', 'מקורות הגעה'], ['agents', 'חברה ונציגים'], ['cars', 'ניתוח רכבים'], ['quality', 'איכות עסקאות'], ['targets', 'יעדים']];
+      var salesPanels = { overview: salesOverview, trends: salesTrends, agents: salesAgents, cars: salesCars, quality: salesQuality, targets: salesTargets };
+      var salesSubs = [['overview', 'סקירה כללית'], ['trends', 'מגמות מכירות'], ['agents', 'חברה ונציגים'], ['cars', 'ניתוח רכבים'], ['quality', 'איכות עסקאות'], ['targets', 'יעדים']];
       function salesNav() { return '<nav class="tabs" id="repSalesTabs" style="margin-bottom:14px;flex-wrap:wrap">' + salesSubs.map(function (s) { return '<button data-ssub="' + s[0] + '"' + (salesSub === s[0] ? ' class="active"' : '') + '>' + s[1] + '</button>'; }).join('') + '</nav>'; }
       var salesPanel = salesNav() + '<div id="repSalesPanel">' + salesPanels[salesSub] + '</div>';
 
@@ -1550,7 +1549,12 @@
         '</div>' +
         secCard('📋 ביצועי קמפיינים <span class="muted" style="font-size:12px;font-weight:400">· ייחוס מה-CRM: כל ליד משויך לקמפיין שממנו הגיע, ולידים ידניים לחברת השיווק</span>', repTable(['קמפיין', 'לידים', 'עסקאות', 'נסגרו', 'הכנסה', 'המרה', 'הוצאה', 'CPL'], campRows));
 
-      var panels = { manager: managerPanel, sales: salesPanel, marketing: marketingPanel };
+      var mktPanels = { overview: marketingPanel, sources: salesSources };
+      var mktSubs = [['overview', '📣 סקירת פרסום'], ['sources', '📥 מקורות הגעה']];
+      function mktNav() { return '<nav class="tabs" id="repMktTabs" style="margin-bottom:14px;flex-wrap:wrap">' + mktSubs.map(function (s) { return '<button data-msub="' + s[0] + '"' + (mktSub === s[0] ? ' class="active"' : '') + '>' + s[1] + '</button>'; }).join('') + '</nav>'; }
+      var marketingWrap = mktNav() + '<div id="repMktPanel">' + mktPanels[mktSub] + '</div>';
+
+      var panels = { manager: managerPanel, sales: salesPanel, marketing: marketingWrap };
       function tab(k, label) { return '<button data-rep="' + k + '"' + (repTab === k ? ' class="active"' : '') + '>' + label + '</button>'; }
       view('<div class="row-between" style="align-items:center;flex-wrap:wrap;gap:10px">' +
           '<div><h2 style="margin:0 0 2px">📊 דוחות וניתוח</h2>' +
@@ -1597,6 +1601,8 @@
       $('repTabs').addEventListener('click', function (e) { var b = e.target.closest('button[data-rep]'); if (!b) return; repTab = b.dataset.rep; $('repTabs').querySelectorAll('button').forEach(function (x) { x.classList.toggle('active', x.dataset.rep === repTab); }); $('repPanel').innerHTML = panels[repTab];  loadAdMetrics(); });
       // sales sub-tab switching (delegated on the persistent repPanel)
       $('repPanel').addEventListener('click', function (e) { var b = e.target.closest('button[data-ssub]'); if (!b) return; salesSub = b.dataset.ssub; var nav = $('repSalesTabs'); if (nav) nav.querySelectorAll('button').forEach(function (x) { x.classList.toggle('active', x.dataset.ssub === salesSub); }); var sp = $('repSalesPanel'); if (sp) sp.innerHTML = salesPanels[salesSub]; });
+      // marketing sub-tab switching — loadAdMetrics מזהה לבד אם הוא בלשונית הנכונה
+      $('repPanel').addEventListener('click', function (e) { var b = e.target.closest('button[data-msub]'); if (!b) return; mktSub = b.dataset.msub; var nav = $('repMktTabs'); if (nav) nav.querySelectorAll('button').forEach(function (x) { x.classList.toggle('active', x.dataset.msub === mktSub); }); var mp = $('repMktPanel'); if (mp) mp.innerHTML = mktPanels[mktSub]; loadAdMetrics(); });
     }).catch(function (e) { errBox(e.message || e); });
   }
   //  ---------- מדדי הפרסום מ-Meta (קריאה בלבד) ----------
@@ -1605,6 +1611,18 @@
   //  adPreset — הטווח שנבחר בלוח השיווק; revenueAt — ההכנסה מהעסקאות
   //  החתומות באותו טווח, לחישוב ROAS מול הוצאת הפרסום.
   var adCache = {}, adPreset = 'last_30d', revenueAt = function () { return 0; };
+  //  יעד הקמפיין כפי שהוא מוגדר ב-Meta. שם היעד לבדו לא מספיק כדי לדעת
+  //  מה נספר: קמפיין ווטסאפ וקמפיין טופס לידים חולקים את אותו OUTCOME_LEADS,
+  //  וההבדל ביניהם מתגלה רק בסוג התוצאה שחוזר בפועל.
+  var OBJECTIVES = {
+    OUTCOME_LEADS: 'לידים', LEAD_GENERATION: 'לידים',
+    OUTCOME_SALES: 'מכירות', CONVERSIONS: 'המרות',
+    OUTCOME_TRAFFIC: 'תנועה', LINK_CLICKS: 'הקלקות',
+    OUTCOME_ENGAGEMENT: 'מעורבות', POST_ENGAGEMENT: 'מעורבות', MESSAGES: 'הודעות',
+    OUTCOME_AWARENESS: 'מודעות', BRAND_AWARENESS: 'מודעות', REACH: 'חשיפה',
+    OUTCOME_APP_PROMOTION: 'קידום אפליקציה', VIDEO_VIEWS: 'צפיות בווידאו'
+  };
+
   function loadAdMetrics() {
     if (!$('mkCamps')) return;                       // לא בלשונית השיווק
     var preset = repMetaPreset();
@@ -1634,7 +1652,10 @@
         var card = el.closest('.kpi'); if (!card) return;
         var sub = card.querySelector('.sub'); if (sub) sub.textContent = txt;
       };
-      hint('mkCpl', (t.leads || 0).toLocaleString('en-US') + ' לידים מ-Meta');
+      //  המספר הכולל מאחד סוגי תוצאה שונים (ליד מטופס, התחלת התכתבות
+      //  בווטסאפ), ולכן הרמז מפרט ממה הוא מורכב.
+      var kinds = (t.results || []).map(function (x) { return x.n.toLocaleString('en-US') + ' ' + x.label; }).join(' \u00b7 ');
+      hint('mkCpl', (t.leads || 0).toLocaleString('en-US') + ' לידים מ-Meta' + (kinds ? ' (' + kinds + ')' : ''));
       hint('mkRoas', 'הכנסה ' + nis0(rev) + ' / הוצאה ' + nis0(sp));
       if ($('mkCtr')) $('mkCtr').textContent = (Math.round((t.ctr || 0) * 100) / 100) + '%';
       if ($('mkCpc')) $('mkCpc').textContent = t.cpc ? '₪' + (Math.round(t.cpc * 100) / 100) : '—';
@@ -1650,6 +1671,7 @@
           : '<span class="muted">● ' + esc(c.status || '—') + '</span>';
         return '<tr>' +
           '<td><b>' + esc(c.name || '—') + '</b></td>' +
+          '<td class="muted">' + esc(OBJECTIVES[c.objective] || c.objective || '—') + '</td>' +
           '<td>' + st + '</td>' +
           '<td class="muted">' + (c.budget ? nis0(c.budget) + ' ' + esc(c.budget_kind || '') : '—') + '</td>' +
           '<td>' + nis0(c.spend) + '</td>' +
@@ -1657,12 +1679,14 @@
           '<td>' + (c.clicks || 0).toLocaleString('en-US') + '</td>' +
           '<td>' + (Math.round((c.ctr || 0) * 100) / 100) + '%</td>' +
           '<td>' + (c.cpc ? '₪' + (Math.round(c.cpc * 100) / 100) : '—') + '</td>' +
-          '<td>' + (c.leads || 0) + '</td>' +
+          '<td>' + (c.leads || 0) +
+            (c.result_type && c.result_type !== 'לידים'
+              ? '<div class="muted" style="font-size:11px;font-weight:400">' + esc(c.result_type) + '</div>' : '') + '</td>' +
           '<td>' + (c.cpl ? nis0(c.cpl) : '—') + '</td></tr>';
       }).join('');
       $('mkCamps').innerHTML = rows
         ? '<div class="table-scroll"><table><thead><tr>' +
-            ['קמפיין', 'סטטוס', 'תקציב', 'הוצאה', 'חשיפות', 'הקלקות', 'CTR', 'CPC', 'לידים', 'CPL']
+            ['קמפיין', 'יעד', 'סטטוס', 'תקציב', 'הוצאה', 'חשיפות', 'הקלקות', 'CTR', 'CPC', 'לידים', 'CPL']
               .map(function (h) { return '<th>' + h + '</th>'; }).join('') +
           '</tr></thead><tbody>' + rows + '</tbody></table></div>'
         : '<span class="muted">אין קמפיינים בטווח שנבחר.</span>';
@@ -1675,7 +1699,7 @@
     }, function (e) { paint({ error: (e && e.message) || 'שגיאה' }); });
   }
 
-  var repTab = 'manager', salesSub = 'overview';
+  var repTab = 'manager', salesSub = 'overview', mktSub = 'overview';
 
   // ---------- USERS & ROLES (admin only) ----------
   var ROLES = [['admin', 'מנהל מערכת'], ['sales', 'סוכן מכירות'], ['files', 'מנהלת תיקי לקוחות'], ['accounting', 'מנהלת חשבונות'], ['branch', 'מנהל סניף']];
