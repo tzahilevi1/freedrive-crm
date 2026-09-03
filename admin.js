@@ -1093,19 +1093,124 @@
   function rankRows(items, fmt, subFmt) { return items.length ? items.map(function (i, idx) { return '<div class="rk' + (idx < 3 ? ' top' + (idx + 1) : '') + '"><span class="n">' + (idx + 1) + '</span><span class="nm">' + esc(i.label) + (subFmt ? ' <span class="mt">' + subFmt(i) + '</span>' : '') + '</span><span class="amt">' + fmt(i.v) + '</span></div>'; }).join('') : '<p class="empty">אין נתונים</p>'; }
   function repTable(headers, rows) { return '<div class="table-scroll"><table><thead><tr>' + headers.map(function (h) { return '<th>' + h + '</th>'; }).join('') + '</tr></thead><tbody>' + (rows || '<tr><td class="empty" colspan="' + headers.length + '">אין נתונים</td></tr>') + '</tbody></table></div>'; }
 
+  //  ---------- בורר טווח התאריכים של הדוחות ----------
+  //  כל טווח מוגדר כפונקציה שמחזירה [מ, עד) במילישניות. גבול עליון פתוח
+  //  כדי שרשומה בשנייה האחרונה של היום לא תיפול בין הכיסאות.
+  var DAY_MS_R = 86400000;
+  function dayStart(d) { var x = new Date(d); x.setHours(0, 0, 0, 0); return x.getTime(); }
+  function monthStart(y, m) { return new Date(y, m, 1).getTime(); }
+  var REP_RANGES = [
+    { k: 'today', l: 'היום', g: function () { var t = dayStart(new Date()); return [t, t + DAY_MS_R]; } },
+    { k: 'yday', l: 'אתמול', g: function () { var t = dayStart(new Date()); return [t - DAY_MS_R, t]; } },
+    { k: 'wk', l: 'השבוע הנוכחי', g: function () { var t = dayStart(new Date()); return [t - new Date(t).getDay() * DAY_MS_R, t + DAY_MS_R]; } },
+    { k: 'wk1', l: 'השבוע שעבר', g: function () { var t = dayStart(new Date()), a = t - new Date(t).getDay() * DAY_MS_R; return [a - 7 * DAY_MS_R, a]; } },
+    { k: 'd7', l: '7 הימים האחרונים', g: function () { var t = dayStart(new Date()); return [t - 6 * DAY_MS_R, t + DAY_MS_R]; } },
+    { k: 'd14', l: '14 הימים האחרונים', g: function () { var t = dayStart(new Date()); return [t - 13 * DAY_MS_R, t + DAY_MS_R]; } },
+    { k: 'd30', l: '30 הימים האחרונים', g: function () { var t = dayStart(new Date()); return [t - 29 * DAY_MS_R, t + DAY_MS_R]; } },
+    { k: 'd90', l: '90 הימים האחרונים', g: function () { var t = dayStart(new Date()); return [t - 89 * DAY_MS_R, t + DAY_MS_R]; } },
+    { k: 'mo', l: 'החודש הנוכחי', g: function () { var n = new Date(); return [monthStart(n.getFullYear(), n.getMonth()), dayStart(n) + DAY_MS_R]; } },
+    { k: 'mo1', l: 'החודש שעבר', g: function () { var n = new Date(); return [monthStart(n.getFullYear(), n.getMonth() - 1), monthStart(n.getFullYear(), n.getMonth())]; } },
+    { k: 'q', l: 'הרבעון הנוכחי', g: function () { var n = new Date(), q = Math.floor(n.getMonth() / 3) * 3; return [monthStart(n.getFullYear(), q), dayStart(n) + DAY_MS_R]; } },
+    { k: 'q1', l: 'הרבעון שעבר', g: function () { var n = new Date(), q = Math.floor(n.getMonth() / 3) * 3; return [monthStart(n.getFullYear(), q - 3), monthStart(n.getFullYear(), q)]; } },
+    { k: 'yr', l: 'השנה', g: function () { var n = new Date(); return [monthStart(n.getFullYear(), 0), dayStart(n) + DAY_MS_R]; } },
+    { k: 'yr1', l: 'השנה שעברה', g: function () { var n = new Date(); return [monthStart(n.getFullYear() - 1, 0), monthStart(n.getFullYear(), 0)]; } },
+    { k: 'all', l: 'כל הזמנים', g: function () { return [0, Date.now() + DAY_MS_R]; } }
+  ];
+  //  הטווח נשמר בדפדפן: מנהל שבודק "החודש שעבר" לא רוצה שהמסך יחזור
+  //  ל"כל הזמנים" בכל רענון.
+  var repRange = (function () {
+    try { return JSON.parse(localStorage.getItem('c2b_rep_range') || 'null') || { k: 'all' }; }
+    catch (e) { return { k: 'all' }; }
+  })();
+  function repRangeDef() { return REP_RANGES.filter(function (r) { return r.k === repRange.k; })[0]; }
+  function repBounds() {
+    if (repRange.k === 'custom') {
+      var a = repRange.from ? dayStart(new Date(repRange.from + 'T00:00:00')) : 0;
+      var b = repRange.to ? dayStart(new Date(repRange.to + 'T00:00:00')) + DAY_MS_R : Date.now() + DAY_MS_R;
+      return [a, b];
+    }
+    var d = repRangeDef(); return d ? d.g() : [0, Date.now() + DAY_MS_R];
+  }
+  function repRangeLabel() {
+    if (repRange.k === 'custom') {
+      var he = function (v) { var d = new Date(v + 'T00:00:00'); return isNaN(d) ? v : d.toLocaleDateString('he-IL'); };
+      return (repRange.from ? he(repRange.from) : '…') + ' — ' + (repRange.to ? he(repRange.to) : 'היום');
+    }
+    var d = repRangeDef(); return d ? d.l : 'כל הזמנים';
+  }
+  function inRepRange(ts) {
+    if (repRange.k === 'all') return true;
+    var t = new Date(ts || 0).getTime();
+    if (!t) return false;
+    var b = repBounds(); return t >= b[0] && t < b[1];
+  }
+  //  לוח השיווק שולף מ-Meta לפי date_preset. ממפים את הטווח לערך הקרוב
+  //  ביותר שיש ל-Meta; טווח שאין לו מקבילה נופל ל-maximum, וזה מצוין במסך.
+  function repMetaPreset() {
+    return ({ today: 'today', yday: 'yesterday', d7: 'last_7d', d14: 'last_14d', d30: 'last_30d',
+              d90: 'last_90d', mo: 'this_month', mo1: 'last_month' })[repRange.k] || 'maximum';
+  }
+  function repRangeBar() {
+    return '<div class="rr-wrap">' +
+      '<button class="btn btn-ghost btn-sm" id="rrBtn" aria-haspopup="true">📅 טווח תאריכים · <b>' + esc(repRangeLabel()) + '</b> ▾</button>' +
+      '</div>';
+  }
+  function openRepRange(anchor) {
+    var old = document.getElementById('rrMenu'); if (old) { old.remove(); return; }
+    var m = document.createElement('div');
+    m.id = 'rrMenu'; m.className = 'rr-menu';
+    m.innerHTML = '<div class="rr-head">בחירת טווח</div>' +
+      '<div class="rr-grid">' + REP_RANGES.map(function (r) {
+        return '<button data-rr="' + r.k + '"' + (repRange.k === r.k ? ' class="on"' : '') + '>' + esc(r.l) + '</button>';
+      }).join('') + '</div>' +
+      '<div class="rr-head" style="margin-top:4px">טווח מותאם</div>' +
+      '<div class="rr-custom">' +
+        '<input type="date" id="rrFrom" value="' + esc(repRange.from || '') + '">' +
+        '<span class="muted">עד</span>' +
+        '<input type="date" id="rrTo" value="' + esc(repRange.to || '') + '">' +
+        '<button class="btn btn-sm" id="rrApply">החל</button>' +
+      '</div>';
+    document.body.appendChild(m);
+    var r = anchor.getBoundingClientRect();
+    m.style.top = (r.bottom + window.scrollY + 6) + 'px';
+    // ממקמים לפי הקצה הימני בגלל RTL, ומונעים חריגה מהמסך
+    var right = Math.max(8, window.innerWidth - r.right);
+    m.style.right = right + 'px';
+    function pick(v) { repRange = v; try { localStorage.setItem('c2b_rep_range', JSON.stringify(v)); } catch (e) {} m.remove(); renderReports(); }
+    m.querySelectorAll('[data-rr]').forEach(function (b) {
+      b.addEventListener('click', function () { pick({ k: b.dataset.rr }); });
+    });
+    m.querySelector('#rrApply').addEventListener('click', function () {
+      var f = m.querySelector('#rrFrom').value, t = m.querySelector('#rrTo').value;
+      if (!f && !t) return;
+      if (f && t && f > t) { var x = f; f = t; t = x; }   // הוזן הפוך — מסדרים
+      pick({ k: 'custom', from: f, to: t });
+    });
+    m.addEventListener('click', function (e) { e.stopPropagation(); });
+    setTimeout(function () {
+      document.addEventListener('click', function h() { var el = document.getElementById('rrMenu'); if (el) el.remove(); document.removeEventListener('click', h); }, { once: true });
+    }, 0);
+  }
+
   function renderReports() {
     loading();
     Promise.all([
       db.from('leads').select('id,name,status,source,created_at,first_response_at,assigned_to,brand,utm_campaign,utm_source,utm_content,marketing_company,city').is('deleted_at', null),
       db.from('appointments').select('status'),
-      db.from('events').select('type,session_id'),
+      db.from('events').select('type,session_id,created_at'),
       db.from('tasks').select('done'),
       db.from('profiles').select('user_id,full_name'),
-      db.from('deals').select('id,lead_id,brand,stage,status,car_make,car_model,total,car_price,commission,discount_amt,salesperson,created_at,financing,tradein,has_signature').is('deleted_at', null),
+      db.from('deals').select('id,lead_id,brand,stage,status,car_make,car_model,total,car_price,commission,discount_amt,salesperson,created_at,signed_at,financing,tradein,has_signature').is('deleted_at', null),
       db.from('payments').select('amount,kind,deal_id'),
       db.from('agent_targets').select('user_id,deals,revenue,profit')
     ]).then(function (res) {
-      var leads = res[0].data || [], appts = res[1].data || [], events = res[2].data || [], tasks = res[3].data || [];
+      //  הכל מסונן לפי הטווח שנבחר. לידים ואירועים לפי מועד היצירה,
+      //  עסקאות לפי מועד החתימה — עסקה שנפתחה בחודש שעבר ונחתמה החודש
+      //  שייכת לחודש הזה.
+      var leads = (res[0].data || []).filter(function (l) { return inRepRange(l.created_at); });
+      var appts = res[1].data || [];
+      var events = (res[2].data || []).filter(function (e) { return inRepRange(e.created_at); });
+      var tasks = res[3].data || [];
       var prof = {}; (res[4].data || []).forEach(function (p) { prof[p.user_id] = p.full_name; });
       var allDeals = res[5].data || [], pays = (res[6] && res[6].data) || [];
       //  יעדים לנציג. טבלה חסרה או ללא הרשאה מחזירה שגיאה — ואז פשוט
@@ -1129,7 +1234,8 @@
       //  מקבלת stage='cancelled' בעוד הסטטוס נשאר 'quote'. בדיקה על
       //  סטטוס בלבד ספרה אותה כעסקה והציגה הכנסה שלא קיימת.
       var deals = allDeals.filter(function (d) {
-        return !!d.has_signature && d.status !== 'cancelled' && d.stage !== 'cancelled';
+        return !!d.has_signature && d.status !== 'cancelled' && d.stage !== 'cancelled'
+               && inRepRange(d.signed_at || d.created_at);
       });
       var cancelled = allDeals.filter(function (d) { return d.status === 'cancelled' || d.stage === 'cancelled'; }).length;
       function isDone(d) { return d.status === 'ordered' || !!d.has_signature; }
@@ -1367,9 +1473,14 @@
 
       var panels = { manager: managerPanel, sales: salesPanel, marketing: marketingPanel };
       function tab(k, label) { return '<button data-rep="' + k + '"' + (repTab === k ? ' class="active"' : '') + '>' + label + '</button>'; }
-      view('<h2 style="margin:0 0 4px">📊 דוחות וניתוח</h2><p class="muted" style="margin:0 0 16px;font-size:13px">שלוש תצוגות: מנהל · מכירות · שיווק — מבוססות על נתוני ה-CRM שלכם</p>' +
+      view('<div class="row-between" style="align-items:center;flex-wrap:wrap;gap:10px">' +
+          '<div><h2 style="margin:0 0 2px">📊 דוחות וניתוח</h2>' +
+            '<p class="muted" style="margin:0;font-size:13px">שלוש תצוגות: מנהל · מכירות · שיווק — כל הנתונים בטווח <b>' + esc(repRangeLabel()) + '</b></p></div>' +
+          repRangeBar() +
+        '</div>' +
         '<nav class="tabs" id="repTabs">' + tab('manager', '👔 מנהל') + tab('sales', '💼 מכירות') + tab('marketing', '📣 שיווק') + '</nav>' +
         '<div id="repPanel">' + panels[repTab] + '</div>');
+      if ($('rrBtn')) $('rrBtn').addEventListener('click', function (e) { e.stopPropagation(); openRepRange(this); });
       loadAdMetrics();
       //  שמירה אחת לכל השורות: upsert לכל נציג שיש לו לפחות ערך אחד.
       //  שדה ריק נשמר כ-null ולא כאפס, אחרת "אין יעד" היה נראה כיעד 0
@@ -1417,7 +1528,7 @@
   var adCache = {}, adPreset = 'last_30d', revenueAt = function () { return 0; };
   function loadAdMetrics() {
     if (!$('mkCamps')) return;                       // לא בלשונית השיווק
-    var preset = adPreset || 'last_30d';
+    var preset = repMetaPreset();
     var setAll = function (v) {
       ['mkSpend', 'mkRoas', 'mkCpl', 'mkCtr', 'mkCpc', 'mkCpm', 'mkActive'].forEach(function (id) {
         if ($(id)) $(id).textContent = v;
