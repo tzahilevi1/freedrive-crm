@@ -1452,15 +1452,24 @@
 
       //  טבלה גנרית לכל רמת ייחוס: כמה לידים נכנסו, כמה מהם הפכו לעסקה
       //  חתומה, כמה הכנסה נכנסה ומה אחוז ההמרה בפועל.
-      function attrTable(map, head) {
+      //  אותה טבלה משרתת שתי שאלות: השיווק שואל כמה לידים המקור הביא,
+      //  והמכירות שואלות כמה כסף הוא סגר. לכן המיון וסדר העמודות משתנים
+      //  לפי המצב, והנתונים עצמם זהים.
+      function attrTable(map, head, byDeals) {
         var rows = Object.keys(map).map(function (k) { return { label: k, o: map[k] }; })
-          .sort(function (a, b) { return (b.o.leads - a.o.leads) || (b.o.revenue - a.o.revenue); })
+          .sort(byDeals
+            ? function (a, b) { return (b.o.revenue - a.o.revenue) || (b.o.count - a.o.count) || (b.o.leads - a.o.leads); }
+            : function (a, b) { return (b.o.leads - a.o.leads) || (b.o.revenue - a.o.revenue); })
           .map(function (i) {
-            var o = i.o, cr = o.leads ? o.count / o.leads * 100 : 0;
-            return '<tr><td><b>' + esc(i.label) + '</b></td><td>' + o.leads + '</td><td>' + o.count +
-              '</td><td>' + M(o.revenue) + '</td><td>' + (o.leads ? P1(cr) : '<span class="muted">\u2014</span>') + '</td></tr>';
+            var o = i.o, cr = o.leads ? P1(o.count / o.leads * 100) : '<span class="muted">\u2014</span>';
+            var cells = byDeals
+              ? ['<td>' + o.count + '</td>', '<td>' + M(o.revenue) + '</td>', '<td>' + o.leads + '</td>', '<td>' + cr + '</td>']
+              : ['<td>' + o.leads + '</td>', '<td>' + o.count + '</td>', '<td>' + M(o.revenue) + '</td>', '<td>' + cr + '</td>'];
+            return '<tr><td><b>' + esc(i.label) + '</b></td>' + cells.join('') + '</tr>';
           }).join('');
-        return repTable([head, 'לידים', 'עסקאות חתומות', 'הכנסות', 'אחוז המרה'], rows);
+        return repTable(byDeals
+          ? [head, 'עסקאות חתומות', 'הכנסות', 'לידים', 'אחוז המרה']
+          : [head, 'לידים', 'עסקאות חתומות', 'הכנסות', 'אחוז המרה'], rows);
       }
       var journeyRows = deals.map(function (d) {
         var l = leadById[d.lead_id] || {};
@@ -1472,31 +1481,57 @@
              esc(PLACEMENTS[pl] || l.utm_term || '\u2014') + '</td><td>' + M(+d.car_price || 0) + '</td></tr>' };
       }).sort(function (a, b) { return b.t - a.t; }).map(function (x) { return x.h; }).join('');
 
-      var salesSources =
-        '<div class="cards">' +
-          kpi('סה\u05f4כ לידים', leads.length.toLocaleString('en-US'), null, true) +
-          kpi('לידים עם ייחוס פרסומי', tracked, leads.length ? P1(tracked / leads.length * 100) + ' מכלל הלידים' : null) +
-          kpi('לידים ללא ייחוס', leads.length - tracked, 'הוקלדו ידנית או ללא UTM') +
-          kpi('עסקאות ממקור פרסומי', paidDeals.length, deals.length + ' עסקאות חתומות בסה\u05f4כ') +
-          kpi('הכנסות מיוחסות לפרסום', M(paidRev), 'לפי מחיר הרכב') +
-        '</div>' +
-        '<div class="rep-grid">' +
-          secCard('\ud83d\udce5 מקור הליד', barRows(repTop(bySrcName, 'leads', 12), function (v) { return v; })) +
-          secCard('\ud83c\udf10 פלטפורמה (utm_source)', barRows(repTop(byPlatform, 'leads', 12), function (v) { return v; })) +
-          secCard('\ud83e\udded סוג תנועה (utm_medium)', barRows(repTop(byMedium, 'leads', 12), function (v) { return v; })) +
-          secCard('\ud83d\udccd מיקום הצגה (utm_term)', barRows(repTop(byPlacement, 'leads', 12), function (v) { return v; })) +
-          secCard('\ud83c\udfe2 חברת שיווק', barRows(repTop(byMktCo, 'leads', 12), function (v) { return v; })) +
-          secCard('\ud83d\udcb0 הכנסות לפי מקור', barRows(repTop(bySrcName, 'revenue', 12), M)) +
-        '</div>' +
-        secCard('\ud83d\udce3 קמפיינים', attrTable(byCampName, 'קמפיין')) +
-        secCard('\ud83c\udf9b\ufe0f קבוצות מודעות', attrTable(byAdset, 'קבוצת מודעות')) +
-        secCard('\ud83d\uddbc\ufe0f מודעות', attrTable(byAdName, 'מודעה')) +
-        secCard('\ud83e\uddfe מסלול ההגעה של העסקאות החתומות',
-          repTable(['לקוח', 'מקור', 'פלטפורמה', 'קמפיין', 'קבוצת מודעות', 'מודעה', 'מיקום', 'הכנסה'], journeyRows)) +
-        '<div class="sec-note">\u2139\ufe0f הייחוס נשמר על הליד ברגע הקליטה מפייסבוק (מקור, קמפיין, קבוצת מודעות ומודעה). ליד שהוקלד ידנית מופיע כ\u05f4' + UNATTR + '\u05f4. ההכנסה מיוחסת לפי <b>מחיר הרכב</b> בעסקה החתומה, ועסקה נספרת למקור של הליד שלה גם אם הליד נפתח לפני הטווח שנבחר.</div>';
+      //  mode='deals' — הלוח שבמכירות: מה כל מקור סגר בפועל.
+      //  mode='leads' — הלוח שבשיווק: כמה פניות כל מקור הביא.
+      function sourcesPanel(mode) {
+        var byDeals = mode === 'deals';
+        var avgDeal = deals.length ? revenue / deals.length : 0;
+        var kpis = byDeals
+          ? kpi('סה\u05f4כ הכנסות', M(revenue), 'לפי מחיר הרכב בעסקאות החתומות', true) +
+            kpi('עסקאות חתומות', deals.length, 'לא כולל מבוטלות') +
+            kpi('עסקאות ממקור פרסומי', paidDeals.length, deals.length ? P1(paidDeals.length / deals.length * 100) + ' מהעסקאות' : null) +
+            kpi('הכנסות ממקור פרסומי', M(paidRev), revenue ? P1(paidRev / revenue * 100) + ' מההכנסות' : null) +
+            kpi('הכנסה ממוצעת לעסקה', M(avgDeal))
+          : kpi('סה\u05f4כ לידים', leads.length.toLocaleString('en-US'), null, true) +
+            kpi('לידים עם ייחוס פרסומי', tracked, leads.length ? P1(tracked / leads.length * 100) + ' מכלל הלידים' : null) +
+            kpi('לידים ללא ייחוס', leads.length - tracked, 'הוקלדו ידנית או ללא UTM') +
+            kpi('עסקאות ממקור פרסומי', paidDeals.length, deals.length + ' עסקאות חתומות בסה\u05f4כ') +
+            kpi('הכנסות מיוחסות לפרסום', M(paidRev), 'לפי מחיר הרכב');
+        //  הגרפים מודדים את מה שהלשונית שואלת עליו: כסף במכירות, פניות בשיווק
+        var bar = function (title, map) {
+          return byDeals
+            ? secCard(title, barRows(repTop(map, 'revenue', 12), M))
+            : secCard(title, barRows(repTop(map, 'leads', 12), function (v) { return v; }));
+        };
+        var grid = byDeals
+          ? bar('\ud83d\udcb0 הכנסות לפי מקור הליד', bySrcName) +
+            secCard('\ud83e\udd1d עסקאות לפי מקור הליד', barRows(repTop(bySrcName, 'count', 12), function (v) { return v; })) +
+            bar('\ud83c\udf10 הכנסות לפי פלטפורמה', byPlatform) +
+            bar('\ud83d\udce3 הכנסות לפי קמפיין', byCampName) +
+            bar('\ud83d\uddbc\ufe0f הכנסות לפי מודעה', byAdName) +
+            bar('\ud83c\udfe2 הכנסות לפי חברת שיווק', byMktCo)
+          : bar('\ud83d\udce5 מקור הליד', bySrcName) +
+            bar('\ud83c\udf10 פלטפורמה (utm_source)', byPlatform) +
+            bar('\ud83e\udded סוג תנועה (utm_medium)', byMedium) +
+            bar('\ud83d\udccd מיקום הצגה (utm_term)', byPlacement) +
+            bar('\ud83c\udfe2 חברת שיווק', byMktCo) +
+            secCard('\ud83d\udcb0 הכנסות לפי מקור', barRows(repTop(bySrcName, 'revenue', 12), M));
+        var note = byDeals
+          ? 'כל עסקה חתומה נספרת למקור של הליד שממנו נולדה, גם אם הליד נפתח לפני הטווח שנבחר. ההכנסה נמדדת לפי <b>מחיר הרכב</b>, ועסקה מבוטלת אינה נספרת.'
+          : 'הייחוס נשמר על הליד ברגע הקליטה מפייסבוק (מקור, קמפיין, קבוצת מודעות ומודעה). ליד שהוקלד ידנית מופיע כ\u05f4' + UNATTR + '\u05f4. ההכנסה מיוחסת לפי <b>מחיר הרכב</b> בעסקה החתומה.';
+        return '<div class="cards">' + kpis + '</div>' +
+          '<div class="rep-grid">' + grid + '</div>' +
+          secCard('\ud83d\udce3 קמפיינים', attrTable(byCampName, 'קמפיין', byDeals)) +
+          secCard('\ud83c\udf9b\ufe0f קבוצות מודעות', attrTable(byAdset, 'קבוצת מודעות', byDeals)) +
+          secCard('\ud83d\uddbc\ufe0f מודעות', attrTable(byAdName, 'מודעה', byDeals)) +
+          secCard('\ud83e\uddfe מסלול ההגעה של העסקאות החתומות',
+            repTable(['לקוח', 'מקור', 'פלטפורמה', 'קמפיין', 'קבוצת מודעות', 'מודעה', 'מיקום', 'הכנסה'], journeyRows)) +
+          '<div class="sec-note">\u2139\ufe0f ' + note + '</div>';
+      }
+      var dealSources = sourcesPanel('deals'), leadSources = sourcesPanel('leads');
 
-      var salesPanels = { overview: salesOverview, trends: salesTrends, agents: salesAgents, cars: salesCars, quality: salesQuality, targets: salesTargets };
-      var salesSubs = [['overview', 'סקירה כללית'], ['trends', 'מגמות מכירות'], ['agents', 'חברה ונציגים'], ['cars', 'ניתוח רכבים'], ['quality', 'איכות עסקאות'], ['targets', 'יעדים']];
+      var salesPanels = { overview: salesOverview, trends: salesTrends, sources: dealSources, agents: salesAgents, cars: salesCars, quality: salesQuality, targets: salesTargets };
+      var salesSubs = [['overview', 'סקירה כללית'], ['trends', 'מגמות מכירות'], ['sources', 'מקורות הגעה'], ['agents', 'חברה ונציגים'], ['cars', 'ניתוח רכבים'], ['quality', 'איכות עסקאות'], ['targets', 'יעדים']];
       function salesNav() { return '<nav class="tabs" id="repSalesTabs" style="margin-bottom:14px;flex-wrap:wrap">' + salesSubs.map(function (s) { return '<button data-ssub="' + s[0] + '"' + (salesSub === s[0] ? ' class="active"' : '') + '>' + s[1] + '</button>'; }).join('') + '</nav>'; }
       var salesPanel = salesNav() + '<div id="repSalesPanel">' + salesPanels[salesSub] + '</div>';
 
@@ -1549,7 +1584,7 @@
         '</div>' +
         secCard('📋 ביצועי קמפיינים <span class="muted" style="font-size:12px;font-weight:400">· ייחוס מה-CRM: כל ליד משויך לקמפיין שממנו הגיע, ולידים ידניים לחברת השיווק</span>', repTable(['קמפיין', 'לידים', 'עסקאות', 'נסגרו', 'הכנסה', 'המרה', 'הוצאה', 'CPL'], campRows));
 
-      var mktPanels = { overview: marketingPanel, sources: salesSources };
+      var mktPanels = { overview: marketingPanel, sources: leadSources };
       var mktSubs = [['overview', '📣 סקירת פרסום'], ['sources', '📥 מקורות הגעה']];
       function mktNav() { return '<nav class="tabs" id="repMktTabs" style="margin-bottom:14px;flex-wrap:wrap">' + mktSubs.map(function (s) { return '<button data-msub="' + s[0] + '"' + (mktSub === s[0] ? ' class="active"' : '') + '>' + s[1] + '</button>'; }).join('') + '</nav>'; }
       var marketingWrap = mktNav() + '<div id="repMktPanel">' + mktPanels[mktSub] + '</div>';
