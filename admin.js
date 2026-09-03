@@ -1307,7 +1307,21 @@
       // ---------- MARKETING ----------
       var netByBrand = repTop(byBrand, 'revenue', 5);
       var campRows = repTop(byCampaign, 'revenue', 60).map(function (i) { var o = i.o; var cr = o.leads ? Math.round(o.done / o.leads * 100) : 0; return '<tr><td><b>' + esc(i.label) + '</b></td><td>' + o.leads + '</td><td>' + (o.count || 0) + '</td><td>' + o.done + '</td><td>' + M(o.revenue) + '</td><td>' + cr + '%</td><td class="muted">—</td><td class="muted">—</td></tr>'; }).join('');
-      revenueForAds = revenue;   // ל-ROAS: הכנסה מעסקאות חתומות מול הוצאת הפרסום
+      //  ROAS משווה הכנסה מול הוצאה, ולכן שתיהן חייבות להימדד באותו חלון.
+      //  קודם הועברה כל ההכנסה ההיסטורית מול הוצאה של 30 יום, וזה החזיר
+      //  יחס חסר משמעות (537x).
+      revenueAt = function (preset) {
+        var DAY = 86400000, now = Date.now(), from = 0;
+        if (preset === 'today') { var d0 = new Date(); d0.setHours(0, 0, 0, 0); from = d0.getTime(); }
+        else if (preset === 'last_7d') from = now - 7 * DAY;
+        else if (preset === 'last_30d') from = now - 30 * DAY;
+        else if (preset === 'last_90d') from = now - 90 * DAY;
+        return allDeals.reduce(function (a, d) {
+          if (!d.has_signature || d.status === 'cancelled' || d.stage === 'cancelled') return a;
+          var t = new Date(d.signed_at || d.created_at || 0).getTime();
+          return t >= from ? a + (+d.total || 0) : a;
+        }, 0);
+      };
       //  המדדים מ-Meta נטענים אחרי הציור (קריאה חיצונית), ולכן כאן רק
       //  מקומות שמורים. הכנסה, לידים ופגישות מגיעים מה-CRM ומוצגים מיד.
       var marketingPanel =
@@ -1317,10 +1331,10 @@
               .map(function (p) { return '<button data-mkr="' + p[0] + '"' + (adPreset === p[0] ? ' class="active"' : '') + '>' + p[1] + '</button>'; }).join('') +
           '</nav></div>' +
         '<div class="cards" id="mktKpis">' +
-          kpi('הכנסה (מעסקאות)', M(revenue), 'עסקאות חתומות', true) +
+          kpi('הכנסה (מעסקאות)', M(revenue), 'כל ההיסטוריה · עסקאות חתומות', true) +
           kpi('הוצאת פרסום', '<span id="mkSpend">…</span>', 'Meta · הטווח הנבחר') +
-          kpi('ROAS', '<span id="mkRoas">…</span>', 'הכנסה / הוצאה') +
-          kpi('עלות לליד (CPL)', '<span id="mkCpl">…</span>', '<span id="mkLeadsFb">—</span> לידים מ-Meta') +
+          kpi('ROAS', '<span id="mkRoas">…</span>', 'באותו טווח') +
+          kpi('עלות לליד (CPL)', '<span id="mkCpl">…</span>', 'לידים מ-Meta') +
           kpi('CTR', '<span id="mkCtr">…</span>', 'הקלקות / חשיפות') +
           kpi('CPC', '<span id="mkCpc">…</span>', 'עלות להקלקה') +
           kpi('CPM', '<span id="mkCpm">…</span>', 'עלות ל-1,000 חשיפות') +
@@ -1384,9 +1398,9 @@
   //  ---------- מדדי הפרסום מ-Meta (קריאה בלבד) ----------
   //  נטענים בנפרד מהדוח: זו קריאה חיצונית לגרף של Meta, ואין סיבה
   //  להשהות את כל המסך בגללה. המדדים נכנסים למקומות השמורים כשהם מגיעים.
-  //  adPreset — הטווח שנבחר בלוח השיווק; revenueForAds — ההכנסה מהעסקאות
-  //  החתומות, לחישוב ה-ROAS מול הוצאת הפרסום.
-  var adCache = {}, adPreset = 'last_30d', revenueForAds = 0;
+  //  adPreset — הטווח שנבחר בלוח השיווק; revenueAt — ההכנסה מהעסקאות
+  //  החתומות באותו טווח, לחישוב ROAS מול הוצאת הפרסום.
+  var adCache = {}, adPreset = 'last_30d', revenueAt = function () { return 0; };
   function loadAdMetrics() {
     if (!$('mkCamps')) return;                       // לא בלשונית השיווק
     var preset = adPreset || 'last_30d';
@@ -1406,9 +1420,18 @@
       var t = d.totals || {}, sp = t.spend || 0;
       var nis0 = function (n) { return '₪' + Math.round(n || 0).toLocaleString('en-US'); };
       if ($('mkSpend')) $('mkSpend').textContent = nis0(sp);
-      if ($('mkRoas')) $('mkRoas').textContent = sp ? (Math.round(revenueForAds / sp * 10) / 10) + 'x' : '—';
+      var rev = revenueAt(preset);
+      if ($('mkRoas')) $('mkRoas').textContent = sp ? (Math.round(rev / sp * 10) / 10) + 'x' : '—';
       if ($('mkCpl')) $('mkCpl').textContent = t.cpl ? nis0(t.cpl) : '—';
-      if ($('mkLeadsFb')) $('mkLeadsFb').textContent = (t.leads || 0).toLocaleString('en-US');
+      //  ה-sub של kpi עובר esc, ולכן אי אפשר לשתול בו span. מעדכנים את
+      //  הרמז עצמו אחרי הציור.
+      var hint = function (id, txt) {
+        var el = $(id); if (!el) return;
+        var card = el.closest('.kpi'); if (!card) return;
+        var sub = card.querySelector('.sub'); if (sub) sub.textContent = txt;
+      };
+      hint('mkCpl', (t.leads || 0).toLocaleString('en-US') + ' לידים מ-Meta');
+      hint('mkRoas', 'הכנסה ' + nis0(rev) + ' / הוצאה ' + nis0(sp));
       if ($('mkCtr')) $('mkCtr').textContent = (Math.round((t.ctr || 0) * 100) / 100) + '%';
       if ($('mkCpc')) $('mkCpc').textContent = t.cpc ? '₪' + (Math.round(t.cpc * 100) / 100) : '—';
       if ($('mkCpm')) $('mkCpm').textContent = t.cpm ? nis0(t.cpm) : '—';
