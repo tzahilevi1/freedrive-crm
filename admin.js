@@ -1195,7 +1195,7 @@
   function renderReports() {
     loading();
     Promise.all([
-      db.from('leads').select('id,name,status,source,created_at,first_response_at,assigned_to,brand,utm_campaign,utm_source,utm_content,marketing_company,city').is('deleted_at', null),
+      db.from('leads').select('id,name,status,source,created_at,first_response_at,assigned_to,brand,utm_campaign,utm_source,utm_medium,utm_term,utm_content,campaign,medium,adset_name,ad_name,ad_group,marketing_company,city').is('deleted_at', null),
       db.from('appointments').select('status'),
       db.from('events').select('type,session_id,created_at'),
       db.from('tasks').select('done'),
@@ -1217,7 +1217,10 @@
       //  אין יעדים, ולא נופלים על כל הדוח.
       var tgt = {}; ((res[7] && res[7].data) || []).forEach(function (t) { tgt[t.user_id] = t; });
       var ST = window.C2B_STATUSES || [], bdg = window.C2B_badge || function (k) { return k; };
-      var leadById = {}; leads.forEach(function (l) { leadById[l.id] = l; });
+      //  מפת הייחוס נבנית מכל הלידים ולא מהמסוננים: כשהטווח הוא "היום",
+      //  עסקה שנחתמה היום מליד של שבוע שעבר עדיין צריכה לדעת מאיזה
+      //  קמפיין הגיעה. הסינון חל על ספירת הלידים, לא על מקור העסקה.
+      var leadById = {}; (res[0].data || []).forEach(function (l) { leadById[l.id] = l; });
 
       // ---- lead-side aggregates ----
       var by = {}; ST.forEach(function (s) { by[s.k] = 0; });
@@ -1294,7 +1297,7 @@
         if (camp) bump(byCampaign, camp, function (o) { o.leads++; if (l.status === 'won') o.done++; });
       });
       // attribute deal revenue back to source / campaign
-      deals.forEach(function (d) { var l = leadById[d.lead_id] || {}; var s = l.source || 'לא ידוע'; bump(bySource, s, function (o) { o.revenue += (+d.total || 0); o.count++; }); var camp = l.utm_campaign || l.marketing_company; if (camp) bump(byCampaign, camp, function (o) { o.revenue += (+d.total || 0); o.count++; }); });
+      deals.forEach(function (d) { var l = leadById[d.lead_id] || {}; var s = l.source || 'לא ידוע'; bump(bySource, s, function (o) { o.revenue += (+d.car_price || 0); o.count++; }); var camp = l.campaign || l.utm_campaign || l.marketing_company; if (camp) bump(byCampaign, camp, function (o) { o.revenue += (+d.car_price || 0); o.count++; }); });
 
       // monthly series (chronological, last 12 with data)
       var months = Object.keys(byMonth).map(Number).sort(function (a, b) { return a - b; }).slice(-12).map(function (k) { var o = byMonth[k]; o.label = HEB_MONTHS[k % 12] + ' ' + Math.floor(k / 12); return o; });
@@ -1417,8 +1420,84 @@
             '<button class="btn btn-sm" id="tgtSave">שמור יעדים</button>' +
             '<span id="tgtMsg" class="muted" style="font-size:12.5px"></span></div>' : ''));
 
-      var salesPanels = { overview: salesOverview, trends: salesTrends, agents: salesAgents, cars: salesCars, quality: salesQuality, targets: salesTargets };
-      var salesSubs = [['overview', 'סקירה כללית'], ['trends', 'מגמות מכירות'], ['agents', 'חברה ונציגים'], ['cars', 'ניתוח רכבים'], ['quality', 'איכות עסקאות'], ['targets', 'יעדים']];
+      // ---------- מקורות הגעה ----------
+      //  מסע ההגעה של הליד: מקור ← פלטפורמה ← קמפיין ← קבוצת מודעות ← מודעה.
+      //  כל רמה נספרת מהלידים, וההכנסה מיוחסת מהעסקה החתומה חזרה לליד שממנו
+      //  היא נולדה. "עסקה" כאן היא בהגדרה של המערכת: חתומה ולא מבוטלת.
+      var UNATTR = 'ללא ייחוס';
+      //  utm_term מגיע מפייסבוק כקוד מיקום ולא כשם קריא
+      var PLACEMENTS = { fb: 'פייסבוק', ig: 'אינסטגרם', an: 'Audience Network', msg: 'מסנג\u05f3ר', fb_ig: 'פייסבוק + אינסטגרם' };
+      function attrBy(get) {
+        var m = {};
+        function cell(l) { var k = String(get(l) || '').trim() || UNATTR; m[k] = m[k] || { leads: 0, count: 0, revenue: 0 }; return m[k]; }
+        leads.forEach(function (l) { cell(l).leads++; });
+        deals.forEach(function (d) {
+          var l = leadById[d.lead_id]; if (!l) return;
+          var o = cell(l); o.count++; o.revenue += (+d.car_price || 0);
+        });
+        return m;
+      }
+      var bySrcName = attrBy(function (l) { return l.source; });
+      var byPlatform = attrBy(function (l) { return l.utm_source; });
+      var byMedium = attrBy(function (l) { return l.utm_medium || l.medium; });
+      var byPlacement = attrBy(function (l) { var t = String(l.utm_term || '').toLowerCase(); return PLACEMENTS[t] || l.utm_term; });
+      var byMktCo = attrBy(function (l) { return l.marketing_company; });
+      var byCampName = attrBy(function (l) { return l.campaign || l.utm_campaign; });
+      var byAdset = attrBy(function (l) { return l.adset_name || l.ad_group; });
+      var byAdName = attrBy(function (l) { return l.ad_name; });
+
+      function isPaid(l) { return !!(l && (l.utm_source || l.campaign || l.utm_campaign)); }
+      var tracked = leads.filter(isPaid).length;
+      var paidDeals = deals.filter(function (d) { return isPaid(leadById[d.lead_id]); });
+      var paidRev = paidDeals.reduce(function (a, d) { return a + (+d.car_price || 0); }, 0);
+
+      //  טבלה גנרית לכל רמת ייחוס: כמה לידים נכנסו, כמה מהם הפכו לעסקה
+      //  חתומה, כמה הכנסה נכנסה ומה אחוז ההמרה בפועל.
+      function attrTable(map, head) {
+        var rows = Object.keys(map).map(function (k) { return { label: k, o: map[k] }; })
+          .sort(function (a, b) { return (b.o.leads - a.o.leads) || (b.o.revenue - a.o.revenue); })
+          .map(function (i) {
+            var o = i.o, cr = o.leads ? o.count / o.leads * 100 : 0;
+            return '<tr><td><b>' + esc(i.label) + '</b></td><td>' + o.leads + '</td><td>' + o.count +
+              '</td><td>' + M(o.revenue) + '</td><td>' + (o.leads ? P1(cr) : '<span class="muted">\u2014</span>') + '</td></tr>';
+          }).join('');
+        return repTable([head, 'לידים', 'עסקאות חתומות', 'הכנסות', 'אחוז המרה'], rows);
+      }
+      var journeyRows = deals.map(function (d) {
+        var l = leadById[d.lead_id] || {};
+        var pl = String(l.utm_term || '').toLowerCase();
+        return { t: new Date(d.signed_at || d.created_at || 0).getTime(),
+          h: '<tr><td><b>' + esc(l.name || '\u2014') + '</b></td><td>' + esc(l.source || UNATTR) + '</td><td>' +
+             esc(l.utm_source || '\u2014') + '</td><td>' + esc(l.campaign || l.utm_campaign || '\u2014') + '</td><td>' +
+             esc(l.adset_name || '\u2014') + '</td><td>' + esc(l.ad_name || '\u2014') + '</td><td>' +
+             esc(PLACEMENTS[pl] || l.utm_term || '\u2014') + '</td><td>' + M(+d.car_price || 0) + '</td></tr>' };
+      }).sort(function (a, b) { return b.t - a.t; }).map(function (x) { return x.h; }).join('');
+
+      var salesSources =
+        '<div class="cards">' +
+          kpi('סה\u05f4כ לידים', leads.length.toLocaleString('en-US'), null, true) +
+          kpi('לידים עם ייחוס פרסומי', tracked, leads.length ? P1(tracked / leads.length * 100) + ' מכלל הלידים' : null) +
+          kpi('לידים ללא ייחוס', leads.length - tracked, 'הוקלדו ידנית או ללא UTM') +
+          kpi('עסקאות ממקור פרסומי', paidDeals.length, deals.length + ' עסקאות חתומות בסה\u05f4כ') +
+          kpi('הכנסות מיוחסות לפרסום', M(paidRev), 'לפי מחיר הרכב') +
+        '</div>' +
+        '<div class="rep-grid">' +
+          secCard('\ud83d\udce5 מקור הליד', barRows(repTop(bySrcName, 'leads', 12), function (v) { return v; })) +
+          secCard('\ud83c\udf10 פלטפורמה (utm_source)', barRows(repTop(byPlatform, 'leads', 12), function (v) { return v; })) +
+          secCard('\ud83e\udded סוג תנועה (utm_medium)', barRows(repTop(byMedium, 'leads', 12), function (v) { return v; })) +
+          secCard('\ud83d\udccd מיקום הצגה (utm_term)', barRows(repTop(byPlacement, 'leads', 12), function (v) { return v; })) +
+          secCard('\ud83c\udfe2 חברת שיווק', barRows(repTop(byMktCo, 'leads', 12), function (v) { return v; })) +
+          secCard('\ud83d\udcb0 הכנסות לפי מקור', barRows(repTop(bySrcName, 'revenue', 12), M)) +
+        '</div>' +
+        secCard('\ud83d\udce3 קמפיינים', attrTable(byCampName, 'קמפיין')) +
+        secCard('\ud83c\udf9b\ufe0f קבוצות מודעות', attrTable(byAdset, 'קבוצת מודעות')) +
+        secCard('\ud83d\uddbc\ufe0f מודעות', attrTable(byAdName, 'מודעה')) +
+        secCard('\ud83e\uddfe מסלול ההגעה של העסקאות החתומות',
+          repTable(['לקוח', 'מקור', 'פלטפורמה', 'קמפיין', 'קבוצת מודעות', 'מודעה', 'מיקום', 'הכנסה'], journeyRows)) +
+        '<div class="sec-note">\u2139\ufe0f הייחוס נשמר על הליד ברגע הקליטה מפייסבוק (מקור, קמפיין, קבוצת מודעות ומודעה). ליד שהוקלד ידנית מופיע כ\u05f4' + UNATTR + '\u05f4. ההכנסה מיוחסת לפי <b>מחיר הרכב</b> בעסקה החתומה, ועסקה נספרת למקור של הליד שלה גם אם הליד נפתח לפני הטווח שנבחר.</div>';
+
+      var salesPanels = { overview: salesOverview, trends: salesTrends, sources: salesSources, agents: salesAgents, cars: salesCars, quality: salesQuality, targets: salesTargets };
+      var salesSubs = [['overview', 'סקירה כללית'], ['trends', 'מגמות מכירות'], ['sources', 'מקורות הגעה'], ['agents', 'חברה ונציגים'], ['cars', 'ניתוח רכבים'], ['quality', 'איכות עסקאות'], ['targets', 'יעדים']];
       function salesNav() { return '<nav class="tabs" id="repSalesTabs" style="margin-bottom:14px;flex-wrap:wrap">' + salesSubs.map(function (s) { return '<button data-ssub="' + s[0] + '"' + (salesSub === s[0] ? ' class="active"' : '') + '>' + s[1] + '</button>'; }).join('') + '</nav>'; }
       var salesPanel = salesNav() + '<div id="repSalesPanel">' + salesPanels[salesSub] + '</div>';
 
