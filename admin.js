@@ -1306,20 +1306,48 @@
       var mgrProfitMonths = barRows(months.map(function (m) { return { label: m.label, v: m.profit }; }), M);
       var mgrTopAgents = rankRows(repTop(byAgent, 'profit', 5), M, function (i) { return i.o.done + ' עסקאות'; });
       var mgrTopBrands = rankRows(repTop(byBrand, 'profit', 5), M, function (i) { return i.o.count + ' עסקאות'; });
+      //  ---------- לוח המנהל ----------
+      //  השאלה שמנהל שואל היא "כמה נכנס, כמה יצא, ועל מה" \u2014 ולכן ההוצאה
+      //  האמיתית מ-Meta יושבת כאן לצד ההכנסה, ולא כמציין מקום. העמלות ירדו
+      //  לשורה משנית: הן נגזרת של העסקאות ולא תמונת המצב.
+      repCtx = { revenue: revenue, leads: leads.length, deals: deals.length,
+                 rangeLabel: repRangeLabel(), metaMatches: repMetaPreset() !== 'maximum' || repRange.k === 'all' };
+      var agentRowsMgr = repTop(byAgent, 'revenue', 12).map(function (i) {
+        var o = i.o, cr = o.leads ? o.done / o.leads * 100 : 0;
+        return '<tr><td><b>' + esc(i.label) + '</b></td><td>' + (o.leads || 0) + '</td><td>' + (o.done || 0) +
+          '</td><td>' + M(o.revenue) + '</td><td>' + (o.leads ? P1(cr) : '<span class="muted">\u2014</span>') +
+          '</td><td class="muted">' + M(o.profit) + '</td></tr>';
+      }).join('');
+      var brandRowsMgr = repTop(byBrand, 'revenue', 12).map(function (i) {
+        var o = i.o, av = o.count ? o.revenue / o.count : 0;
+        return '<tr><td><b>' + esc(i.label) + '</b></td><td>' + o.count + '</td><td>' + (o.done || 0) +
+          '</td><td>' + M(o.revenue) + '</td><td>' + M(av) + '</td></tr>';
+      }).join('');
       var managerPanel =
         '<div class="cards">' +
-          kpi('סה״כ עמלות סוכן', M(profit), 'סכום שדה "עמלת סוכן" בעסקאות החתומות', true) +
-          kpi('עמלה ממוצעת לעסקה', M(avgProfit), doneDeals.length + ' עסקאות חתומות') +
-          kpi('סה״כ עסקאות', deals.length, cancelled + ' בוטלו') +
-          kpi('נגבה בפועל', M(collected), 'מתוך ' + M(revenue) + ' שווי עסקאות') +
+          kpi('הכנסות', M(revenue), deals.length + ' עסקאות חתומות \u00b7 לפי מחיר הרכב', true) +
+          kpi('הוצאות פרסום', '<span id="mgSpend">\u2026</span>', 'Meta \u00b7 הטווח הנבחר') +
+          kpi('הפרש (הכנסות פחות פרסום)', '<span id="mgNet">\u2026</span>', 'לא רווח נקי \u2014 אין כאן עלות רכב') +
+          kpi('ROAS', '<span id="mgRoas">\u2026</span>', 'הכנסה על כל שקל פרסום') +
         '</div>' +
-        (profit === 0 ? '<div class="sec-note">💡 טיפ: כדי שהעמלות ישקפו את המציאות, ודאו שדה <b>עמלת סוכן</b> מלא בעסקאות (מתמלא אוטומטית מהמלאי בבחירת רכב).</div>' : '') +
+        '<div class="cards">' +
+          kpi('עלות לליד', '<span id="mgCpl">\u2026</span>', leads.length + ' לידים בטווח') +
+          kpi('עלות לעסקה', '<span id="mgCac">\u2026</span>', 'הוצאת הפרסום חלקי העסקאות') +
+          kpi('אחוז סגירה', P1(closeRate), doneDeals.length + ' מתוך ' + leads.length + ' לידים') +
+          kpi('נגבה בפועל', M(collected), 'מתוך ' + M(revenue) + ' שווי עסקאות') +
+          kpi('עמלות סוכן', M(profit), 'סכום שדה "עמלת סוכן"') +
+        '</div>' +
+        '<div class="sec-note" id="mgNote">\ud83d\udce1 טוען את נתוני ההוצאה מ-Meta\u2026</div>' +
+        secCard('\ud83d\udcb8 על מה יצא הכסף \u2014 הוצאה לפי קמפיין',
+                '<div id="mgCamps" class="muted" style="font-size:13px">טוען\u2026</div>') +
         '<div class="rep-grid">' +
-          secCard('📈 עמלות סוכן לפי חודש', mgrProfitMonths) +
-          secCard('🏆 הנציגים המובילים בעמלות', mgrTopAgents) +
-          secCard('🚗 המותגים המובילים בעמלות', mgrTopBrands) +
-          secCard('💰 תמונת מצב שיווק', '<div class="cards" style="margin:0">' + kpi('הכנסות מעסקאות', M(revenue)) + kpi('הוצאות שיווק', M(0), 'יתחבר עם Facebook Ads') + kpi('דלתא (רווח מול הוצאה)', M(revenue), null, true) + '</div>') +
-        '</div>';
+          secCard('\ud83d\udcc8 הכנסות לפי חודש', barRows(months.map(function (m) { return { label: m.label, v: m.revenue }; }), M)) +
+          secCard('\ud83e\udd1d עסקאות חתומות לפי חודש', barRows(months.map(function (m) { return { label: m.label, v: m.done }; }), function (v) { return v; })) +
+        '</div>' +
+        secCard('\ud83e\uddd1\u200d\ud83d\udcbc ביצועי נציגים',
+                repTable(['נציג', 'לידים', 'עסקאות חתומות', 'הכנסות', 'אחוז סגירה', 'עמלות'], agentRowsMgr)) +
+        secCard('\ud83d\ude97 ביצועי מותגים',
+                repTable(['מותג', 'עסקאות', 'מתוכן הושלמו', 'הכנסות', 'ערך ממוצע לעסקה'], brandRowsMgr));
 
       // ---------- SALES — sub-tabs ----------
       // overview
@@ -1665,6 +1693,13 @@
   //  adPreset — הטווח שנבחר בלוח השיווק; revenueAt — ההכנסה מהעסקאות
   //  החתומות באותו טווח, לחישוב ROAS מול הוצאת הפרסום.
   var adCache = {}, adPreset = 'last_30d', revenueAt = function () { return 0; };
+  //  דוח המנהל מציג הכנסה מול הוצאה באותו מסך, ולכן טעינת המדדים מ-Meta
+  //  צריכה גישה למספרים של הטווח שכבר חושבו בציור הדוח.
+  var repCtx = { revenue: 0, leads: 0, deals: 0, rangeLabel: '', metaMatches: true };
+  //  שם עברי לחלון שמטא באמת החזירה, כדי שאפשר יהיה לראות אי-התאמה
+  var META_WINDOW = { today: 'היום', yesterday: 'אתמול', last_7d: '7 הימים האחרונים',
+    last_14d: '14 הימים האחרונים', last_30d: '30 הימים האחרונים', last_90d: '90 הימים האחרונים',
+    this_month: 'החודש הנוכחי', last_month: 'החודש שעבר', maximum: 'כל הזמנים' };
   //  יעד הקמפיין כפי שהוא מוגדר ב-Meta. שם היעד לבדו לא מספיק כדי לדעת
   //  מה נספר: קמפיין ווטסאפ וקמפיין טופס לידים חולקים את אותו OUTCOME_LEADS,
   //  וההבדל ביניהם מתגלה רק בסוג התוצאה שחוזר בפועל.
@@ -1678,19 +1713,23 @@
   };
 
   function loadAdMetrics() {
-    if (!$('mkCamps')) return;                       // לא בלשונית השיווק
+    //  אותה קריאה משרתת את לוח השיווק ואת לוח המנהל \u2014 שניהם מציגים
+    //  את ההוצאה מ-Meta, ואין סיבה למשוך אותה פעמיים.
+    if (!$('mkCamps') && !$('mgSpend')) return;
     var preset = repMetaPreset();
     var setAll = function (v) {
-      ['mkSpend', 'mkRoas', 'mkCpl', 'mkCtr', 'mkCpc', 'mkCpm', 'mkActive'].forEach(function (id) {
+      ['mkSpend', 'mkRoas', 'mkCpl', 'mkCtr', 'mkCpc', 'mkCpm', 'mkActive',
+       'mgSpend', 'mgNet', 'mgRoas', 'mgCpl', 'mgCac'].forEach(function (id) {
         if ($(id)) $(id).textContent = v;
       });
     };
     var paint = function (d) {
       if (!$('mkCamps')) return;
       if (!d || d.error) {
-        setAll('—');
-        if ($('mkNote')) $('mkNote').innerHTML = '📡 לא ניתן לטעון מדדים מ-Meta: ' + esc((d && d.error) || 'שגיאה');
-        $('mkCamps').innerHTML = '<span class="muted">אין נתונים להצגה.</span>';
+        setAll('\u2014');
+        var msg = '\ud83d\udce1 לא ניתן לטעון מדדים מ-Meta: ' + esc((d && d.error) || 'שגיאה');
+        ['mkNote', 'mgNote'].forEach(function (id) { if ($(id)) $(id).innerHTML = msg; });
+        ['mkCamps', 'mgCamps'].forEach(function (id) { if ($(id)) $(id).innerHTML = '<span class="muted">אין נתונים להצגה.</span>'; });
         return;
       }
       var t = d.totals || {}, sp = t.spend || 0;
@@ -1718,6 +1757,46 @@
       if ($('mkNote')) $('mkNote').innerHTML = '📡 הנתונים מ-Meta · חשבון ' + esc(d.account || '') +
         ' · ' + (t.impressions || 0).toLocaleString('en-US') + ' חשיפות · ' +
         (t.clicks || 0).toLocaleString('en-US') + ' הקלקות · <b>לצפייה בלבד</b> — שינוי תקציב או סטטוס נעשה ב-Meta.';
+
+      //  ---------- לוח המנהל ----------
+      if ($('mgSpend')) {
+        var rv = repCtx.revenue || 0;
+        $('mgSpend').textContent = nis0(sp);
+        if ($('mgNet')) $('mgNet').textContent = nis0(rv - sp);
+        if ($('mgRoas')) $('mgRoas').textContent = sp ? (Math.round(rv / sp * 10) / 10) + 'x' : '\u2014';
+        if ($('mgCpl')) $('mgCpl').textContent = t.leads ? nis0(sp / t.leads) : '\u2014';
+        if ($('mgCac')) $('mgCac').textContent = repCtx.deals ? nis0(sp / repCtx.deals) : '\u2014';
+        hint('mgSpend', 'Meta \u00b7 ' + (META_WINDOW[d.preset] || d.preset));
+        hint('mgNet', nis0(rv) + ' פחות ' + nis0(sp));
+        hint('mgCpl', (t.leads || 0) + ' תוצאות ב-Meta \u00b7 ' + repCtx.leads + ' לידים ב-CRM');
+        if ($('mgNote')) {
+          //  כשהטווח שנבחר אינו קיים כמסנן של Meta, ההוצאה מגיעה מחלון אחר.
+          //  שתיקה כאן הייתה גורמת למנהל להשוות הכנסה של רבעון להוצאה של תמיד.
+          $('mgNote').innerHTML = repCtx.metaMatches
+            ? '\ud83d\udce1 הכנסות מה-CRM מול הוצאה אמיתית מ-Meta \u00b7 חשבון ' + esc(d.account || '') +
+              ' \u00b7 שניהם בטווח <b>' + esc(repCtx.rangeLabel) + '</b>.'
+            : '\u26a0\ufe0f ההכנסות בטווח <b>' + esc(repCtx.rangeLabel) + '</b>, אבל ל-Meta אין מסנן תואם ולכן ההוצאה היא של <b>' +
+              esc(META_WINDOW[d.preset] || d.preset) + '</b>. ל-ROAS ולעלות לעסקה בחרו טווח כמו 7 / 30 / 90 יום או חודש.';
+        }
+        var mrows = (d.campaigns || []).slice().sort(function (a, b) { return b.spend - a.spend; }).map(function (c) {
+          var share = sp ? c.spend / sp * 100 : 0;
+          return '<tr><td><b>' + esc(c.name || '\u2014') + '</b></td>' +
+            '<td class="muted">' + esc(OBJECTIVES[c.objective] || c.objective || '\u2014') + '</td>' +
+            '<td>' + nis0(c.spend) + '</td>' +
+            '<td>' + (Math.round(share * 10) / 10) + '%</td>' +
+            '<td>' + (c.leads || 0) + (c.result_type && c.result_type !== 'לידים'
+              ? '<div class="muted" style="font-size:11px;font-weight:400">' + esc(c.result_type) + '</div>' : '') + '</td>' +
+            '<td>' + (c.cpl ? nis0(c.cpl) : '\u2014') + '</td>' +
+            '<td class="muted">' + (c.status === 'ACTIVE' ? 'פעיל' : esc(c.status || '\u2014')) + '</td></tr>';
+        }).join('');
+        if ($('mgCamps')) $('mgCamps').innerHTML = mrows
+          ? '<div class="table-scroll"><table><thead><tr>' +
+              ['קמפיין', 'יעד', 'הוצאה', '% מהתקציב', 'לידים', 'עלות לליד', 'סטטוס']
+                .map(function (h) { return '<th>' + h + '</th>'; }).join('') +
+            '</tr></thead><tbody>' + mrows + '</tbody></table></div>'
+          : '<span class="muted">לא הייתה הוצאה בטווח שנבחר.</span>';
+      }
+      if (!$('mkCamps')) return;                      // לוח המנהל בלבד
 
       var rows = (d.campaigns || []).map(function (c) {
         var st = c.status === 'ACTIVE'
