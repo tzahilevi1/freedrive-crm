@@ -1724,7 +1724,9 @@
       });
     };
     var paint = function (d) {
-      if (!$('mkCamps')) return;
+      //  שני לוחות צורכים את הנתונים האלה. שומר שבודק רק את לוח השיווק
+      //  גרם ללוח המנהל להישאר על "טוען" למרות שהקריאה הצליחה.
+      if (!$('mkCamps') && !$('mgSpend')) return;
       if (!d || d.error) {
         setAll('\u2014');
         var msg = '\ud83d\udce1 לא ניתן לטעון מדדים מ-Meta: ' + esc((d && d.error) || 'שגיאה');
