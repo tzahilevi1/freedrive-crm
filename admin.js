@@ -1310,8 +1310,6 @@
       //  השאלה שמנהל שואל היא "כמה נכנס, כמה יצא, ועל מה" \u2014 ולכן ההוצאה
       //  האמיתית מ-Meta יושבת כאן לצד ההכנסה, ולא כמציין מקום. העמלות ירדו
       //  לשורה משנית: הן נגזרת של העסקאות ולא תמונת המצב.
-      repCtx = { revenue: revenue, leads: leads.length, deals: deals.length,
-                 rangeLabel: repRangeLabel(), metaMatches: repMetaPreset() !== 'maximum' || repRange.k === 'all' };
       var agentRowsMgr = repTop(byAgent, 'revenue', 12).map(function (i) {
         var o = i.o, cr = o.leads ? o.done / o.leads * 100 : 0;
         return '<tr><td><b>' + esc(i.label) + '</b></td><td>' + (o.leads || 0) + '</td><td>' + (o.done || 0) +
@@ -1328,11 +1326,12 @@
           kpi('הכנסות', M(revenue), deals.length + ' עסקאות חתומות \u00b7 לפי מחיר הרכב', true) +
           kpi('הוצאות פרסום', '<span id="mgSpend">\u2026</span>', 'Meta \u00b7 הטווח הנבחר') +
           kpi('הפרש (הכנסות פחות פרסום)', '<span id="mgNet">\u2026</span>', 'לא רווח נקי \u2014 אין כאן עלות רכב') +
-          kpi('ROAS', '<span id="mgRoas">\u2026</span>', 'הכנסה על כל שקל פרסום') +
+          kpi('ROAS מהפרסום', '<span id="mgRoas">\u2026</span>', 'רק הכנסה שמיוחסת למודעות') +
         '</div>' +
         '<div class="cards">' +
+          kpi('הכנסות מפרסום', '<span id="mgPaidRev">\u2026</span>', 'עסקאות שנולדו מקמפיין') +
           kpi('עלות לליד', '<span id="mgCpl">\u2026</span>', leads.length + ' לידים בטווח') +
-          kpi('עלות לעסקה', '<span id="mgCac">\u2026</span>', 'הוצאת הפרסום חלקי העסקאות') +
+          kpi('עלות לעסקה מפרסום', '<span id="mgCac">\u2026</span>', 'הוצאה חלקי עסקאות מקמפיין') +
           kpi('אחוז סגירה', P1(closeRate), doneDeals.length + ' מתוך ' + leads.length + ' לידים') +
           kpi('נגבה בפועל', M(collected), 'מתוך ' + M(revenue) + ' שווי עסקאות') +
           kpi('עמלות סוכן', M(profit), 'סכום שדה "עמלת סוכן"') +
@@ -1577,6 +1576,15 @@
       }
       var dealSources = sourcesPanel('deals'), leadSources = sourcesPanel('leads');
 
+      //  ROAS מול ההכנסה הכוללת הוא מספר משקר: ההכנסה של פרי דרייב הגיעה
+      //  עד כה משותף עסקי ולא מהמודעות, וחלוקה שלה בהוצאת הפרסום החזירה
+      //  198x. לכן דוח המנהל משווה הוצאה מול ההכנסה **המיוחסת לפרסום**
+      //  בלבד, ואת ההכנסה הכוללת מציג בנפרד.
+      repCtx = { revenue: revenue, paidRevenue: paidRev, leads: leads.length,
+                 deals: deals.length, paidDeals: paidDeals.length,
+                 rangeLabel: repRangeLabel(),
+                 metaMatches: repMetaPreset() !== 'maximum' || repRange.k === 'all' };
+
       var salesPanels = { overview: salesOverview, trends: salesTrends, sources: dealSources, agents: salesAgents, cars: salesCars, quality: salesQuality, targets: salesTargets };
       var salesSubs = [['overview', 'סקירה כללית'], ['trends', 'מגמות מכירות'], ['sources', 'מקורות הגעה'], ['agents', 'חברה ונציגים'], ['cars', 'ניתוח רכבים'], ['quality', 'איכות עסקאות'], ['targets', 'יעדים']];
       function salesNav() { return '<nav class="tabs" id="repSalesTabs" style="margin-bottom:14px;flex-wrap:wrap">' + salesSubs.map(function (s) { return '<button data-ssub="' + s[0] + '"' + (salesSub === s[0] ? ' class="active"' : '') + '>' + s[1] + '</button>'; }).join('') + '</nav>'; }
@@ -1719,7 +1727,7 @@
     var preset = repMetaPreset();
     var setAll = function (v) {
       ['mkSpend', 'mkRoas', 'mkCpl', 'mkCtr', 'mkCpc', 'mkCpm', 'mkActive',
-       'mgSpend', 'mgNet', 'mgRoas', 'mgCpl', 'mgCac'].forEach(function (id) {
+       'mgSpend', 'mgNet', 'mgRoas', 'mgCpl', 'mgCac', 'mgPaidRev'].forEach(function (id) {
         if ($(id)) $(id).textContent = v;
       });
     };
@@ -1762,15 +1770,21 @@
 
       //  ---------- לוח המנהל ----------
       if ($('mgSpend')) {
-        var rv = repCtx.revenue || 0;
+        var rv = repCtx.revenue || 0, prv = repCtx.paidRevenue || 0, pdl = repCtx.paidDeals || 0;
         $('mgSpend').textContent = nis0(sp);
         if ($('mgNet')) $('mgNet').textContent = nis0(rv - sp);
-        if ($('mgRoas')) $('mgRoas').textContent = sp ? (Math.round(rv / sp * 10) / 10) + 'x' : '\u2014';
+        if ($('mgPaidRev')) $('mgPaidRev').textContent = nis0(prv);
+        //  אין עסקאות מפרסום \u2014 ROAS הוא 0, לא "אין נתונים". זו התשובה
+        //  האמיתית: הקמפיינים עדיין לא החזירו שקל.
+        if ($('mgRoas')) $('mgRoas').textContent = sp ? (Math.round(prv / sp * 10) / 10) + 'x' : '\u2014';
         if ($('mgCpl')) $('mgCpl').textContent = t.leads ? nis0(sp / t.leads) : '\u2014';
-        if ($('mgCac')) $('mgCac').textContent = repCtx.deals ? nis0(sp / repCtx.deals) : '\u2014';
+        if ($('mgCac')) $('mgCac').textContent = pdl ? nis0(sp / pdl) : '\u2014';
         hint('mgSpend', 'Meta \u00b7 ' + (META_WINDOW[d.preset] || d.preset));
         hint('mgNet', nis0(rv) + ' פחות ' + nis0(sp));
+        hint('mgPaidRev', pdl + ' מתוך ' + repCtx.deals + ' עסקאות \u00b7 השאר ממקורות אחרים');
+        hint('mgRoas', prv ? nis0(prv) + ' חלקי ' + nis0(sp) : 'הקמפיינים עדיין לא החזירו הכנסה');
         hint('mgCpl', (t.leads || 0) + ' תוצאות ב-Meta \u00b7 ' + repCtx.leads + ' לידים ב-CRM');
+        hint('mgCac', pdl ? pdl + ' עסקאות מקמפיין' : 'אין עדיין עסקה שנולדה מקמפיין');
         if ($('mgNote')) {
           //  כשהטווח שנבחר אינו קיים כמסנן של Meta, ההוצאה מגיעה מחלון אחר.
           //  שתיקה כאן הייתה גורמת למנהל להשוות הכנסה של רבעון להוצאה של תמיד.
