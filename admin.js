@@ -1997,24 +1997,29 @@
     db.from('profiles').select('*').order('created_at', { ascending: true }).then(function (r) {
       if (r.error) return errBox(r.error.message);
       var ps = r.data || [];
-      //  מנהל סניף רואה את המסך אבל אינו יכול לשנות: המדיניות במסד מתירה
-      //  כתיבה רק למנהל מערכת. הצגת כפתורים שנכשלים בשקט גרועה מהסתרתם.
-      var canEditUsers = (window.C2B && window.C2B.role) === 'admin';
+      //  מנהל סניף מנהל את הצוות שלו ולכן עורך משתמשים, אבל המסד חוסם
+      //  ממנו שורה של מנהל מערכת ואת קידום מישהו לתפקיד הזה. הממשק מציג
+      //  בדיוק את מה שמותר — כפתור שנכשל ב-RLS גרוע מכפתור שלא קיים.
+      var myRoleU = (window.C2B && window.C2B.role) || '';
+      var isAdminU = myRoleU === 'admin';
+      var canEditUsers = isAdminU || myRoleU === 'branch';
+      var canEditRow = function (p) { return isAdminU || p.role !== 'admin'; };
+      var roleOpts = ROLES.filter(function (x) { return isAdminU || x[0] !== 'admin'; });
       var rows = ps.map(function (p) {
-        var reset = !canEditUsers ? '' : (p.email ? '<button class="btn btn-ghost btn-sm" data-reset="' + esc(p.email) + '">🔑 אפס סיסמה</button>' : '<span class="muted" style="font-size:12px">אין אימייל</span>');
-        if (!canEditUsers) {
+        var reset = !canEditRow(p) ? '' : (p.email ? '<button class="btn btn-ghost btn-sm" data-reset="' + esc(p.email) + '">🔑 אפס סיסמה</button>' : '<span class="muted" style="font-size:12px">אין אימייל</span>');
+        if (!canEditRow(p)) {
           return '<tr><td><span class="avatar" style="margin-inline-end:8px">' + esc((p.full_name || '?').charAt(0)) + '</span>' + esc(p.full_name || '—') +
             (p.email ? '<div class="muted" style="font-size:11px">' + esc(p.email) + '</div>' : '') + '</td>' +
             '<td>' + esc(roleLabel(p.role)) + '</td>' +
             '<td style="white-space:normal;max-width:260px">' + (p.role === 'admin' ? '<span class="muted" style="font-size:12.5px">👑 רואה את הכל</span>' : viewsLabel(p.views, p.role)) + '</td>' +
             '<td>' + (p.active ? '<span style="color:var(--ok);font-weight:700">✓ פעיל</span>' : '<span style="color:var(--danger);font-weight:700">✕ לא פעיל</span>') + '</td>' +
-            '<td></td></tr>';
+            '<td class="muted" style="font-size:12px">🔒 מנהל מערכת</td></tr>';
         }
         var seg = '<div style="display:inline-flex;border:1px solid var(--line);border-radius:9px;overflow:hidden">' +
           '<button data-actset="' + p.user_id + '" data-on="1" style="border:none;padding:6px 12px;font-size:12.5px;cursor:pointer;font-weight:600;background:' + (p.active ? 'var(--ok)' : 'transparent') + ';color:' + (p.active ? '#fff' : 'var(--muted)') + '">✓ פעיל</button>' +
           '<button data-actset="' + p.user_id + '" data-on="0" style="border:none;border-inline-start:1px solid var(--line);padding:6px 12px;font-size:12.5px;cursor:pointer;font-weight:600;background:' + (!p.active ? 'var(--danger)' : 'transparent') + ';color:' + (!p.active ? '#fff' : 'var(--muted)') + '">✕ לא פעיל</button></div>';
         return '<tr><td><span class="avatar" style="margin-inline-end:8px">' + esc((p.full_name || '?').charAt(0)) + '</span><span class="uname-txt" data-nameuid="' + p.user_id + '">' + esc(p.full_name || '—') + '</span> <button class="btn btn-ghost btn-sm" data-edituser="' + p.user_id + '" title="ערוך את כל פרטי המשתמש">✏️ ערוך</button>' + (p.email ? '<div class="muted" style="font-size:11px">' + esc(p.email) + '</div>' : '') + '</td>' +
-          '<td><select class="inp" data-role="' + p.user_id + '">' + ROLES.map(function (x) { return '<option value="' + x[0] + '"' + (p.role === x[0] ? ' selected' : '') + '>' + x[1] + '</option>'; }).join('') + '</select></td>' +
+          '<td><select class="inp" data-role="' + p.user_id + '">' + roleOpts.map(function (x) { return '<option value="' + x[0] + '"' + (p.role === x[0] ? ' selected' : '') + '>' + x[1] + '</option>'; }).join('') + '</select></td>' +
           '<td style="white-space:normal;max-width:260px">' + (p.role === 'admin' ? '<span class="muted" style="font-size:12.5px">👑 מנהל מערכת — רואה את הכל (תצוגות לא חלות על מנהל)</span>' : viewsLabel(p.views, p.role) + ' <button class="btn btn-ghost btn-sm" data-editviews="' + p.user_id + '">✏️</button><div class="hidden" id="ev_' + p.user_id + '"></div>') + '</td>' +
           '<td>' + seg + '</td>' +
           '<td>' + reset + '</td></tr>' +
@@ -2024,11 +2029,11 @@
         '<div class="grid2"><div class="field" style="margin:0"><label>שם מלא</label><input class="inp" id="nuName" placeholder="למשל: דנה כהן"></div>' +
         '<div class="field" style="margin:0"><label>אימייל</label><input class="inp" id="nuEmail" type="email" placeholder="name@email.com"></div></div>' +
         '<div class="grid2" style="margin-top:12px"><div class="field" style="margin:0"><label>טלפון</label><input class="inp" id="nuPhone" type="tel" placeholder="050-0000000"></div>' +
-        '<div class="field" style="margin:0"><label>תפקיד</label><select class="inp" id="nuRole">' + ROLES.map(function (x) { return '<option value="' + x[0] + '">' + x[1] + '</option>'; }).join('') + '</select></div></div>' +
+        '<div class="field" style="margin:0"><label>תפקיד</label><select class="inp" id="nuRole">' + roleOpts.map(function (x) { return '<option value="' + x[0] + '">' + x[1] + '</option>'; }).join('') + '</select></div></div>' +
         '<label style="font-size:13px;color:var(--muted);margin-top:12px;display:block">תצוגות שהמשתמש יראה (מוגדר לפי התפקיד — אפשר להוסיף/להוריד):</label><div id="nuViews">' + viewChecks('nv', DEFAULT_VIEWS.sales) + '</div>' +
         '<div style="margin-top:14px"><button class="btn" id="nuCreate">צור משתמש ושלח הזמנה</button> <span id="nuMsg" style="font-size:13px;margin-inline-start:10px"></span></div><div id="nuResult" style="margin-top:12px"></div></div>';
       view('<h2 style="margin:0 0 14px">משתמשים והרשאות</h2>' +
-        (canEditUsers ? '' : '<div class="sec-note">👁️ תצוגה לצפייה בלבד. יצירת משתמשים, שינוי תפקידים והרשאות נעשים על ידי מנהל מערכת.</div>') +
+        (isAdminU ? '' : '<div class="sec-note">🔑 אתם יכולים ליצור משתמשים, לשנות תפקידים והרשאות ולהפעיל או לכבות אנשי צוות. תפקיד <b>מנהל מערכת</b> שמור לבעל המערכת — אי אפשר ליצור אותו או לערוך משתמש שכבר מוגדר כך.</div>') +
         (canEditUsers ? addForm : '') +
         '<div class="card"><h3>משתמשים קיימים (' + ps.length + ')</h3>' +
         '<div class="table-scroll"><table><thead><tr><th>שם</th><th>תפקיד</th><th>תצוגות מותרות</th><th>פעיל</th><th></th></tr></thead><tbody>' + (rows || '<tr><td colspan="5" class="empty">אין משתמשים</td></tr>') + '</tbody></table></div>' +
@@ -2145,7 +2150,8 @@
         // רק מהתפריט הקטן בטבלה — כאן הוא במקום שבו באמת עורכים משתמש.
         '<div class="field" style="margin:0"><label>תפקיד במערכת</label>' +
           '<select class="inp" id="ue_role" style="width:100%"' + (isSelf ? ' disabled' : '') + '>' +
-          ROLES.map(function (r) { return '<option value="' + r[0] + '"' + (p.role === r[0] ? ' selected' : '') + '>' + esc(r[1]) + '</option>'; }).join('') +
+          ROLES.filter(function (r) { return (window.C2B && window.C2B.role) === 'admin' || r[0] !== 'admin'; })
+            .map(function (r) { return '<option value="' + r[0] + '"' + (p.role === r[0] ? ' selected' : '') + '>' + esc(r[1]) + '</option>'; }).join('') +
           '</select>' +
           (isSelf ? '<span class="muted" style="font-size:11px">אי אפשר לשנות את התפקיד של עצמך</span>' : '') +
         '</div>' +
