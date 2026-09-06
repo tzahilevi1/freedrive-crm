@@ -307,7 +307,7 @@
   var DEFAULT_VIEWS = {
     // מנהל מערכת רואה הכל — בלי זה C2B.views של אדמין מחושב כ-['dashboard'] בלבד
     admin: ['dashboard','leads','files','accounting','cars','appointments','tasks','analytics',
-            'reports','ai','quotes','documents','whatsapp','emails','sms','automations','users','branches','trash','audit','ctemplates','settings'],
+            'reports','agents','ai','quotes','documents','whatsapp','emails','sms','automations','users','branches','trash','audit','ctemplates','settings'],
     // סוכן מכירות: כל התפעול שלו — בלי כספים, בלי דוחות/אנליטיקס, בלי ערוצי הודעות
     sales: ['dashboard', 'leads', 'files', 'cars', 'appointments', 'tasks', 'ai', 'quotes', 'documents'],
     // מנהלת תיקי לקוחות: דשבורד, תיקי לקוחות, רכבים, יומן, משימות, הצעות מחיר, מסמכים והסכמים
@@ -316,7 +316,7 @@
     accounting: ['dashboard', 'accounting', 'cars', 'appointments', 'tasks', 'reports', 'ai', 'quotes', 'documents'],
     // מנהל סניף: רואה הכל, למעט מסכי הניהול של המערכת (משתמשים, הגדרות, אוטומציות)
     branch: ['dashboard', 'leads', 'files', 'accounting', 'cars', 'appointments', 'tasks', 'analytics',
-             'reports', 'ai', 'quotes', 'documents', 'whatsapp', 'emails', 'sms', 'audit']
+             'reports', 'agents', 'ai', 'quotes', 'documents', 'whatsapp', 'emails', 'sms', 'users', 'audit']
   };
   // screens the admin can grant when creating a user (label + key)
   var GRANTABLE_VIEWS = [
@@ -327,11 +327,16 @@
   ];
   // מסכי ניהול שאינם ניתנים להקצאה (מנהל מערכת בלבד) — כאן רק כדי שיוצגו בעברית
   var ADMIN_ONLY_VIEWS = { users: 'משתמשים והרשאות', settings: 'הגדרות ורשימות', branches: 'סניפים', ctemplates: 'תבניות הסכמים',
-                           automations: 'אוטומציות', trash: 'סל מיחזור' };
+                           automations: 'אוטומציות', trash: 'סל מיחזור', agents: 'נציגים' };
+  //  מסכים שפתוחים גם למנהל סניף. "משתמשים והרשאות" נפתח לו לצפייה בלבד:
+  //  RLS מרשה לכל אנשי הצוות לקרוא פרופילים אבל רק למנהל מערכת לכתוב,
+  //  ולכן כפתורי העריכה מוסתרים ממנו במקום להיכשל בשקט.
+  var SENIOR_VIEWS = { users: 1, agents: 1 };
   function navAllowed(nav, role) {
     if (role === 'admin' || !role) return true;
     if (nav === 'activity' || nav === 'dashboard') return true;   // always available
-    if (nav === 'users' || (nav && nav.indexOf('soon:') === 0)) return false; // admin-only
+    if (nav && nav.indexOf('soon:') === 0) return false;
+    if (SENIOR_VIEWS[nav]) return role === 'branch';   // מנהל מערכת כבר חזר true למעלה
     var views = (window.C2B && window.C2B.views) || DEFAULT_VIEWS[role] || ['dashboard'];
     return views.indexOf(nav) >= 0;
   }
@@ -378,6 +383,7 @@
     opts = opts || {};
     if (window.C2B && window.C2B.role && !navAllowed(nav, window.C2B.role)) { nav = 'dashboard'; opts = {}; }
     if (nav === 'users') { setActive(nav); if (window.innerWidth <= 820) { $('side').classList.remove('open'); $('overlay').classList.remove('open'); } return renderUsers(); }
+    if (nav === 'agents') { setActive(nav); if (window.innerWidth <= 820) { $('side').classList.remove('open'); $('overlay').classList.remove('open'); } return renderAgents(); }
     setActive(nav, opts.status);
     if (window.innerWidth <= 820) { $('side').classList.remove('open'); $('overlay').classList.remove('open'); }
     if (nav === 'dashboard') return window.C2B_renderDashboard && window.C2B_renderDashboard();
@@ -1869,13 +1875,141 @@
       return '<label style="display:flex;gap:5px;align-items:center;font-size:13px"><input type="checkbox" data-' + idPrefix + '="' + g[0] + '"' + (checked.indexOf(g[0]) >= 0 ? ' checked' : '') + '> ' + g[1] + '</label>';
     }).join('') + '</div>';
   }
+
+  //  ---------- נציגים ----------
+  //  מנהל שואל שתי שאלות על נציג: כמה לידים יש לו, ואיפה הם תקועים.
+  //  לכן התצוגה הראשית היא מטריצה של נציג מול סטטוס, ותת-התצוגה של כל
+  //  נציג פורסת את הלידים שלו לפי אותם סטטוסים בדיוק.
+  var agentTab = 'all';
+  function renderAgents() {
+    loading();
+    Promise.all([
+      db.from('profiles').select('user_id,full_name,role,active').order('full_name'),
+      db.from('leads').select('id,name,phone,car,status,assigned_to,created_at,source,campaign')
+        .is('deleted_at', null).order('created_at', { ascending: false }).limit(5000)
+    ]).then(function (res) {
+      if (res[0].error) return errBox(res[0].error.message);
+      if (res[1].error) return errBox(res[1].error.message);
+      var profs = res[0].data || [], leads = res[1].data || [];
+      var ST = window.C2B_STATUSES || [];
+      var stDef = function (k) { for (var i = 0; i < ST.length; i++) if (ST[i].k === k) return ST[i]; return { k: k, label: k, icon: '•', color: 'var(--muted)' }; };
+      var byId = {}; profs.forEach(function (p) { byId[p.user_id] = p; });
+
+      //  נציג ללא לידים חייב להופיע \u2014 אחרת אי אפשר לראות שהוא לא מקבל
+      var buckets = {};
+      profs.forEach(function (p) { if (p.active) buckets[p.user_id] = { p: p, leads: [] }; });
+      var UNASSIGNED = '\u2014none\u2014';
+      leads.forEach(function (l) {
+        var k = l.assigned_to && buckets[l.assigned_to] ? l.assigned_to : UNASSIGNED;
+        if (!buckets[k]) buckets[k] = { p: byId[l.assigned_to] || { full_name: 'לא משויך', role: '' }, leads: [] };
+        buckets[k].leads.push(l);
+      });
+      var keys = Object.keys(buckets).sort(function (a, b) {
+        if (a === UNASSIGNED) return 1; if (b === UNASSIGNED) return -1;
+        return buckets[b].leads.length - buckets[a].leads.length;
+      });
+      var cnt = function (arr, k) { return arr.filter(function (l) { return (l.status || 'new') === k; }).length; };
+
+      // ---------- טבלת כל הנציגים ----------
+      var head = ['נציג', 'תפקיד', 'סה\u05f4כ'].concat(ST.map(function (s) { return s.icon + ' ' + s.label; })).concat(['אחוז סגירה']);
+      var rows = keys.map(function (k) {
+        var b = buckets[k], n = b.leads.length, won = cnt(b.leads, 'won');
+        return '<tr><td><b>' + esc(k === UNASSIGNED ? 'לא משויך' : (b.p.full_name || '\u2014')) + '</b></td>' +
+          '<td class="muted">' + esc(k === UNASSIGNED ? '' : roleLabel(b.p.role)) + '</td>' +
+          '<td><b>' + n + '</b></td>' +
+          ST.map(function (s) {
+            var c = cnt(b.leads, s.k);
+            return '<td' + (c ? ' style="color:' + s.color + ';font-weight:700"' : ' class="muted"') + '>' + (c || '\u2014') + '</td>';
+          }).join('') +
+          '<td>' + (n ? (Math.round(won / n * 1000) / 10) + '%' : '<span class="muted">\u2014</span>') + '</td></tr>';
+      }).join('');
+      var totals = { n: leads.length, won: leads.filter(function (l) { return l.status === 'won'; }).length };
+      var overview =
+        '<div class="cards">' +
+          kpi('סה\u05f4כ לידים', leads.length.toLocaleString('en-US'), keys.length + ' נציגים', true) +
+          kpi('נסגרו', totals.won, totals.n ? (Math.round(totals.won / totals.n * 1000) / 10) + '% מהלידים' : null) +
+          kpi('פתוחים', leads.filter(function (l) { return ['won', 'lost'].indexOf(l.status) < 0; }).length, 'לא נסגרו ולא נפסלו') +
+          kpi('לא משויכים', (buckets[UNASSIGNED] || { leads: [] }).leads.length, 'ממתינים לשיוך') +
+        '</div>' +
+        secCardA('\ud83d\udcca לידים לפי נציג וסטטוס', repTableA(head, rows)) +
+        '<div class="sec-note">לחיצה על שם נציג בשורת הלשוניות למעלה פותחת את הלידים שלו לפי סטטוס.</div>';
+
+      // ---------- תת-תצוגה של נציג ----------
+      function agentPanel(k) {
+        var b = buckets[k]; if (!b) return '<p class="empty">לא נמצא</p>';
+        var n = b.leads.length, won = cnt(b.leads, 'won'), open = b.leads.filter(function (l) { return ['won', 'lost'].indexOf(l.status) < 0; }).length;
+        var sections = ST.map(function (s) {
+          var ls = b.leads.filter(function (l) { return (l.status || 'new') === s.k; });
+          if (!ls.length) return '';
+          var trs = ls.map(function (l) {
+            return '<tr data-agentlead="' + esc(l.id) + '" style="cursor:pointer">' +
+              '<td><b>' + esc(l.name || '\u2014') + '</b></td>' +
+              '<td class="ltr"><bdi>' + esc(l.phone || '\u2014') + '</bdi></td>' +
+              '<td>' + esc(l.car || '\u2014') + '</td>' +
+              '<td class="muted">' + esc(l.source || '\u2014') + '</td>' +
+              '<td class="muted">' + esc(l.campaign || '\u2014') + '</td>' +
+              '<td class="muted">' + fmtDateTime(l.created_at) + '</td></tr>';
+          }).join('');
+          return secCardA('<span style="color:' + s.color + '">' + s.icon + ' ' + esc(s.label) + '</span> <span class="muted" style="font-weight:400;font-size:12px">\u00b7 ' + ls.length + '</span>',
+            repTableA(['שם', 'טלפון', 'רכב', 'מקור', 'קמפיין', 'נכנס בתאריך'], trs));
+        }).join('');
+        return '<div class="cards">' +
+            kpi('סה\u05f4כ לידים', n, esc(k === UNASSIGNED ? 'ללא שיוך' : roleLabel(b.p.role)), true) +
+            kpi('פתוחים', open) +
+            kpi('נסגרו', won, n ? (Math.round(won / n * 1000) / 10) + '% סגירה' : null) +
+            kpi('לא רלוונטי', cnt(b.leads, 'lost')) +
+          '</div>' + (sections || '<div class="card"><p class="empty">אין לידים לנציג הזה</p></div>');
+      }
+
+      var tabs = [['all', 'כל הנציגים']].concat(keys.map(function (k) {
+        return [k, (k === UNASSIGNED ? 'לא משויך' : (buckets[k].p.full_name || '\u2014')) + ' (' + buckets[k].leads.length + ')'];
+      }));
+      if (!buckets[agentTab] && agentTab !== 'all') agentTab = 'all';
+      var nav = '<nav class="tabs" id="agTabs" style="margin-bottom:14px;flex-wrap:wrap">' + tabs.map(function (t) {
+        return '<button data-ag="' + esc(t[0]) + '"' + (agentTab === t[0] ? ' class="active"' : '') + '>' + esc(t[1]) + '</button>';
+      }).join('') + '</nav>';
+
+      view('<h2 style="margin:0 0 4px">🧑\u200d💼 נציגים</h2>' +
+        '<p class="muted" style="margin:0 0 14px;font-size:13px">כל הלידים של כל נציג, לפי סטטוס. תצוגה למנהלים בלבד.</p>' +
+        nav + '<div id="agPanel">' + (agentTab === 'all' ? overview : agentPanel(agentTab)) + '</div>');
+
+      $('agTabs').addEventListener('click', function (e) {
+        var b2 = e.target.closest('button[data-ag]'); if (!b2) return;
+        agentTab = b2.dataset.ag;
+        $('agTabs').querySelectorAll('button').forEach(function (x) { x.classList.toggle('active', x.dataset.ag === agentTab); });
+        $('agPanel').innerHTML = agentTab === 'all' ? overview : agentPanel(agentTab);
+      });
+      //  פתיחת כרטיס ליד מתוך הרשימה, באותה דרך שבה נפתח ליד ממסך הלידים
+      $('agPanel').addEventListener('click', function (e) {
+        var tr = e.target.closest('tr[data-agentlead]'); if (!tr) return;
+        if (window.C2B_openLeadCard) window.C2B_openLeadCard(tr.dataset.agentlead);
+      });
+    }).catch(function (e) { errBox(e.message || e); });
+  }
+  function secCardA(title, inner) { return '<div class="card"><div class="sec-title">' + title + '</div>' + inner + '</div>'; }
+  function repTableA(headers, rows) {
+    return '<div class="table-scroll"><table><thead><tr>' + headers.map(function (h) { return '<th>' + h + '</th>'; }).join('') +
+      '</tr></thead><tbody>' + (rows || '<tr><td class="empty" colspan="' + headers.length + '">אין נתונים</td></tr>') + '</tbody></table></div>';
+  }
+
   function renderUsers() {
     loading();
     db.from('profiles').select('*').order('created_at', { ascending: true }).then(function (r) {
       if (r.error) return errBox(r.error.message);
       var ps = r.data || [];
+      //  מנהל סניף רואה את המסך אבל אינו יכול לשנות: המדיניות במסד מתירה
+      //  כתיבה רק למנהל מערכת. הצגת כפתורים שנכשלים בשקט גרועה מהסתרתם.
+      var canEditUsers = (window.C2B && window.C2B.role) === 'admin';
       var rows = ps.map(function (p) {
-        var reset = p.email ? '<button class="btn btn-ghost btn-sm" data-reset="' + esc(p.email) + '">🔑 אפס סיסמה</button>' : '<span class="muted" style="font-size:12px">אין אימייל</span>';
+        var reset = !canEditUsers ? '' : (p.email ? '<button class="btn btn-ghost btn-sm" data-reset="' + esc(p.email) + '">🔑 אפס סיסמה</button>' : '<span class="muted" style="font-size:12px">אין אימייל</span>');
+        if (!canEditUsers) {
+          return '<tr><td><span class="avatar" style="margin-inline-end:8px">' + esc((p.full_name || '?').charAt(0)) + '</span>' + esc(p.full_name || '—') +
+            (p.email ? '<div class="muted" style="font-size:11px">' + esc(p.email) + '</div>' : '') + '</td>' +
+            '<td>' + esc(roleLabel(p.role)) + '</td>' +
+            '<td style="white-space:normal;max-width:260px">' + (p.role === 'admin' ? '<span class="muted" style="font-size:12.5px">👑 רואה את הכל</span>' : viewsLabel(p.views, p.role)) + '</td>' +
+            '<td>' + (p.active ? '<span style="color:var(--ok);font-weight:700">✓ פעיל</span>' : '<span style="color:var(--danger);font-weight:700">✕ לא פעיל</span>') + '</td>' +
+            '<td></td></tr>';
+        }
         var seg = '<div style="display:inline-flex;border:1px solid var(--line);border-radius:9px;overflow:hidden">' +
           '<button data-actset="' + p.user_id + '" data-on="1" style="border:none;padding:6px 12px;font-size:12.5px;cursor:pointer;font-weight:600;background:' + (p.active ? 'var(--ok)' : 'transparent') + ';color:' + (p.active ? '#fff' : 'var(--muted)') + '">✓ פעיל</button>' +
           '<button data-actset="' + p.user_id + '" data-on="0" style="border:none;border-inline-start:1px solid var(--line);padding:6px 12px;font-size:12.5px;cursor:pointer;font-weight:600;background:' + (!p.active ? 'var(--danger)' : 'transparent') + ';color:' + (!p.active ? '#fff' : 'var(--muted)') + '">✕ לא פעיל</button></div>';
@@ -1893,11 +2027,14 @@
         '<div class="field" style="margin:0"><label>תפקיד</label><select class="inp" id="nuRole">' + ROLES.map(function (x) { return '<option value="' + x[0] + '">' + x[1] + '</option>'; }).join('') + '</select></div></div>' +
         '<label style="font-size:13px;color:var(--muted);margin-top:12px;display:block">תצוגות שהמשתמש יראה (מוגדר לפי התפקיד — אפשר להוסיף/להוריד):</label><div id="nuViews">' + viewChecks('nv', DEFAULT_VIEWS.sales) + '</div>' +
         '<div style="margin-top:14px"><button class="btn" id="nuCreate">צור משתמש ושלח הזמנה</button> <span id="nuMsg" style="font-size:13px;margin-inline-start:10px"></span></div><div id="nuResult" style="margin-top:12px"></div></div>';
-      view('<h2 style="margin:0 0 14px">משתמשים והרשאות</h2>' + addForm +
+      view('<h2 style="margin:0 0 14px">משתמשים והרשאות</h2>' +
+        (canEditUsers ? '' : '<div class="sec-note">👁️ תצוגה לצפייה בלבד. יצירת משתמשים, שינוי תפקידים והרשאות נעשים על ידי מנהל מערכת.</div>') +
+        (canEditUsers ? addForm : '') +
         '<div class="card"><h3>משתמשים קיימים (' + ps.length + ')</h3>' +
         '<div class="table-scroll"><table><thead><tr><th>שם</th><th>תפקיד</th><th>תצוגות מותרות</th><th>פעיל</th><th></th></tr></thead><tbody>' + (rows || '<tr><td colspan="5" class="empty">אין משתמשים</td></tr>') + '</tbody></table></div>' +
         '<div class="muted" style="font-size:12.5px;margin-top:10px">מנהל מערכת רואה הכל. שאר המשתמשים רואים רק את הלידים <b>שהוקצו להם</b> ואת התצוגות שסומנו כאן.</div></div>');
 
+      if (!canEditUsers) return;                 // אין מאזיני עריכה בתצוגת הצפייה
       // sync the Cloudflare Access gate to the CRM's active users (manager never touches Cloudflare)
       function syncAccessGate() {
         try {
