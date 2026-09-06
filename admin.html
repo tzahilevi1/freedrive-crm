@@ -2,6 +2,12 @@
 <html lang="he" dir="rtl">
 <head>
 <meta charset="UTF-8">
+<!--  הגנת מסגור. frame-ancestors אינו נתמך בתגית meta ו-GitHub Pages אינו
+      מגיש כותרות HTTP, ולכן זו ההגנה היחידה מפני clickjacking כאן: הדף
+      מוסתר עד שמתברר שהוא אינו בתוך מסגרת של אתר אחר. ה-style מוסר רק
+      בעמוד עליון, כך שגם דפדפן שיחסום את הניווט לא יציג את התוכן. -->
+<style id="af">html{display:none!important}</style>
+<script>(function(){try{if(self===top){var e=document.getElementById('af');e&&e.parentNode.removeChild(e);}else{top.location.replace(self.location.href);}}catch(x){top.location.replace(self.location.href);}})();</script>
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://gfwopgoydfqiouratcpc.supabase.co wss://gfwopgoydfqiouratcpc.supabase.co https://data.gov.il https://api.ipify.org; frame-src https://www.youtube.com https://www.youtube-nocookie.com https://gfwopgoydfqiouratcpc.supabase.co; object-src 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests">
 <meta name="referrer" content="strict-origin-when-cross-origin">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -412,8 +418,8 @@
 <div id="drawer"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js" integrity="sha384-0w2KAL2YHP6wKOkUDzkCDGgVvfmHnj02DHeQ6XcHOgTfFsGyonKOpShMH1x6nk9o" crossorigin="anonymous"></script>
-<script src="admin.js?v=202609060906"></script>
-<script src="admin-crm.js?v=202609060906"></script>
-<script src="admin-modules.js?v=202609060906"></script>
+<script src="admin.js?v=202609060930"></script>
+<script src="admin-crm.js?v=202609060930"></script>
+<script src="admin-modules.js?v=202609060930"></script>
 </body>
 </html>

@@ -2,7 +2,13 @@
 <html lang="he" dir="rtl">
 <head>
 <meta charset="UTF-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://gfwopgoydfqiouratcpc.supabase.co wss://tdxhqpauuqawcoivjnnm.supabase.co https://data.gov.il https://api.ipify.org; frame-src https://www.youtube.com https://www.youtube-nocookie.com; object-src 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests">
+<!--  הגנת מסגור. frame-ancestors אינו נתמך בתגית meta ו-GitHub Pages אינו
+      מגיש כותרות HTTP, ולכן זו ההגנה היחידה מפני clickjacking כאן: הדף
+      מוסתר עד שמתברר שהוא אינו בתוך מסגרת של אתר אחר. ה-style מוסר רק
+      בעמוד עליון, כך שגם דפדפן שיחסום את הניווט לא יציג את התוכן. -->
+<style id="af">html{display:none!important}</style>
+<script>(function(){try{if(self===top){var e=document.getElementById('af');e&&e.parentNode.removeChild(e);}else{top.location.replace(self.location.href);}}catch(x){top.location.replace(self.location.href);}})();</script>
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://gfwopgoydfqiouratcpc.supabase.co wss://gfwopgoydfqiouratcpc.supabase.co https://data.gov.il https://api.ipify.org; frame-src https://www.youtube.com https://www.youtube-nocookie.com; object-src 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests">
 <meta name="referrer" content="strict-origin-when-cross-origin">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="robots" content="noindex, nofollow">
