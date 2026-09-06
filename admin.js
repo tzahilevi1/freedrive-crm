@@ -343,6 +343,9 @@
   function applyRole(role) {
     $('nav').querySelectorAll('.nav-item, .nav-group-label').forEach(function (it) {
       if (it.classList.contains('nav-group-label')) { it.style.display = role === 'admin' ? '' : 'none'; return; }
+      //  פריט שמסומן data-senior הוא תצוגת ניהול בתוך תפריט שפתוח לכולם
+      //  (למשל תור החלוקה שבתוך "לידים") — הרשאת האב אינה מספיקה לו.
+      if (it.dataset.senior && role !== 'admin' && role !== 'branch') { it.style.display = 'none'; return; }
       it.style.display = navAllowed(it.dataset.nav, role) ? '' : 'none';
     });
   }
