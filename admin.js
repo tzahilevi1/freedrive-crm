@@ -361,7 +361,7 @@
     e.preventDefault();
     var em = $('email').value.trim();
     if (!em) { $('loginErr').style.color = 'var(--danger)'; $('loginErr').textContent = 'הזינו אימייל למעלה ואז לחצו "שכחתי סיסמה".'; return; }
-    var redirect = 'https://tzahilevi1.github.io/freedrive-crm/reset.html';
+    var redirect = 'https://crm.freedrive.co.il/reset.html';
     db.auth.resetPasswordForEmail(em, { redirectTo: redirect }).then(function (r) {
       $('loginErr').style.color = r.error ? 'var(--danger)' : 'var(--ok)';
       $('loginErr').textContent = r.error ? ('שגיאה: ' + r.error.message) : 'נשלח מייל לאיפוס סיסמה (אם החשבון קיים). בדקו את תיבת הדואר.';
@@ -1031,7 +1031,7 @@
   }
 
   // ---------- ANALYTICS ----------
-  function refDomain(r) { if (!r) return '(ישיר / הקלדה)'; try { var h = new URL(r).hostname.replace(/^www\./, ''); if (/google\./.test(h)) return 'Google (אורגני)'; if (/facebook|fb\.com|instagram/.test(h)) return 'Meta (פייסבוק/אינסטגרם)'; if (/t\.co|twitter|x\.com/.test(h)) return 'X/Twitter'; if (/youtube/.test(h)) return 'YouTube'; if (h.indexOf('tzahilevi1.github.io') >= 0) return '(פנימי)'; return h; } catch (e) { return '(אחר)'; } }
+  function refDomain(r) { if (!r) return '(ישיר / הקלדה)'; try { var h = new URL(r).hostname.replace(/^www\./, ''); if (/google\./.test(h)) return 'Google (אורגני)'; if (/facebook|fb\.com|instagram/.test(h)) return 'Meta (פייסבוק/אינסטגרם)'; if (/t\.co|twitter|x\.com/.test(h)) return 'X/Twitter'; if (/youtube/.test(h)) return 'YouTube'; if (h.indexOf('crm.freedrive.co.il') >= 0) return '(פנימי)'; return h; } catch (e) { return '(אחר)'; } }
   function deviceOf(ua) { ua = ua || ''; if (/iPad|Tablet/i.test(ua)) return 'טאבלט'; if (/Mobi|Android|iPhone/i.test(ua)) return 'מובייל'; return 'דסקטופ'; }
   function browserOf(ua) { ua = ua || ''; if (/Edg/i.test(ua)) return 'Edge'; if (/Chrome/i.test(ua)) return 'Chrome'; if (/Firefox/i.test(ua)) return 'Firefox'; if (/Safari/i.test(ua)) return 'Safari'; return 'אחר'; }
   function anBars(days) {
@@ -1641,7 +1641,7 @@
         '<div class="rep-grid">' +
           secCard('📣 לידים לפי מקור', barRows(repTop(bySource, 'leads', 12), function (v) { return v; })) +
           secCard('🏆 חמשת המותגים המובילים בהכנסות', rankRows(netByBrand, M, function (i) { return i.o.count + ' עסקאות'; })) +
-          secCard('🌐 צפיות באתר הציבורי <span class="muted" style="font-size:12px;font-weight:400">· tzahilevi1.github.io</span>', '<div class="cards" style="margin:0">' + kpi('צפיות בעמודים', pv.toLocaleString('en-US')) + kpi('מבקרים ייחודיים', Object.keys(sess).length.toLocaleString('en-US')) + '</div>') +
+          secCard('🌐 צפיות באתר הציבורי <span class="muted" style="font-size:12px;font-weight:400">· crm.freedrive.co.il</span>', '<div class="cards" style="margin:0">' + kpi('צפיות בעמודים', pv.toLocaleString('en-US')) + kpi('מבקרים ייחודיים', Object.keys(sess).length.toLocaleString('en-US')) + '</div>') +
         '</div>' +
         secCard('📋 ביצועי קמפיינים <span class="muted" style="font-size:12px;font-weight:400">· ייחוס מה-CRM: כל ליד משויך לקמפיין שממנו הגיע, ולידים ידניים לחברת השיווק</span>', repTable(['קמפיין', 'לידים', 'עסקאות', 'נסגרו', 'הכנסה', 'המרה', 'הוצאה', 'CPL'], campRows));
 
@@ -2122,7 +2122,7 @@
       // password reset for a user
       $('view').querySelectorAll('button[data-reset]').forEach(function (b) {
         b.addEventListener('click', function () {
-          var email = b.dataset.reset, redirect = 'https://tzahilevi1.github.io/freedrive-crm/reset.html';
+          var email = b.dataset.reset, redirect = 'https://crm.freedrive.co.il/reset.html';
           db.auth.resetPasswordForEmail(email, { redirectTo: redirect }).then(function (r) { alert(r.error ? ('שגיאה: ' + r.error.message) : ('נשלח מייל לאיפוס סיסמה אל ' + email)); });
         });
       });

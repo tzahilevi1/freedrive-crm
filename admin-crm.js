@@ -2656,7 +2656,7 @@
     // ---- remote signing: build link + send via email / WhatsApp / SMS ----
     if (deal.id) {
       // sign.html מוגש באתר הציבורי (לא ב-CRM) — חייב כתובת מלאה, כמו במייל (phase-signing.sql)
-      var signBase = 'https://tzahilevi1.github.io/freedrive-crm/sign.html';
+      var signBase = 'https://crm.freedrive.co.il/sign.html';
       var signUrl = null;
       function withUrl(cb) {
         if (signUrl) return cb(signUrl);
