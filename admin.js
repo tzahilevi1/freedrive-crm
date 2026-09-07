@@ -1204,7 +1204,7 @@
   function renderReports() {
     loading();
     Promise.all([
-      db.from('leads').select('id,name,status,source,created_at,first_response_at,assigned_to,brand,utm_campaign,utm_source,utm_medium,utm_term,utm_content,campaign,medium,adset_name,ad_name,ad_group,marketing_company,city').is('deleted_at', null),
+      db.from('leads').select('id,name,phone,car,status,source,created_at,first_response_at,assigned_to,brand,utm_campaign,utm_source,utm_medium,utm_term,utm_content,campaign,medium,adset_name,ad_name,ad_group,ad_id,marketing_company,city').is('deleted_at', null),
       db.from('appointments').select('status'),
       db.from('events').select('type,session_id,created_at'),
       db.from('tasks').select('done'),
