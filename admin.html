@@ -101,7 +101,7 @@
   /* full lead page */
   .lead-top{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:8px}
   .lead-nav{display:flex;gap:6px}
-  .lead-grid{display:grid;grid-template-columns:300px 1fr;gap:18px;align-items:start}
+  .lead-grid{display:grid;grid-template-columns:clamp(300px,28%,420px) 1fr;gap:18px;align-items:start}
   .lead-grid>*{min-width:0}
   @media(max-width:900px){.lead-grid{grid-template-columns:1fr}}
   .stmenu{position:absolute;background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);z-index:45;padding:6px;min-width:180px}
@@ -291,11 +291,11 @@
 
   /* lead details field list */
   .lead-fields{display:grid;grid-template-columns:1fr;gap:0}
-  .lead-fields .lf{display:flex;justify-content:space-between;gap:10px;padding:7px 0;border-bottom:1px solid var(--line);font-size:13.5px}
+  .lead-fields .lf{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--line);font-size:13.5px}
   .lead-fields .lf .k{color:var(--muted);flex:none}
-  .lead-fields .lf .v{text-align:left;word-break:break-word}
+  .lead-fields .lf .v{flex:1;min-width:0;text-align:left;word-break:break-word}
   /* inline-editable field (no edit button — click and type) */
-  .lead-fields .lf .lf-edit{border:1px solid transparent;background:transparent;color:var(--txt);font-size:13.5px;text-align:left;padding:3px 7px;border-radius:7px;min-width:120px;max-width:62%;font-family:inherit;transition:background .1s,border-color .1s;cursor:text}
+  .lead-fields .lf .lf-edit{border:1px solid transparent;background:transparent;color:var(--txt);font-size:13.5px;text-align:left;padding:3px 7px;border-radius:7px;flex:1;min-width:0;font-family:inherit;transition:background .1s,border-color .1s;cursor:text}
   .lead-fields .lf select.lf-edit{cursor:pointer}
   .lead-fields .lf .lf-edit:hover{border-color:var(--line);background:var(--surface-2)}
   .lead-fields .lf .lf-edit:focus{outline:none;border-color:var(--brand);background:var(--surface)}
@@ -426,8 +426,8 @@
 <div id="drawer"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js" integrity="sha384-0w2KAL2YHP6wKOkUDzkCDGgVvfmHnj02DHeQ6XcHOgTfFsGyonKOpShMH1x6nk9o" crossorigin="anonymous"></script>
-<script src="admin.js?v=202609071200"></script>
-<script src="admin-crm.js?v=202609071200"></script>
-<script src="admin-modules.js?v=202609071200"></script>
+<script src="admin.js?v=202609071240"></script>
+<script src="admin-crm.js?v=202609071240"></script>
+<script src="admin-modules.js?v=202609071240"></script>
 </body>
 </html>
