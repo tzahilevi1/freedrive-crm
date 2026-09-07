@@ -1462,9 +1462,6 @@
       //  ששותף עסקי הביא (מקור ידוע לחלוטין) וליד שהמקור שלו באמת אבד.
       //  שותף אינו קמפיין, ולכן הוא לא אמור להופיע בטבלת הקמפיינים בכלל.
       var UNATTR = 'ללא ייחוס';
-      //  אינדקס שטוח של הרשומות מאחורי כל תא לחיץ. נשמר על window כדי
-      //  שהמאזין ימצא אותו גם אחרי שהלוח נצבע מחדש.
-      var repKeys = []; window.C2B_repKeys = repKeys;
       //  utm_term מגיע מפייסבוק כקוד מיקום ולא כשם קריא
       var PLACEMENTS = { fb: 'פייסבוק', ig: 'אינסטגרם', an: 'Audience Network', msg: 'מסנג\u05f3ר', fb_ig: 'פייסבוק + אינסטגרם' };
       //  הערכים האלה מתארים איך הליד נכנס למערכת ולא מאיפה הוא הגיע, ולכן
@@ -1480,13 +1477,11 @@
       //  only — מסננת אופציונלית, כדי שטבלאות הפרסום יכילו רק לידים מפרסום
       function attrBy(get, only) {
         var m = {};
-        //  שומרים גם את הרשומות עצמן ולא רק ספירה: כל מספר בדוח לחיץ
-        //  ופותח את הלידים או העסקאות שמאחוריו.
-        function cell(l) { var k = String(get(l) || '').trim() || UNATTR; m[k] = m[k] || { leads: 0, count: 0, revenue: 0, L: [], D: [] }; return m[k]; }
-        leads.forEach(function (l) { if (only && !only(l)) return; var o = cell(l); o.leads++; o.L.push(l); });
+        function cell(l) { var k = String(get(l) || '').trim() || UNATTR; m[k] = m[k] || { leads: 0, count: 0, revenue: 0 }; return m[k]; }
+        leads.forEach(function (l) { if (only && !only(l)) return; cell(l).leads++; });
         deals.forEach(function (d) {
           var l = leadById[d.lead_id]; if (!l || (only && !only(l))) return;
-          var o = cell(l); o.count++; o.revenue += (+d.car_price || 0); o.D.push({ d: d, l: l });
+          var o = cell(l); o.count++; o.revenue += (+d.car_price || 0);
         });
         return m;
       }
@@ -1519,12 +1514,9 @@
             : function (a, b) { return (b.o.leads - a.o.leads) || (b.o.revenue - a.o.revenue); })
           .map(function (i) {
             var o = i.o, cr = o.leads ? P1(o.count / o.leads * 100) : '<span class="muted">\u2014</span>';
-            var key = repKeys.push({ label: i.label, o: o }) - 1;
-            var nL = o.leads ? '<a class="drill-n" data-rk="' + key + '" data-what="leads">' + o.leads + '</a>' : '<span class="muted">0</span>';
-            var nD = o.count ? '<a class="drill-n" data-rk="' + key + '" data-what="deals">' + o.count + '</a>' : '<span class="muted">0</span>';
             var cells = byDeals
-              ? ['<td>' + nD + '</td>', '<td>' + M(o.revenue) + '</td>', '<td>' + nL + '</td>', '<td>' + cr + '</td>']
-              : ['<td>' + nL + '</td>', '<td>' + nD + '</td>', '<td>' + M(o.revenue) + '</td>', '<td>' + cr + '</td>'];
+              ? ['<td>' + o.count + '</td>', '<td>' + M(o.revenue) + '</td>', '<td>' + o.leads + '</td>', '<td>' + cr + '</td>']
+              : ['<td>' + o.leads + '</td>', '<td>' + o.count + '</td>', '<td>' + M(o.revenue) + '</td>', '<td>' + cr + '</td>'];
             return '<tr><td><b>' + esc(i.label) + '</b></td>' + cells.join('') + '</tr>';
           }).join('');
         return repTable(byDeals
@@ -1722,14 +1714,6 @@
         b.parentElement.querySelectorAll('button').forEach(function (x) { x.classList.toggle('active', x === b); });
         loadAdMetrics();
       });
-      //  מאזין אחד לכל המספרים הלחיצים בדוחות, על המכל שנשאר בין ציורים
-      $('repPanel').onclick = function (e) {
-        var a = e.target.closest('a.drill-n[data-rk]'); if (!a) return;
-        var it = (window.C2B_repKeys || [])[+a.dataset.rk]; if (!it) return;
-        var what = a.dataset.what;
-        repDetail((what === 'deals' ? 'עסקאות \u00b7 ' : 'לידים \u00b7 ') + it.label, what,
-                  what === 'deals' ? it.o.D : it.o.L);
-      };
       $('repTabs').addEventListener('click', function (e) { var b = e.target.closest('button[data-rep]'); if (!b) return; repTab = b.dataset.rep; $('repTabs').querySelectorAll('button').forEach(function (x) { x.classList.toggle('active', x.dataset.rep === repTab); }); $('repPanel').innerHTML = panels[repTab];  loadAdMetrics(); });
       // sales sub-tab switching (delegated on the persistent repPanel)
       $('repPanel').addEventListener('click', function (e) { var b = e.target.closest('button[data-ssub]'); if (!b) return; salesSub = b.dataset.ssub; var nav = $('repSalesTabs'); if (nav) nav.querySelectorAll('button').forEach(function (x) { x.classList.toggle('active', x.dataset.ssub === salesSub); }); var sp = $('repSalesPanel'); if (sp) sp.innerHTML = salesPanels[salesSub]; });
