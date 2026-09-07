@@ -1589,7 +1589,22 @@
       //  עד כה משותף עסקי ולא מהמודעות, וחלוקה שלה בהוצאת הפרסום החזירה
       //  198x. לכן דוח המנהל משווה הוצאה מול ההכנסה **המיוחסת לפרסום**
       //  בלבד, ואת ההכנסה הכוללת מציג בנפרד.
+      //  חיבור בין שני העולמות נעשה לפי **מזהים** ולא לפי שמות: שם קמפיין
+      //  משתנה בלחיצה אחת ב-Meta ואז כל ההיסטוריה מתנתקת, בעוד המזהה קבוע.
+      //  הליד נושא את utm_campaign (מזהה קמפיין), ad_group (סדרה) ו-ad_id.
+      function crmIndex(field) {
+        var m = {};
+        function cell(k) { if (!k) return null; m[k] = m[k] || { leads: [], deals: [] }; return m[k]; }
+        leads.forEach(function (l) { var c = cell(String(l[field] || '')); if (c) c.leads.push(l); });
+        deals.forEach(function (d) {
+          var l = leadById[d.lead_id]; if (!l) return;
+          var c = cell(String(l[field] || '')); if (!c) return;
+          c.deals.push({ d: d, l: l });
+        });
+        return m;
+      }
       repCtx = { revenue: revenue, paidRevenue: paidRev, leads: leads.length,
+                 crm: { campaign: crmIndex('utm_campaign'), adset: crmIndex('ad_group'), ad: crmIndex('ad_id') },
                  deals: deals.length, paidDeals: paidDeals.length,
                  rangeLabel: repRangeLabel(),
                  metaMatches: repMetaPreset() !== 'maximum' || repRange.k === 'all' };
@@ -1639,8 +1654,10 @@
           kpi('פגישות שנקבעו', appts.length) +
         '</div>' +
         '<div class="sec-note" id="mkNote">📡 טוען מדדים מ-Meta…</div>' +
-        secCard('📣 קמפיינים ב-Meta <span class="muted" style="font-size:12px;font-weight:400">· לצפייה בלבד</span>',
+        secCard('📣 קמפיינים ב-Meta <span class="muted" style="font-size:12px;font-weight:400">· לחצו על קמפיין כדי לפתוח את הסדרות והמודעות שלו \u00b7 לצפייה בלבד</span>',
                 '<div id="mkCamps" class="muted" style="font-size:13px">טוען…</div>') +
+        secCard('📊 נתוני מדיה מלאים <span class="muted" style="font-size:12px;font-weight:400">· חשיפות, הקלקות, CTR ו-CPC ברמת קמפיין</span>',
+                '<div id="mkMedia" class="muted" style="font-size:13px">טוען…</div>') +
         '<div class="rep-grid">' +
           secCard('📣 לידים לפי מקור', barRows(repTop(bySource, 'leads', 12), function (v) { return v; })) +
           secCard('🏆 חמשת המותגים המובילים בהכנסות', rankRows(netByBrand, M, function (i) { return i.o.count + ' עסקאות'; })) +
@@ -1728,6 +1745,53 @@
     OUTCOME_AWARENESS: 'מודעות', BRAND_AWARENESS: 'מודעות', REACH: 'חשיפה',
     OUTCOME_APP_PROMOTION: 'קידום אפליקציה', VIDEO_VIEWS: 'צפיות בווידאו'
   };
+
+  //  ---------- פירוט מאחורי מספר בדוח ----------
+  //  מספר בדוח בלי דרך לראות ממה הוא מורכב מכריח את המנהל להאמין לו.
+  //  כל ספירה כאן פותחת את הרשומות עצמן, ומשם אפשר לקפוץ לכרטיס הליד.
+  function repDetail(title, kind, list) {
+    var bg = document.createElement('div');
+    bg.className = 'adm-bg';
+    var head, rows;
+    if (kind === 'deals') {
+      head = ['לקוח', 'רכב', 'מחיר הרכב', 'נחתם', 'נציג'];
+      rows = list.map(function (x) {
+        return '<tr data-replead="' + esc(x.l.id) + '" style="cursor:pointer">' +
+          '<td><b>' + esc(x.l.name || '\u2014') + '</b></td>' +
+          '<td>' + esc([x.d.car_make, x.d.car_model].filter(Boolean).join(' ') || '\u2014') + '</td>' +
+          '<td>' + M(+x.d.car_price || 0) + '</td>' +
+          '<td class="muted">' + esc(fmtDateTime(x.d.signed_at || x.d.created_at)) + '</td>' +
+          '<td class="muted">' + esc(x.d.salesperson || '\u2014') + '</td></tr>';
+      }).join('');
+    } else {
+      head = ['שם', 'טלפון', 'סטטוס', 'רכב', 'נכנס בתאריך'];
+      rows = list.map(function (l) {
+        var sd = (window.C2B_STATUSES || []).filter(function (x) { return x.k === (l.status || 'new'); })[0] || { label: l.status, color: 'var(--muted)', icon: '' };
+        return '<tr data-replead="' + esc(l.id) + '" style="cursor:pointer">' +
+          '<td><b>' + esc(l.name || '\u2014') + '</b></td>' +
+          '<td class="ltr"><bdi>' + esc(l.phone || '\u2014') + '</bdi></td>' +
+          '<td style="color:' + sd.color + ';font-weight:600">' + esc(sd.icon + ' ' + sd.label) + '</td>' +
+          '<td>' + esc(l.car || '\u2014') + '</td>' +
+          '<td class="muted">' + esc(fmtDateTime(l.created_at)) + '</td></tr>';
+      }).join('');
+    }
+    bg.innerHTML = '<div class="adm"><div class="adm-hd"><h3>' + esc(title) + ' \u00b7 ' + list.length + '</h3>' +
+      '<button class="adm-x" data-admx title="סגור">\u2715</button></div>' +
+      '<div class="adm-body">' +
+        (rows ? '<div class="table-scroll"><table><thead><tr>' + head.map(function (h) { return '<th>' + h + '</th>'; }).join('') +
+          '</tr></thead><tbody>' + rows + '</tbody></table></div>'
+              : '<p class="empty">אין רשומות</p>') +
+      '</div><div class="adm-meta"><span>לחיצה על שורה פותחת את כרטיס הליד</span></div></div>';
+    document.body.appendChild(bg);
+    function close() { bg.remove(); document.removeEventListener('keydown', onKey); }
+    function onKey(e) { if (e.key === 'Escape') close(); }
+    document.addEventListener('keydown', onKey);
+    bg.addEventListener('click', function (e) {
+      if (e.target === bg || e.target.closest('[data-admx]')) return close();
+      var tr = e.target.closest('tr[data-replead]');
+      if (tr && window.C2B_openLeadCard) { close(); window.C2B_openLeadCard(tr.dataset.replead); }
+    });
+  }
 
   function loadAdMetrics() {
     //  אותה קריאה משרתת את לוח השיווק ואת לוח המנהל \u2014 שניהם מציגים
@@ -1823,6 +1887,83 @@
       }
       if (!$('mkCamps')) return;                      // לוח המנהל בלבד
 
+      //  ---------- טבלה נפתחת: קמפיין \u2192 סדרה \u2192 מודעה ----------
+      //  שלוש הרמות יושבות באותה טבלה ולא בטבלאות נפרדות, כדי שהמנהל
+      //  יראה את הסדרות בהקשר של הקמפיין שמעליהן ולא יאבד את המקום.
+      var crm = (repCtx.crm || {});
+      function cellOf(level, id) { return ((crm[level] || {})[String(id)] || { leads: [], deals: [] }); }
+      function metrRow(level, id, name, indent, kids, extra) {
+        var o = cellOf(level, id), nl = o.leads.length, nd = o.deals.length;
+        var rev = o.deals.reduce(function (a, x) { return a + (+x.d.car_price || 0); }, 0);
+        var conv = nl ? nd / nl * 100 : null;
+        var cac = nd ? extra.spend / nd : null;
+        var arrow = kids ? '<span class="drill-x">\u25b8</span> ' : '';
+        return '<tr data-lvl="' + level + '" data-id="' + esc(id) + '" data-parent="' + esc(extra.parent || '') + '"' +
+            (level !== 'campaign' ? ' class="hidden"' : '') + (kids ? ' data-kids="1"' : '') + '>' +
+          '<td style="padding-inline-start:' + (10 + indent * 22) + 'px' + (kids ? ';cursor:pointer' : '') + '"' +
+             (kids ? ' data-drill="1"' : '') + '>' + arrow + '<b>' + esc(name || '\u2014') + '</b>' +
+             (extra.sub ? '<div class="muted" style="font-size:11px;font-weight:400">' + esc(extra.sub) + '</div>' : '') + '</td>' +
+          '<td>' + nis0(extra.spend) + '</td>' +
+          '<td>' + (extra.leads || 0) + (extra.result_type && extra.result_type !== 'לידים'
+            ? '<div class="muted" style="font-size:11px">' + esc(extra.result_type) + '</div>' : '') + '</td>' +
+          '<td>' + (nl ? '<a class="drill-n" data-open="leads" data-lvl2="' + level + '" data-id2="' + esc(id) + '">' + nl + '</a>' : '<span class="muted">0</span>') + '</td>' +
+          '<td>' + (nd ? '<a class="drill-n" data-open="deals" data-lvl2="' + level + '" data-id2="' + esc(id) + '">' + nd + '</a>' : '<span class="muted">0</span>') + '</td>' +
+          '<td>' + (rev ? M(rev) : '<span class="muted">\u2014</span>') + '</td>' +
+          '<td>' + (conv === null ? '<span class="muted">\u2014</span>' : P1(conv)) + '</td>' +
+          '<td>' + (cac === null ? '<span class="muted">\u2014</span>' : nis0(cac)) + '</td>' +
+          '<td>' + (extra.cpl ? nis0(extra.cpl) : '<span class="muted">\u2014</span>') + '</td></tr>';
+      }
+      var adsets = d.adsets || [], ads = d.ads || [];
+      var drill = (d.campaigns || []).slice().sort(function (a, b) { return b.spend - a.spend; }).map(function (c) {
+        var myAdsets = adsets.filter(function (a) { return a.campaign_id === String(c.id); });
+        var out = metrRow('campaign', c.id, c.name, 0, myAdsets.length, {
+          spend: c.spend, leads: c.leads, cpl: c.cpl, result_type: c.result_type, parent: '',
+          sub: (OBJECTIVES[c.objective] || c.objective || '') + (c.status === 'ACTIVE' ? ' \u00b7 פעיל' : c.status ? ' \u00b7 ' + c.status : '')
+        });
+        myAdsets.forEach(function (a) {
+          var myAds = ads.filter(function (x) { return x.adset_id === String(a.id); });
+          out += metrRow('adset', a.id, a.name, 1, myAds.length, {
+            spend: a.spend, leads: a.leads, cpl: a.cpl, result_type: a.result_type, parent: String(c.id)
+          });
+          myAds.forEach(function (x) {
+            out += metrRow('ad', x.id, x.name, 2, 0, {
+              spend: x.spend, leads: x.leads, cpl: x.cpl, result_type: x.result_type, parent: String(a.id)
+            });
+          });
+        });
+        return out;
+      }).join('');
+      $('mkCamps').innerHTML = drill
+        ? '<div class="table-scroll"><table id="drillTbl"><thead><tr>' +
+            ['קמפיין / סדרה / מודעה', 'הוצאה', 'תוצאות ב-Meta', 'לידים ב-CRM', 'עסקאות', 'הכנסות', 'שיעור המרה', 'עלות לעסקה', 'עלות לתוצאה']
+              .map(function (h) { return '<th>' + h + '</th>'; }).join('') +
+          '</tr></thead><tbody>' + drill + '</tbody></table></div>'
+        : '<span class="muted">אין קמפיינים בטווח שנבחר.</span>';
+
+      //  פתיחה וסגירה של רמה. סגירת הורה מקפלת גם את הנכדים, אחרת נשארות
+      //  מודעות תלויות באוויר בלי הסדרה שלהן.
+      $('mkCamps').addEventListener('click', function (e) {
+        var num = e.target.closest('a.drill-n');
+        if (num) {
+          var o = cellOf(num.dataset.lvl2, num.dataset.id2);
+          var nm = (num.closest('tr').querySelector('td b') || {}).textContent || '';
+          return repDetail((num.dataset.open === 'deals' ? 'עסקאות \u00b7 ' : 'לידים \u00b7 ') + nm,
+                           num.dataset.open, num.dataset.open === 'deals' ? o.deals : o.leads);
+        }
+        var cell = e.target.closest('td[data-drill]'); if (!cell) return;
+        var tr = cell.closest('tr'), id = tr.dataset.id, tb = tr.parentNode;
+        var open = tr.classList.toggle('drill-open');
+        var mark = tr.querySelector('.drill-x'); if (mark) mark.textContent = open ? '\u25be' : '\u25b8';
+        [].forEach.call(tb.querySelectorAll('tr[data-parent="' + id + '"]'), function (k) {
+          k.classList.toggle('hidden', !open);
+          if (!open) {
+            k.classList.remove('drill-open');
+            var m2 = k.querySelector('.drill-x'); if (m2) m2.textContent = '\u25b8';
+            [].forEach.call(tb.querySelectorAll('tr[data-parent="' + k.dataset.id + '"]'), function (g) { g.classList.add('hidden'); });
+          }
+        });
+      });
+
       var rows = (d.campaigns || []).map(function (c) {
         var st = c.status === 'ACTIVE'
           ? '<span style="color:var(--ok);font-weight:600">● פעיל</span>'
@@ -1842,7 +1983,9 @@
               ? '<div class="muted" style="font-size:11px;font-weight:400">' + esc(c.result_type) + '</div>' : '') + '</td>' +
           '<td>' + (c.cpl ? nis0(c.cpl) : '—') + '</td></tr>';
       }).join('');
-      $('mkCamps').innerHTML = rows
+      //  טבלת המדיה המפורטת (חשיפות/הקלקות/CTR) יורדת אל מתחת לטבלה
+      //  הנפתחת, כדי ששתיהן ייראו בלי להתחרות על אותו מקום.
+      if ($('mkMedia')) $('mkMedia').innerHTML = rows
         ? '<div class="table-scroll"><table><thead><tr>' +
             ['קמפיין', 'יעד', 'סטטוס', 'תקציב', 'הוצאה', 'חשיפות', 'הקלקות', 'CTR', 'CPC', 'לידים', 'CPL']
               .map(function (h) { return '<th>' + h + '</th>'; }).join('') +
