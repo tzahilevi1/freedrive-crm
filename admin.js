@@ -307,22 +307,22 @@
   var DEFAULT_VIEWS = {
     // מנהל מערכת רואה הכל — בלי זה C2B.views של אדמין מחושב כ-['dashboard'] בלבד
     admin: ['dashboard','leads','files','accounting','cars','appointments','tasks','analytics',
-            'reports','agents','ai','quotes','documents','whatsapp','emails','sms','automations','users','branches','trash','audit','ctemplates','settings'],
+            'reports','agents','ai','quotes','documents','whatsapp','heyy','emails','sms','automations','users','branches','trash','audit','ctemplates','settings'],
     // סוכן מכירות: כל התפעול שלו — בלי כספים, בלי דוחות/אנליטיקס, בלי ערוצי הודעות
-    sales: ['dashboard', 'leads', 'files', 'cars', 'appointments', 'tasks', 'ai', 'quotes', 'documents'],
+    sales: ['dashboard', 'leads', 'files', 'cars', 'appointments', 'tasks', 'ai', 'quotes', 'documents', 'heyy'],
     // מנהלת תיקי לקוחות: דשבורד, תיקי לקוחות, רכבים, יומן, משימות, הצעות מחיר, מסמכים והסכמים
     files: ['dashboard', 'files', 'cars', 'appointments', 'tasks', 'quotes', 'documents'],
     // מנהלת חשבונות: דשבורד, הנהלת חשבונות, רכבים, יומן, משימות, דוחות, עוזר AI, הצעות מחיר, מסמכים והסכמים
     accounting: ['dashboard', 'accounting', 'cars', 'appointments', 'tasks', 'reports', 'ai', 'quotes', 'documents'],
     // מנהל סניף: רואה הכל, למעט מסכי הניהול של המערכת (משתמשים, הגדרות, אוטומציות)
     branch: ['dashboard', 'leads', 'files', 'accounting', 'cars', 'appointments', 'tasks', 'analytics',
-             'reports', 'agents', 'ai', 'quotes', 'documents', 'whatsapp', 'emails', 'sms', 'users', 'audit']
+             'reports', 'agents', 'ai', 'quotes', 'documents', 'whatsapp', 'heyy', 'emails', 'sms', 'users', 'audit']
   };
   // screens the admin can grant when creating a user (label + key)
   var GRANTABLE_VIEWS = [
     ['dashboard', 'דשבורד'], ['leads', 'לידים'], ['files', 'תיקי לקוחות'], ['accounting', 'הנהלת חשבונות'],
     ['cars', 'רכבים'], ['appointments', 'יומן פגישות'], ['tasks', 'משימות'], ['analytics', 'אנליטיקס'], ['reports', 'דוחות'],
-    ['ai', 'עוזר AI'], ['quotes', 'הצעות מחיר'], ['documents', 'מסמכים והסכמים'], ['whatsapp', 'WhatsApp'], ['emails', 'מיילים'], ['sms', 'SMS'],
+    ['ai', 'עוזר AI'], ['quotes', 'הצעות מחיר'], ['documents', 'מסמכים והסכמים'], ['whatsapp', 'WhatsApp'], ['heyy', 'Hey · WhatsApp'], ['emails', 'מיילים'], ['sms', 'SMS'],
     ['audit', 'יומן פעולות']
   ];
   // מסכי ניהול שאינם ניתנים להקצאה (מנהל מערכת בלבד) — כאן רק כדי שיוצגו בעברית
@@ -386,6 +386,7 @@
     opts = opts || {};
     if (window.C2B && window.C2B.role && !navAllowed(nav, window.C2B.role)) { nav = 'dashboard'; opts = {}; }
     if (nav === 'users') { setActive(nav); if (window.innerWidth <= 820) { $('side').classList.remove('open'); $('overlay').classList.remove('open'); } return renderUsers(); }
+    if (nav === 'heyy') { setActive(nav); if (window.innerWidth <= 820) { $('side').classList.remove('open'); $('overlay').classList.remove('open'); } return renderHeyy(); }
     if (nav === 'agents') { setActive(nav); if (window.innerWidth <= 820) { $('side').classList.remove('open'); $('overlay').classList.remove('open'); } return renderAgents(); }
     setActive(nav, opts.status);
     if (window.innerWidth <= 820) { $('side').classList.remove('open'); $('overlay').classList.remove('open'); }
@@ -2155,6 +2156,169 @@
   function repTableA(headers, rows) {
     return '<div class="table-scroll"><table><thead><tr>' + headers.map(function (h) { return '<th>' + h + '</th>'; }).join('') +
       '</tr></thead><tbody>' + (rows || '<tr><td class="empty" colspan="' + headers.length + '">אין נתונים</td></tr>') + '</tbody></table></div>';
+  }
+
+
+  //  ---------- Hey \u00b7 WhatsApp ----------
+  //  Heyy מנהל את תיבת הווטסאפ ושולח אלינו webhook. המסך הזה קורא בלבד:
+  //  שליחה תתווסף כשיהיה API שליחה מהספק.
+  //
+  //  כלל הגישה: מנהל מערכת רואה את כל המספרים, וכל שאר המשתמשים רואים
+  //  אך ורק את המספר שמוגדר להם בפרופיל. האכיפה במסד (RLS) ולא כאן —
+  //  הממשק רק משקף אותה, ולכן בורר המספרים מוצג רק למנהל מערכת.
+  var heyyNum = '', heyyThread = '';
+  function renderHeyy() {
+    loading();
+    var isAdm = (window.C2B && window.C2B.role) === 'admin';
+    Promise.all([
+      db.from('wa_numbers').select('id,phone,label,active').order('created_at'),
+      db.from('profiles').select('user_id,full_name,role,active,wa_number_id').order('full_name'),
+      db.from('wa_threads').select('id,number_id,contact_phone,contact_name,lead_id,last_at,last_text,last_dir,unread')
+        .order('last_at', { ascending: false, nullsFirst: false }).limit(500)
+    ]).then(function (res) {
+      if (res[0].error) return errBox(res[0].error.message);
+      var nums = res[0].data || [], profs = res[1].data || [], threads = res[2].data || [];
+      var me = profs.filter(function (p) { return p.user_id === (window.C2B && window.C2B.userId); })[0] || {};
+      var numById = {}; nums.forEach(function (n) { numById[n.id] = n; });
+      if (!isAdm) heyyNum = me.wa_number_id || '';
+      var shown = threads.filter(function (t) { return !heyyNum || t.number_id === heyyNum; });
+
+      //  מצב שדורש הסבר ולא מסך ריק: משתמש בלי מספר משויך.
+      if (!isAdm && !me.wa_number_id) {
+        return view('<h2 style="margin:0 0 4px">\ud83d\udfe2 Hey \u00b7 WhatsApp</h2>' +
+          '<div class="card"><p class="empty">\ud83d\udd12 לא הוגדר לך מספר ווטסאפ.<br>' +
+          'מנהל המערכת משייך מספר למשתמש במסך זה, ואז השיחות של אותו מספר יופיעו כאן.</p></div>');
+      }
+
+      var pick = nums.map(function (n) {
+        return '<option value="' + esc(n.id) + '"' + (heyyNum === n.id ? ' selected' : '') + '>' +
+          esc((n.label ? n.label + ' \u00b7 ' : '') + n.phone) + (n.active ? '' : ' (כבוי)') + '</option>';
+      }).join('');
+      var head = '<div class="row-between" style="align-items:center;flex-wrap:wrap;gap:10px">' +
+        '<div><h2 style="margin:0 0 2px">\ud83d\udfe2 Hey \u00b7 WhatsApp</h2>' +
+          '<p class="muted" style="margin:0;font-size:13px">' +
+            (isAdm ? 'כל המספרים המנוהלים' : 'המספר שלך: <b>' + esc((numById[heyyNum] || {}).phone || '\u2014') + '</b>') +
+            ' \u00b7 ' + shown.length + ' שיחות</p></div>' +
+        (isAdm ? '<select class="inp" id="heyyNum" style="width:auto;min-width:200px">' +
+          '<option value="">כל המספרים</option>' + pick + '</select>' : '') + '</div>';
+
+      var list = shown.map(function (t) {
+        var nm = t.contact_name || t.contact_phone;
+        return '<div class="wa-th' + (heyyThread === t.id ? ' on' : '') + '" data-th="' + esc(t.id) + '">' +
+          '<span class="av">' + esc(String(nm).charAt(0)) + '</span>' +
+          '<span class="mid"><span class="nm">' + esc(nm) +
+            (t.unread ? ' <span class="badge" style="background:var(--ok);color:#fff">' + t.unread + '</span>' : '') + '</span>' +
+            '<span class="pv">' + (t.last_dir === 'out' ? '\u21a9 ' : '') + esc(t.last_text || '\u2014') + '</span></span>' +
+          '<span class="rt">' + esc(t.last_at ? fmtDateTime(t.last_at).split(' ')[0] : '') + '</span></div>';
+      }).join('');
+
+      var admin_ = isAdm ? numbersCard(nums, profs) : '';
+      view(head +
+        '<div class="wa-wrap" style="margin-top:14px">' +
+          '<div class="card" style="padding:8px"><div class="wa-list" id="waList">' +
+            (list || '<p class="empty">אין שיחות עדיין. ברגע ש-Heyy יתחיל לשלוח, הן יופיעו כאן.</p>') + '</div></div>' +
+          '<div class="card" id="waPane"><p class="empty">בחרו שיחה מהרשימה</p></div>' +
+        '</div>' + admin_);
+
+      if ($('heyyNum')) $('heyyNum').addEventListener('change', function () { heyyNum = this.value; heyyThread = ''; renderHeyy(); });
+      $('waList').addEventListener('click', function (e) {
+        var el = e.target.closest('[data-th]'); if (!el) return;
+        heyyThread = el.dataset.th;
+        $('waList').querySelectorAll('.wa-th').forEach(function (x) { x.classList.toggle('on', x.dataset.th === heyyThread); });
+        openThread(threads.filter(function (t) { return t.id === heyyThread; })[0]);
+      });
+      if (isAdm) wireNumbers();
+      if (heyyThread) openThread(shown.filter(function (t) { return t.id === heyyThread; })[0]);
+    }).catch(function (e) { errBox(e.message || e); });
+  }
+
+  function openThread(t) {
+    if (!t) return;
+    $('waPane').innerHTML = '<div class="loading">טוען\u2026</div>';
+    db.from('wa_messages').select('id,direction,body,media_url,media_type,author,sent_at')
+      .eq('thread_id', t.id).order('sent_at').limit(500).then(function (r) {
+      if (r.error) return ($('waPane').innerHTML = '<p class="err">' + esc(r.error.message) + '</p>');
+      var msgs = (r.data || []).map(function (m) {
+        var media = m.media_url ? '<div><a href="' + esc(m.media_url) + '" target="_blank" rel="noopener">\ud83d\udcce קובץ מצורף</a></div>' : '';
+        return '<div class="wa-m ' + esc(m.direction) + '">' + media + esc(m.body || (m.media_url ? '' : '\u2014')) +
+          '<span class="t">' + esc(fmtDateTime(m.sent_at)) + (m.author ? ' \u00b7 ' + esc(m.author) : '') + '</span></div>';
+      }).join('');
+      var nm = t.contact_name || t.contact_phone;
+      $('waPane').innerHTML =
+        '<div class="row-between" style="align-items:center;margin-bottom:10px">' +
+          '<div><b style="font-size:15px">' + esc(nm) + '</b>' +
+            '<div class="muted" style="font-size:12px" class="ltr"><bdi>' + esc(t.contact_phone) + '</bdi></div></div>' +
+          (t.lead_id ? '<button class="btn btn-ghost btn-sm" data-waopen="' + esc(t.lead_id) + '">\ud83d\udc64 כרטיס הליד</button>'
+                     : '<span class="muted" style="font-size:12px">אין ליד מקושר</span>') +
+        '</div>' +
+        '<div class="wa-msgs">' + (msgs || '<p class="empty">אין הודעות</p>') + '</div>' +
+        '<div class="sec-note" style="margin:12px 0 0">\u2139\ufe0f תצוגה בלבד. השיחה מנוהלת ב-Heyy, וכאן היא נשמרת ומקושרת ללקוח.</div>';
+      var b = $('waPane').querySelector('[data-waopen]');
+      if (b) b.addEventListener('click', function () { window.C2B_openLeadCard && window.C2B_openLeadCard(this.dataset.waopen); });
+      db.rpc('wa_mark_read', { p_thread: t.id }).then(function () {}, function () {});
+    });
+  }
+
+  //  ניהול המספרים ושיוך המשתמשים \u2014 מנהל מערכת בלבד
+  function numbersCard(nums, profs) {
+    var rows = nums.map(function (n) {
+      var who = profs.filter(function (p) { return p.wa_number_id === n.id; }).map(function (p) { return p.full_name; });
+      return '<tr><td class="ltr"><bdi><b>' + esc(n.phone) + '</b></bdi></td>' +
+        '<td>' + esc(n.label || '\u2014') + '</td>' +
+        '<td>' + (n.active ? '<span style="color:var(--ok);font-weight:600">פעיל</span>' : '<span class="muted">כבוי</span>') + '</td>' +
+        '<td>' + (who.length ? esc(who.join(', ')) : '<span class="muted">לא שויך אף אחד</span>') + '</td>' +
+        '<td><button class="btn btn-ghost btn-sm" data-numtog="' + esc(n.id) + '" data-on="' + (n.active ? '0' : '1') + '">' +
+          (n.active ? 'כיבוי' : 'הפעלה') + '</button></td></tr>';
+    }).join('');
+    var opts = function (cur) {
+      return '<option value="">\u2014 ללא \u2014</option>' + nums.map(function (n) {
+        return '<option value="' + esc(n.id) + '"' + (cur === n.id ? ' selected' : '') + '>' + esc(n.phone) + '</option>';
+      }).join('');
+    };
+    var assign = profs.filter(function (p) { return p.active; }).map(function (p) {
+      return '<tr><td><b>' + esc(p.full_name || '\u2014') + '</b> <span class="muted" style="font-size:12px">' + esc(roleLabel(p.role)) + '</span></td>' +
+        '<td><select class="inp" data-waassign="' + esc(p.user_id) + '" style="width:190px">' + opts(p.wa_number_id) + '</select></td></tr>';
+    }).join('');
+    return '<div class="card" style="margin-top:16px"><div class="sec-title">\u2699\ufe0f מספרים מנוהלים</div>' +
+      repTable(['מספר', 'שם', 'מצב', 'משויך ל', ''], rows) +
+      '<div class="row" style="gap:8px;margin-top:12px;flex-wrap:wrap">' +
+        '<input class="inp" id="waNewPhone" placeholder="972500000000" style="width:190px">' +
+        '<input class="inp" id="waNewLabel" placeholder="שם לתצוגה" style="width:190px">' +
+        '<button class="btn btn-sm" id="waAdd">הוספת מספר</button>' +
+        '<span id="waMsg" class="muted" style="font-size:12.5px"></span></div></div>' +
+      '<div class="card" style="margin-top:14px"><div class="sec-title">\ud83d\udc65 שיוך משתמשים למספר</div>' +
+      '<div class="sec-note">כל משתמש רואה אך ורק את השיחות של המספר שמשויך אליו. מנהל מערכת רואה את כולם.</div>' +
+      repTable(['משתמש', 'מספר מנוהל'], assign) + '</div>';
+  }
+
+  function wireNumbers() {
+    var msg = $('waMsg');
+    if ($('waAdd')) $('waAdd').addEventListener('click', function () {
+      var ph = ($('waNewPhone').value || '').replace(/\D/g, '');
+      if (ph.indexOf('0') === 0) ph = '972' + ph.slice(1);
+      if (ph.length < 9) { msg.style.color = 'var(--danger)'; msg.textContent = 'מספר לא תקין'; return; }
+      db.from('wa_numbers').insert({ phone: ph, label: ($('waNewLabel').value || '').trim() || null }).then(function (r) {
+        if (r.error) { msg.style.color = 'var(--danger)'; msg.textContent = r.error.message; return; }
+        renderHeyy();
+      });
+    });
+    $('view').querySelectorAll('[data-numtog]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        db.from('wa_numbers').update({ active: this.dataset.on === '1' }).eq('id', this.dataset.numtog)
+          .then(function () { renderHeyy(); });
+      });
+    });
+    $('view').querySelectorAll('[data-waassign]').forEach(function (s) {
+      s.addEventListener('change', function () {
+        var self = this;
+        db.from('profiles').update({ wa_number_id: this.value || null }).eq('user_id', this.dataset.waassign)
+          .then(function (r) {
+            msg = $('waMsg');
+            if (msg) { msg.style.color = r.error ? 'var(--danger)' : 'var(--ok)'; msg.textContent = r.error ? r.error.message : '\u2714 השיוך נשמר'; }
+            self.blur();
+          });
+      });
+    });
   }
 
   function renderUsers() {

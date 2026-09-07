@@ -205,6 +205,23 @@
   #drillTbl tr.hidden{display:none}
   a.drill-n{color:var(--brand);font-weight:700;cursor:pointer;text-decoration:underline;text-underline-offset:2px}
   a.drill-n:hover{opacity:.75}
+  /* Hey · WhatsApp */
+  .wa-wrap{display:grid;grid-template-columns:clamp(280px,30%,380px) 1fr;gap:14px;align-items:start}
+  @media(max-width:900px){.wa-wrap{grid-template-columns:1fr}}
+  .wa-list{max-height:66vh;overflow:auto}
+  .wa-th{display:flex;gap:10px;align-items:center;padding:10px;border-bottom:1px solid var(--line);cursor:pointer;border-radius:9px}
+  .wa-th:hover{background:var(--surface-2)}
+  .wa-th.on{background:var(--brand-soft)}
+  .wa-th .av{width:34px;height:34px;border-radius:50%;background:var(--surface-2);display:grid;place-items:center;font-weight:700;flex:none}
+  .wa-th .mid{flex:1;min-width:0}
+  .wa-th .nm{font-weight:700;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .wa-th .pv{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .wa-th .rt{font-size:11px;color:var(--muted);flex:none;text-align:left}
+  .wa-msgs{max-height:60vh;overflow:auto;display:flex;flex-direction:column;gap:8px;padding:4px}
+  .wa-m{max-width:74%;padding:8px 12px;border-radius:14px;font-size:13.5px;line-height:1.55;white-space:pre-wrap;word-break:break-word}
+  .wa-m.in{align-self:flex-start;background:var(--surface-2);border-bottom-left-radius:4px}
+  .wa-m.out{align-self:flex-end;background:var(--brand-soft);border-bottom-right-radius:4px}
+  .wa-m .t{display:block;font-size:10.5px;color:var(--muted);margin-top:4px}
   .sec-note{background:var(--brand-soft);border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:12.5px;color:var(--muted);margin:0 0 16px}
   .mbar{display:grid;grid-template-columns:130px 1fr auto;align-items:center;gap:12px;padding:7px 0;font-size:13px}
   .mbar .lbl{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600}
@@ -392,6 +409,7 @@
       <div class="nav-item" data-nav="quotes"><span class="ic">📄</span> הצעות מחיר</div>
       <div class="nav-item" data-nav="documents"><span class="ic">✍️</span> מסמכים והסכמים</div>
       <div class="nav-item" data-nav="whatsapp"><span class="ic">💬</span> WhatsApp</div>
+      <div class="nav-item" data-nav="heyy"><span class="ic">🟢</span> Hey · WhatsApp <span class="badge" id="bHeyy">0</span></div>
       <div class="nav-item" data-nav="emails"><span class="ic">📧</span> מיילים</div>
       <div class="nav-item" data-nav="sms"><span class="ic">📱</span> SMS</div>
       <div class="nav-item" data-nav="automations"><span class="ic">🤖</span> אוטומציות</div>
@@ -426,8 +444,8 @@
 <div id="drawer"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js" integrity="sha384-0w2KAL2YHP6wKOkUDzkCDGgVvfmHnj02DHeQ6XcHOgTfFsGyonKOpShMH1x6nk9o" crossorigin="anonymous"></script>
-<script src="admin.js?v=202609071240"></script>
-<script src="admin-crm.js?v=202609071240"></script>
-<script src="admin-modules.js?v=202609071240"></script>
+<script src="admin.js?v=202609071322"></script>
+<script src="admin-crm.js?v=202609071322"></script>
+<script src="admin-modules.js?v=202609071322"></script>
 </body>
 </html>
