@@ -1942,7 +1942,10 @@
 
       //  פתיחה וסגירה של רמה. סגירת הורה מקפלת גם את הנכדים, אחרת נשארות
       //  מודעות תלויות באוויר בלי הסדרה שלהן.
-      $('mkCamps').addEventListener('click', function (e) {
+      //  שיוך ל-onclick ולא addEventListener: paint רצה מחדש בכל שינוי
+      //  טווח או מעבר לשונית, ומאזין מצטבר גרם ל-toggle כפול שביטל את
+      //  עצמו — הלחיצה נראתה כאילו אינה עושה כלום.
+      $('mkCamps').onclick = function (e) {
         var num = e.target.closest('a.drill-n');
         if (num) {
           var o = cellOf(num.dataset.lvl2, num.dataset.id2);
@@ -1962,7 +1965,7 @@
             [].forEach.call(tb.querySelectorAll('tr[data-parent="' + k.dataset.id + '"]'), function (g) { g.classList.add('hidden'); });
           }
         });
-      });
+      };
 
       var rows = (d.campaigns || []).map(function (c) {
         var st = c.status === 'ACTIVE'
