@@ -3090,6 +3090,9 @@
 
   // expose the status model for admin.js (bell, reports)
   window.C2B_STATUSES = STATUSES;
+  //  מנגנון ה-PDF (טעינה עצלה של html2canvas+jsPDF) משמש גם את הצעת
+  //  המחיר שבמסך הווטסאפ, במקום לטעון שתי ספריות פעמיים.
+  window.C2B_pdf = downloadContractPdf;
   //  מסך הווטסאפ משנה סטטוס של ליד, וחייב לעשות זאת דרך אותה פונקציה:
   //  היא זו שרושמת בציר הזמן ומריצה אוטומציות. שכפול שלה היה
   //  יוצר שינויים שלא מופיעים בהיסטוריה של הליד.

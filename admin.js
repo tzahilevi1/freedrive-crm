@@ -2284,13 +2284,104 @@
     if (x.accessories) L.push('\u2728 אביזרים: ' + x.accessories);
     if (x.km) L.push('\ud83d\udee3\ufe0f ' + Number(x.km).toLocaleString('en-US') + ' ק\u05f4מ');
     L.push('');
-    L.push('\u2705 ביטוח מקיף וחובה');
     L.push('\u2705 טיפולים, רישוי וצמיגים');
     L.push('\u2705 עד 100% מימון');
     L.push('');
     L.push('אשמח לענות על כל שאלה \ud83d\ude42');
     L.push('_' + (brandName || 'פרי דרייב') + '_');
     return L.join('\n');
+  }
+
+  //  ---------- הצעת מחיר ----------
+  //  הנוסח של העסק. המספרים נשאבים מהמלאי ונשארים ניתנים
+  //  לעריכה לפני השליחה: הצעה שיוצאת ללקוח חייבת לעבור
+  //  דרך עין אנושית, ולא להישלח אוטומטית מהמאגר.
+  function quoteText(c) {
+    var x = c.extra || {};
+    var nis = function (n) { return n ? Number(n).toLocaleString('en-US') + ' \u20aa' : ''; };
+    var L = [];
+    L.push('\ud83d\ude97 *הצעת מחיר: ' + [c.brand, c.name].filter(Boolean).join(' ') + '*');
+    L.push('-----------------------------------------');
+    L.push('*רמת גימור: ' + (c.trim || '\u2014') + '*');
+    L.push('-----------------------------------------');
+    L.push((c.year || '') + (c.condition === 'חדש' || !x.km ? ' | 0 ק\u05f4מ' : ' | ' + Number(x.km).toLocaleString('en-US') + ' ק\u05f4מ'));
+    L.push('-----------------------------------------');
+    L.push('');
+    L.push('*## \ud83d\udcb0 פרטי העסקה . ##*');
+    L.push('');
+    L.push('\ud83d\udcb5 *מחיר מיוחד:* ' + nis(x.deal_price || c.price));
+    L.push('');
+    L.push('\ud83d\udcb3 *מקדמה חד-פעמית:* ' + nis(x.down_payment));
+    L.push('');
+    L.push('\ud83d\udcc6 *החזר חודשי משוער ל-36 חודשים:*');
+    L.push('*החל מ\u05be* ' + nis(c.monthly));
+    L.push('');
+    L.push('---');
+    L.push('');
+    L.push('*## \ud83c\udf81 מה כלול בעסקה \u2013 ללא תוספת תשלום##*');
+    L.push('');
+    L.push('\u2705 חבילת אבזור במתנה');
+    L.push('\u2705 אספקה מהירה \ud83d\ude9a');
+    L.push('\u2705 עד 40% הנחה בביטוח חובה ומקיף \ud83d\udee1\ufe0f');
+    L.push('\u2705 אגרת רישוי ראשונה כלולה \ud83e\uddfe');
+    L.push('\u2705 פתיחת תיק ב-EURO-LEASE \ud83d\udcc2');
+    L.push('\u2705 איש מימון צמוד שידאג להשיג עבורך את הריביות הנמוכות ביותר \ud83e\udd1d');
+    L.push('\u2705 אביזרים ומיגונים בהתאם לדרישות חברת הביטוח \ud83e\uddf0');
+    L.push('\u2705 מערכת איתור לרכב \ud83d\udce1');
+    L.push('\u2705 כל האפשרויות בתום התקופה \u2013 כפי שסוכם מראש \u2714\ufe0f');
+    L.push('');
+    L.push('---');
+    L.push('');
+    L.push('*## \ud83d\udcc9 תנאי המימון##*');
+    L.push('');
+    L.push('\ud83d\udcca *ריבית לעסקה: החל מ\u05be3.9%*');
+    L.push('(בהתחייבות לריבית מהנמוכות בשוק הרכב)');
+    L.push('');
+    L.push('---');
+    L.push('');
+    L.push('*## \ud83d\udd04 האפשרויות בתום 36 חודשים##*');
+    L.push('');
+    L.push('*1\ufe0f\u20e3 להתחדש ברכב חדש* \ud83d\ude97\u2728');
+    L.push('למכור לנו את הרכב, בכפוף לתקנון ולמחירון לוי יצחק.');
+    L.push('*ללא מקדמה נוספת!*');
+    L.push('');
+    L.push('*2\ufe0f\u20e3 להחזיר את הרכב* \ud83d\udd01');
+    L.push('בכפוף לתקנון ולמחירון לוי יצחק.');
+    L.push('');
+    L.push('*3\ufe0f\u20e3 לפרוס את יתרת התשלום* \ud83d\udcc6');
+    L.push('מתשלום 1 עד 60 תשלומים נוספים.');
+    L.push('');
+    L.push('*4\ufe0f\u20e3 יציאה מוקדמת מהעסקה* \u23f3');
+    L.push('החזרת הרכב בכפוף למחירון לוי יצחק ותשלום עבור 3 חודשי שימוש.');
+    L.push('');
+    L.push('---');
+    L.push('');
+    L.push('*## \ud83d\udcdd חשוב לדעת##*');
+    L.push('');
+    L.push('\u2714\ufe0f הרכב נרשם על שם הלקוח.');
+    L.push('\u2714\ufe0f ניתן למכור את הרכב בשוק הפרטי בכל עת.');
+    L.push('\u2714\ufe0f ניתן לפרוע את המימון באופן עצמאי בכל שלב.');
+    L.push('\u2714\ufe0f ברכישת רכב נוסף מאיתנו בעוד 3 שנים \u2013 *לא תידרש מקדמה נוספת.* \ud83c\udfaf');
+    L.push('');
+    L.push('---');
+    L.push('');
+    L.push('לפרטים נוספים ולהתקדמות בתהליך, אני כאן לכל שאלה.');
+    return L.join('\n');
+  }
+
+  //  גרסה מעוצבת ל-PDF. הטקסט זהה — רק סימוני ה-* של
+  //  ווטסאפ מומרים להדגשה אמיתית.
+  function quoteHtml(c, txt) {
+    var body = esc(txt)
+      .replace(/^-{5,}$/gm, '<hr>')
+      .replace(/^---$/gm, '<hr>')
+      .replace(/\*\*?##\s*(.+?)\s*##\*\*?/g, '<h3>$1</h3>')
+      .replace(/\*([^*\n]+)\*/g, '<b>$1</b>')
+      .split('\n').join('<br>');
+    return '<div class="q-doc">' +
+      (c.img ? '<img class="q-img" src="' + esc(carImg(c.img)) + '" alt="">' : '') +
+      '<div class="q-body">' + body + '</div>' +
+      '<div class="q-foot">פרי דרייב \u00b7 058-470076</div></div>';
   }
 
   function waTools(t) {
@@ -2305,6 +2396,7 @@
         '<textarea class="inp" id="waBody" rows="2" placeholder="כתבו הודעה, או בחרו הודעה מהירה למעלה\u2026">' + esc(waDraft) + '</textarea>' +
         '<div class="wa-btns">' +
           '<button class="btn btn-ghost btn-sm" id="waCarBtn" title="שליחת דגם מהמלאי">\ud83d\ude97 דגם</button>' +
+          '<button class="btn btn-ghost btn-sm" id="waQuoteBtn" title="הצעת מחיר מלאה">\ud83d\udcb0 הצעת מחיר</button>' +
           '<button class="btn btn-ghost btn-sm" id="waCopy" title="העתקה כדי להדביק ב-Heyy">\ud83d\udccb העתקה</button>' +
           '<button class="btn btn-ghost btn-sm" id="waSched" title="תזמון לשעה מאוחרת יותר">\u23f0 תזמון</button>' +
           '<button class="btn btn-sm" id="waQueue">הוספה לתור</button>' +
@@ -2343,7 +2435,8 @@
         function () { say('\u2714 הועתק \u2014 אפשר להדביק ב-Heyy', true); },
         function () { say('ההעתקה נחסמה בדפדפן', false); });
     };
-    if ($('waCarBtn')) $('waCarBtn').onclick = function () { carPicker(t, body); };
+    if ($('waCarBtn')) $('waCarBtn').onclick = function () { carPicker(t, body, false); };
+    if ($('waQuoteBtn')) $('waQuoteBtn').onclick = function () { carPicker(t, body, true); };
     if ($('waSched')) $('waSched').onclick = function () { schedBox(t, body, say); };
     if ($('waQueue')) $('waQueue').onclick = function () {
       queueMsg(t, body.value, null, waPickedCar, say);
@@ -2424,7 +2517,7 @@
   }
 
   //  ---------- בורר הדגמים ----------
-  function carPicker(t, body) {
+  function carPicker(t, body, quoteMode) {
     var bg = document.createElement('div'); bg.className = 'adm-bg';
     var render = function (q) {
       var list = waCars.filter(function (c) {
@@ -2439,7 +2532,8 @@
           '<span class="pr">' + (c.monthly ? Number(c.monthly).toLocaleString('en-US') + ' \u20aa/ח' : (c.price ? Number(c.price).toLocaleString('en-US') + ' \u20aa' : '')) + '</span></div>';
       }).join('') || '<p class="empty">לא נמצא דגם</p>';
     };
-    bg.innerHTML = '<div class="adm" style="max-width:620px"><div class="adm-hd"><h3>\ud83d\ude97 שליחת דגם מהמלאי</h3>' +
+    bg.innerHTML = '<div class="adm" style="max-width:620px"><div class="adm-hd"><h3>' +
+      (quoteMode ? '\ud83d\udcb0 הצעת מחיר' : '\ud83d\ude97 שליחת דגם מהמלאי') + '</h3>' +
       '<button class="adm-x" data-admx>\u2715</button></div><div class="adm-body">' +
       '<input class="inp" id="waCarQ" placeholder="חיפוש דגם\u2026" style="margin-bottom:10px">' +
       '<div class="wa-cars" id="waCarList">' + render('') + '</div>' +
@@ -2454,7 +2548,7 @@
       if (row) {
         var c = waCars.filter(function (x) { return x.id === row.dataset.car; })[0];
         if (!c) return;
-        var txt = carCard(c, null);
+        var txt = quoteMode ? quoteText(c) : carCard(c, null);
         bg.querySelector('#waCarPrev').innerHTML =
           '<div class="sec-title" style="margin-top:14px">תצוגה מקדימה</div>' +
           '<div class="wa-preview">' + (c.img ? '<img src="' + esc(carImg(c.img)) + '" alt="">' : '') +
@@ -2462,7 +2556,9 @@
           '<div class="row" style="gap:8px;margin-top:12px;flex-wrap:wrap">' +
             '<button class="btn btn-sm" id="waCarUse">הוספה להודעה</button>' +
             '<button class="btn btn-ghost btn-sm" id="waCarCopy">\ud83d\udccb העתקה</button>' +
-            '<span class="muted" style="font-size:12px">בלי מחיר קנייה ובלי נתונים פנימיים</span></div>';
+            (quoteMode ? '<button class="btn btn-ghost btn-sm" id="waQuotePdf">\ud83d\udcc4 הורדה כ-PDF</button>' : '') +
+            '<span class="muted" style="font-size:12px">בלי מחיר קנייה ובלי נתונים פנימיים</span></div>' +
+          (quoteMode ? '<div id="waQDoc" style="position:fixed;left:-9999px;top:0">' + quoteHtml(c, txt) + '</div>' : '');
         bg.querySelector('#waCarUse').onclick = function () {
           body.value = (body.value ? body.value + '\n\n' : '') + txt; waDraft = body.value;
           //  נשמר כדי שהתור יקבל גם את מזהה הרכב ואת התמונה: כשחיבור
@@ -2474,6 +2570,12 @@
           //  הכתובת המקורית מחזירה 403 מחוץ לאתר המקור; ה-proxy פתוח.
           navigator.clipboard.writeText(txt + (c.img ? '\n' + carImg(c.img) : ''));
           this.textContent = '\u2714 הועתק';
+        };
+        var pdfBtn = bg.querySelector('#waQuotePdf');
+        if (pdfBtn) pdfBtn.onclick = function () {
+          if (!window.C2B_pdf) return alert('מנגנון ה-PDF לא נטען');
+          window.C2B_pdf(bg.querySelector('.q-doc'),
+            'הצעת מחיר - ' + [c.brand, c.name].filter(Boolean).join(' '), this);
         };
       }
     });
