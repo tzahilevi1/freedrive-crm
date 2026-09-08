@@ -377,6 +377,8 @@
 
   // ---------- routing ----------
   function setActive(nav, status) {
+    //  פריט האב נשאר מודגש גם כשנמצאים בלשונית משנה שלו
+    var g = subGroup(nav); if (g) nav = g;
     var items = $('nav').querySelectorAll('.nav-item');
     for (var i = 0; i < items.length; i++) {
       var it = items[i];
@@ -384,9 +386,43 @@
     }
     var sub = $('leadSub'); if (sub) sub.classList.toggle('open', nav === 'leads');
   }
+
+  //  ---------- לשוניות משנה ----------
+  //  המסכים הפנימיים מחליפים את כל #view, וחלקם עושים זאת
+  //  אחרי שליפת נתונים. לכן סרגל הלשוניות יושב באלמנט נפרד
+  //  מעליו — אחרת הוא היה נמחק בכל רינדור אסינכרוני.
+  var SUBTABS = {
+    automations: [
+      ['automations', '\u2699\ufe0f כללי אוטומציה'],
+      ['whatsapp', '\ud83d\udcac WhatsApp'],
+      ['emails', '\ud83d\udce7 מיילים'],
+      ['sms', '\ud83d\udcf1 SMS']
+    ],
+    settings: [
+      ['settings', '\ud83d\udccb רשימות ובחירות'],
+      ['branches', '\ud83c\udfe2 סניפים'],
+      ['ctemplates', '\ud83d\udcdc תבניות הסכמים']
+    ]
+  };
+  function subGroup(nav) {
+    for (var g in SUBTABS) if (SUBTABS[g].some(function (t) { return t[0] === nav; })) return g;
+    return null;
+  }
+  function drawSubnav(nav) {
+    var el = $('subnav'); if (!el) return;
+    var g = subGroup(nav);
+    if (!g) { el.style.display = 'none'; el.innerHTML = ''; return; }
+    el.style.display = '';
+    el.innerHTML = SUBTABS[g].filter(function (t) { return navAllowed(t[0], (window.C2B && window.C2B.role) || ''); })
+      .map(function (t) {
+        return '<button data-sub="' + t[0] + '"' + (nav === t[0] ? ' class="active"' : '') + '>' + t[1] + '</button>';
+      }).join('');
+  }
+
   function go(nav, opts) {
     opts = opts || {};
     if (window.C2B && window.C2B.role && !navAllowed(nav, window.C2B.role)) { nav = 'dashboard'; opts = {}; }
+    drawSubnav(nav);
     if (nav === 'users') { setActive(nav); if (window.innerWidth <= 820) { $('side').classList.remove('open'); $('overlay').classList.remove('open'); } return renderUsers(); }
     if (nav === 'heyy') { setActive(nav); if (window.innerWidth <= 820) { $('side').classList.remove('open'); $('overlay').classList.remove('open'); } return renderHeyy(); }
     if (nav === 'agents') { setActive(nav); if (window.innerWidth <= 820) { $('side').classList.remove('open'); $('overlay').classList.remove('open'); } return renderAgents(); }
@@ -420,6 +456,11 @@
   $('nav').addEventListener('click', function (e) {
     var it = e.target.closest('.nav-item'); if (!it) return;
     go(it.dataset.nav, { status: it.dataset.status });
+  });
+  //  לשוניות המשנה. המאזין על המיכל שנשאר בדף, ולכן שורד כל רינדור.
+  $('subnav').addEventListener('click', function (e) {
+    var b = e.target.closest('button[data-sub]'); if (!b) return;
+    go(b.dataset.sub);
   });
 
   function refreshBadges() {
@@ -2304,7 +2345,11 @@
     L.push('-----------------------------------------');
     L.push('*רמת גימור: ' + (c.trim || '\u2014') + '*');
     L.push('-----------------------------------------');
-    L.push((c.year || '') + (c.condition === 'חדש' || !x.km ? ' | 0 ק\u05f4מ' : ' | ' + Number(x.km).toLocaleString('en-US') + ' ק\u05f4מ'));
+    //  רכב חדש מגיע מהגיליון בלי שנה, והשורה יצאה עם קו מפריד
+    //  מיותם בתחילה. בונים מהחלקים שקיימים בפועל.
+    var kmTxt = x.km ? Number(x.km).toLocaleString('en-US') + ' ק״מ' : '0 ק״מ';
+    var yLine = [c.year, kmTxt].filter(Boolean).join(' | ');
+    if (yLine) L.push(yLine);
     L.push('-----------------------------------------');
     L.push('');
     L.push('*## \ud83d\udcb0 פרטי העסקה . ##*');
