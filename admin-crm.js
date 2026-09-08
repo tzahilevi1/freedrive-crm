@@ -2193,13 +2193,32 @@
         }
       } catch (e) { blank = null; }   // קנבס מזוהם — נופלים לחיתוך קבוע
 
+      // ההקטנה ממצעת פיקסלים, ולכן שורת טקסט דקה מתחוורת ונראית ריקה.
+      // לכן העותק המוקטן משמש כמסנן מהיר בלבד, וכל מועמד מאומת על
+      // הקנבס במלוא הרוחב לפני שנחתכים עליו.
+      var fctx = canvas.getContext('2d');
+      function rowClear(y) {
+        try {
+          var r = fctx.getImageData(0, y, canvas.width, 1).data;
+          for (var x = 0; x < canvas.width; x++) {
+            var o = x * 4;
+            if (r[o] < 236 || r[o + 1] < 236 || r[o + 2] < 236) return false;
+          }
+          return true;
+        } catch (e) { return true; }   // קנבס מזוהם — לא חוסמים את החיתוך
+      }
+
       // מחפשים רווח לאחור מנקודת החיתוך, עד 30% מגובה העמוד. יותר מכך
       // היה יוצר עמודים ריקים למחציתם.
       function cutAt(from) {
         var want = Math.min(from + pageHpx, canvas.height);
         if (want >= canvas.height || !blank) return want;
-        var min = from + pageHpx * 0.7;
-        for (var y2 = Math.floor(want); y2 > min; y2--) if (blank[y2]) return y2;
+        var min = from + pageHpx * 0.7, tries = 0;
+        for (var y2 = Math.floor(want); y2 > min; y2--) {
+          if (!blank[y2]) continue;
+          if (rowClear(y2)) return y2;
+          if (++tries > 400) break;    // גבול זמן: מסמך צפוף במיוחד
+        }
         return want;
       }
 
