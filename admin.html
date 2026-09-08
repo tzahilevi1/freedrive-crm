@@ -205,23 +205,41 @@
   #drillTbl tr.hidden{display:none}
   a.drill-n{color:var(--brand);font-weight:700;cursor:pointer;text-decoration:underline;text-underline-offset:2px}
   a.drill-n:hover{opacity:.75}
-  /* Hey · WhatsApp */
-  .wa-wrap{display:grid;grid-template-columns:clamp(280px,30%,380px) 1fr;gap:14px;align-items:start}
-  @media(max-width:900px){.wa-wrap{grid-template-columns:1fr}}
-  .wa-list{max-height:66vh;overflow:auto}
-  .wa-th{display:flex;gap:10px;align-items:center;padding:10px;border-bottom:1px solid var(--line);cursor:pointer;border-radius:9px}
+  /* Hey · WhatsApp — פריסה בסגנון ווטסאפ: רשימה מימין, שיחה משמאל */
+  .wa-wrap{display:grid;grid-template-columns:clamp(280px,32%,400px) 1fr;gap:14px;align-items:stretch;height:calc(100vh - 210px);min-height:460px}
+  @media(max-width:900px){.wa-wrap{grid-template-columns:1fr;height:auto}}
+  .wa-side{display:flex;flex-direction:column;padding:10px;overflow:hidden}
+  .wa-search{padding:0 2px 8px}
+  .wa-search .inp{width:100%;border-radius:20px}
+  .wa-list{flex:1;overflow-y:auto;margin:0 -4px;padding:0 4px}
+  .wa-th{display:flex;gap:10px;align-items:center;padding:9px 8px;cursor:pointer;border-radius:10px;transition:background .1s}
+  .wa-th+.wa-th{border-top:1px solid var(--line)}
   .wa-th:hover{background:var(--surface-2)}
   .wa-th.on{background:var(--brand-soft)}
-  .wa-th .av{width:34px;height:34px;border-radius:50%;background:var(--surface-2);display:grid;place-items:center;font-weight:700;flex:none}
-  .wa-th .mid{flex:1;min-width:0}
-  .wa-th .nm{font-weight:700;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .wa-th .pv{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .wa-th .rt{font-size:11px;color:var(--muted);flex:none;text-align:left}
-  .wa-msgs{max-height:60vh;overflow:auto;display:flex;flex-direction:column;gap:8px;padding:4px}
-  .wa-m{max-width:74%;padding:8px 12px;border-radius:14px;font-size:13.5px;line-height:1.55;white-space:pre-wrap;word-break:break-word}
-  .wa-m.in{align-self:flex-start;background:var(--surface-2);border-bottom-left-radius:4px}
-  .wa-m.out{align-self:flex-end;background:var(--brand-soft);border-bottom-right-radius:4px}
-  .wa-m .t{display:block;font-size:10.5px;color:var(--muted);margin-top:4px}
+  .wa-th .av{width:40px;height:40px;border-radius:50%;background:var(--brand-soft);color:var(--brand);display:grid;place-items:center;font-weight:800;font-size:15px;flex:none}
+  .wa-th .mid{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+  .wa-th .top{display:flex;align-items:center;gap:8px;min-width:0}
+  .wa-th .nm{font-weight:700;font-size:13.5px;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .wa-th .pv{font-size:12.5px;color:var(--muted);flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .wa-th .rt{font-size:11px;color:var(--muted);flex:none}
+  .wa-unread{background:var(--ok);color:#fff;border-radius:11px;min-width:20px;height:20px;padding:0 6px;font-size:11.5px;font-weight:700;display:grid;place-items:center;flex:none}
+  .tick{color:#34b7f1;letter-spacing:-2px}
+  .wa-pane{display:flex;flex-direction:column;padding:0;overflow:hidden}
+  .wa-blank{flex:1;display:grid;place-items:center;align-content:center;text-align:center}
+  .wa-top{display:flex;gap:10px;align-items:center;padding:12px 16px;border-bottom:1px solid var(--line);background:var(--surface-2)}
+  .wa-top .av{width:38px;height:38px;border-radius:50%;background:var(--brand-soft);color:var(--brand);display:grid;place-items:center;font-weight:800;flex:none}
+  .wa-msgs{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:6px;padding:16px;
+    background-image:radial-gradient(var(--line) 1px,transparent 1px);background-size:22px 22px}
+  .wa-day{align-self:center;background:var(--surface);border:1px solid var(--line);color:var(--muted);
+    font-size:11.5px;padding:3px 12px;border-radius:12px;margin:8px 0 4px}
+  .wa-m{max-width:72%;padding:7px 11px 5px;border-radius:12px;font-size:13.5px;line-height:1.5;
+    white-space:pre-wrap;word-break:break-word;box-shadow:0 1px 1px rgba(0,0,0,.06);position:relative}
+  .wa-m.in{align-self:flex-start;background:var(--surface);border-top-left-radius:3px}
+  .wa-m.out{align-self:flex-end;background:var(--brand-soft);border-top-right-radius:3px}
+  .wa-m img{max-width:230px;border-radius:8px;display:block;margin-bottom:5px}
+  .wa-m .t{display:block;font-size:10.5px;color:var(--muted);margin-top:3px;text-align:left}
+  .wa-compose{display:flex;gap:8px;padding:10px 12px;border-top:1px solid var(--line);background:var(--surface-2)}
+  .wa-compose .inp{flex:1;border-radius:20px}
   .sec-note{background:var(--brand-soft);border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:12.5px;color:var(--muted);margin:0 0 16px}
   .mbar{display:grid;grid-template-columns:130px 1fr auto;align-items:center;gap:12px;padding:7px 0;font-size:13px}
   .mbar .lbl{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600}
@@ -444,8 +462,8 @@
 <div id="drawer"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js" integrity="sha384-0w2KAL2YHP6wKOkUDzkCDGgVvfmHnj02DHeQ6XcHOgTfFsGyonKOpShMH1x6nk9o" crossorigin="anonymous"></script>
-<script src="admin.js?v=202609071322"></script>
-<script src="admin-crm.js?v=202609071322"></script>
-<script src="admin-modules.js?v=202609071322"></script>
+<script src="admin.js?v=202609080623"></script>
+<script src="admin-crm.js?v=202609080623"></script>
+<script src="admin-modules.js?v=202609080623"></script>
 </body>
 </html>

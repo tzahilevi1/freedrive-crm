@@ -2160,164 +2160,229 @@
 
 
   //  ---------- Hey \u00b7 WhatsApp ----------
-  //  Heyy מנהל את תיבת הווטסאפ ושולח אלינו webhook. המסך הזה קורא בלבד:
-  //  שליחה תתווסף כשיהיה API שליחה מהספק.
+  //  Heyy מנהל את תיבת הווטסאפ ושולח webhook על כל הודעה. המסך קורא
+  //  בלבד: שליחה תתווסף כשיהיה API שליחה מהספק.
   //
-  //  כלל הגישה: מנהל מערכת רואה את כל המספרים, וכל שאר המשתמשים רואים
-  //  אך ורק את המספר שמוגדר להם בפרופיל. האכיפה במסד (RLS) ולא כאן —
-  //  הממשק רק משקף אותה, ולכן בורר המספרים מוצג רק למנהל מערכת.
-  var heyyNum = '', heyyThread = '';
+  //  כלל הגישה: מנהל מערכת רואה את כל הערוצים, וכל שאר המשתמשים רואים
+  //  אך ורק את הערוץ שמוגדר להם בפרופיל. האכיפה במסד (RLS) והממשק רק
+  //  משקף אותה. ניהול הערוצים והשיוך יושבים ב"משתמשים והרשאות".
+  var heyyNum = '', heyyThread = '', heyyQ = '';
   function renderHeyy() {
     loading();
     var isAdm = (window.C2B && window.C2B.role) === 'admin';
     Promise.all([
-      db.from('wa_numbers').select('id,phone,label,active').order('created_at'),
-      db.from('profiles').select('user_id,full_name,role,active,wa_number_id').order('full_name'),
+      db.from('wa_numbers').select('id,phone,label,channel_id,active').order('created_at'),
+      db.from('profiles').select('user_id,full_name,wa_number_id').eq('user_id', (window.C2B && window.C2B.userId) || '00000000-0000-0000-0000-000000000000'),
       db.from('wa_threads').select('id,number_id,contact_phone,contact_name,lead_id,last_at,last_text,last_dir,unread')
         .order('last_at', { ascending: false, nullsFirst: false }).limit(500)
     ]).then(function (res) {
       if (res[0].error) return errBox(res[0].error.message);
-      var nums = res[0].data || [], profs = res[1].data || [], threads = res[2].data || [];
-      var me = profs.filter(function (p) { return p.user_id === (window.C2B && window.C2B.userId); })[0] || {};
+      var nums = res[0].data || [], me = (res[1].data || [])[0] || {}, threads = res[2].data || [];
       var numById = {}; nums.forEach(function (n) { numById[n.id] = n; });
       if (!isAdm) heyyNum = me.wa_number_id || '';
-      var shown = threads.filter(function (t) { return !heyyNum || t.number_id === heyyNum; });
 
-      //  מצב שדורש הסבר ולא מסך ריק: משתמש בלי מספר משויך.
+      //  מצב שדורש הסבר ולא מסך ריק
       if (!isAdm && !me.wa_number_id) {
-        return view('<h2 style="margin:0 0 4px">\ud83d\udfe2 Hey \u00b7 WhatsApp</h2>' +
+        return view(heyyHead(nums, numById, isAdm, 0) +
           '<div class="card"><p class="empty">\ud83d\udd12 לא הוגדר לך מספר ווטסאפ.<br>' +
-          'מנהל המערכת משייך מספר למשתמש במסך זה, ואז השיחות של אותו מספר יופיעו כאן.</p></div>');
+          'מנהל המערכת משייך מספר למשתמש במסך <b>משתמשים והרשאות</b>, ואז השיחות של אותו מספר יופיעו כאן.</p></div>');
       }
 
-      var pick = nums.map(function (n) {
-        return '<option value="' + esc(n.id) + '"' + (heyyNum === n.id ? ' selected' : '') + '>' +
-          esc((n.label ? n.label + ' \u00b7 ' : '') + n.phone) + (n.active ? '' : ' (כבוי)') + '</option>';
-      }).join('');
-      var head = '<div class="row-between" style="align-items:center;flex-wrap:wrap;gap:10px">' +
-        '<div><h2 style="margin:0 0 2px">\ud83d\udfe2 Hey \u00b7 WhatsApp</h2>' +
-          '<p class="muted" style="margin:0;font-size:13px">' +
-            (isAdm ? 'כל המספרים המנוהלים' : 'המספר שלך: <b>' + esc((numById[heyyNum] || {}).phone || '\u2014') + '</b>') +
-            ' \u00b7 ' + shown.length + ' שיחות</p></div>' +
-        (isAdm ? '<select class="inp" id="heyyNum" style="width:auto;min-width:200px">' +
-          '<option value="">כל המספרים</option>' + pick + '</select>' : '') + '</div>';
-
-      var list = shown.map(function (t) {
-        var nm = t.contact_name || t.contact_phone;
-        return '<div class="wa-th' + (heyyThread === t.id ? ' on' : '') + '" data-th="' + esc(t.id) + '">' +
-          '<span class="av">' + esc(String(nm).charAt(0)) + '</span>' +
-          '<span class="mid"><span class="nm">' + esc(nm) +
-            (t.unread ? ' <span class="badge" style="background:var(--ok);color:#fff">' + t.unread + '</span>' : '') + '</span>' +
-            '<span class="pv">' + (t.last_dir === 'out' ? '\u21a9 ' : '') + esc(t.last_text || '\u2014') + '</span></span>' +
-          '<span class="rt">' + esc(t.last_at ? fmtDateTime(t.last_at).split(' ')[0] : '') + '</span></div>';
-      }).join('');
-
-      var admin_ = isAdm ? numbersCard(nums, profs) : '';
-      view(head +
-        '<div class="wa-wrap" style="margin-top:14px">' +
-          '<div class="card" style="padding:8px"><div class="wa-list" id="waList">' +
-            (list || '<p class="empty">אין שיחות עדיין. ברגע ש-Heyy יתחיל לשלוח, הן יופיעו כאן.</p>') + '</div></div>' +
-          '<div class="card" id="waPane"><p class="empty">בחרו שיחה מהרשימה</p></div>' +
-        '</div>' + admin_);
+      var shown = threads.filter(function (t) {
+        if (heyyNum && t.number_id !== heyyNum) return false;
+        if (!heyyQ) return true;
+        var q = heyyQ.toLowerCase();
+        return ((t.contact_name || '') + ' ' + t.contact_phone + ' ' + (t.last_text || '')).toLowerCase().indexOf(q) >= 0;
+      });
+      view(heyyHead(nums, numById, isAdm, shown.length) +
+        '<div class="wa-wrap">' +
+          '<div class="card wa-side">' +
+            '<div class="wa-search"><input class="inp" id="waQ" placeholder="\ud83d\udd0d חיפוש שיחה\u2026" value="' + esc(heyyQ) + '"></div>' +
+            '<div class="wa-list" id="waList">' + heyyList(shown) + '</div>' +
+          '</div>' +
+          '<div class="card wa-pane" id="waPane">' + heyyEmpty() + '</div>' +
+        '</div>');
 
       if ($('heyyNum')) $('heyyNum').addEventListener('change', function () { heyyNum = this.value; heyyThread = ''; renderHeyy(); });
+      var q = $('waQ');
+      if (q) {
+        //  שמירת מיקום הסמן: renderHeyy נקרא מחדש בכל הקלדה, ובלי זה
+        //  הסמן קופץ לתחילת השדה אחרי כל אות.
+        q.addEventListener('input', function () { heyyQ = this.value; renderHeyy(); });
+        if (heyyQ) { q.focus(); q.setSelectionRange(heyyQ.length, heyyQ.length); }
+      }
       $('waList').addEventListener('click', function (e) {
         var el = e.target.closest('[data-th]'); if (!el) return;
         heyyThread = el.dataset.th;
         $('waList').querySelectorAll('.wa-th').forEach(function (x) { x.classList.toggle('on', x.dataset.th === heyyThread); });
+        var b2 = el.querySelector('.wa-unread'); if (b2) b2.remove();
         openThread(threads.filter(function (t) { return t.id === heyyThread; })[0]);
       });
-      if (isAdm) wireNumbers();
       if (heyyThread) openThread(shown.filter(function (t) { return t.id === heyyThread; })[0]);
     }).catch(function (e) { errBox(e.message || e); });
   }
 
+  function heyyHead(nums, numById, isAdm, n) {
+    var pick = nums.map(function (x) {
+      return '<option value="' + esc(x.id) + '"' + (heyyNum === x.id ? ' selected' : '') + '>' +
+        esc(x.label || x.phone || 'ערוץ') + (x.phone ? ' \u00b7 ' + esc(x.phone) : '') + (x.active ? '' : ' (כבוי)') + '</option>';
+    }).join('');
+    return '<div class="row-between" style="align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px">' +
+      '<div><h2 style="margin:0 0 2px">\ud83d\udfe2 Hey \u00b7 WhatsApp</h2>' +
+        '<p class="muted" style="margin:0;font-size:13px">' +
+          (isAdm ? 'כל הערוצים המנוהלים' : 'הערוץ שלך: <b>' + esc((numById[heyyNum] || {}).label || (numById[heyyNum] || {}).phone || '\u2014') + '</b>') +
+          ' \u00b7 ' + n + ' שיחות</p></div>' +
+      (isAdm ? '<select class="inp" id="heyyNum" style="width:auto;min-width:210px">' +
+        '<option value="">כל הערוצים</option>' + pick + '</select>' : '') + '</div>';
+  }
+  function heyyEmpty() {
+    return '<div class="wa-blank"><div style="font-size:44px">\ud83d\udcac</div>' +
+      '<p class="muted" style="margin:10px 0 0">בחרו שיחה מהרשימה</p></div>';
+  }
+  //  היום, אתמול, או תאריך — בדיוק כמו ברשימת השיחות של ווטסאפ
+  function waWhen(iso) {
+    if (!iso) return '';
+    var d = new Date(iso), now = new Date();
+    var day = function (x) { return x.getFullYear() + '-' + x.getMonth() + '-' + x.getDate(); };
+    if (day(d) === day(now)) return d.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' });
+    var y = new Date(now); y.setDate(y.getDate() - 1);
+    if (day(d) === day(y)) return 'אתמול';
+    return d.toLocaleDateString('he-IL');
+  }
+  function heyyList(rows) {
+    if (!rows.length) return '<p class="empty">אין שיחות' + (heyyQ ? ' שתואמות לחיפוש' : ' עדיין') + '</p>';
+    return rows.map(function (t) {
+      var nm = t.contact_name || t.contact_phone;
+      return '<div class="wa-th' + (heyyThread === t.id ? ' on' : '') + '" data-th="' + esc(t.id) + '">' +
+        '<span class="av">' + esc(String(nm).charAt(0)) + '</span>' +
+        '<span class="mid"><span class="top"><span class="nm">' + esc(nm) + '</span>' +
+          '<span class="rt">' + esc(waWhen(t.last_at)) + '</span></span>' +
+          '<span class="top"><span class="pv">' +
+            (t.last_dir === 'out' ? '<span class="tick">\u2713\u2713</span> ' : '') + esc(t.last_text || '\u2014') + '</span>' +
+          (t.unread ? '<span class="wa-unread">' + t.unread + '</span>' : '') + '</span></span></div>';
+    }).join('');
+  }
+
   function openThread(t) {
-    if (!t) return;
+    if (!t) { $('waPane').innerHTML = heyyEmpty(); return; }
     $('waPane').innerHTML = '<div class="loading">טוען\u2026</div>';
     db.from('wa_messages').select('id,direction,body,media_url,media_type,author,sent_at')
       .eq('thread_id', t.id).order('sent_at').limit(500).then(function (r) {
       if (r.error) return ($('waPane').innerHTML = '<p class="err">' + esc(r.error.message) + '</p>');
-      var msgs = (r.data || []).map(function (m) {
-        var media = m.media_url ? '<div><a href="' + esc(m.media_url) + '" target="_blank" rel="noopener">\ud83d\udcce קובץ מצורף</a></div>' : '';
-        return '<div class="wa-m ' + esc(m.direction) + '">' + media + esc(m.body || (m.media_url ? '' : '\u2014')) +
-          '<span class="t">' + esc(fmtDateTime(m.sent_at)) + (m.author ? ' \u00b7 ' + esc(m.author) : '') + '</span></div>';
+      var last = '', html = (r.data || []).map(function (m) {
+        //  מפריד תאריך בין ימים, כמו בווטסאפ
+        var d = new Date(m.sent_at), key = d.toDateString(), sep = '';
+        if (key !== last) { last = key; sep = '<div class="wa-day">' + esc(waDay(d)) + '</div>'; }
+        var media = m.media_url
+          ? (/image/i.test(m.media_type || '') ? '<img src="' + esc(m.media_url) + '" alt="">'
+             : '<a href="' + esc(m.media_url) + '" target="_blank" rel="noopener">\ud83d\udcce קובץ מצורף</a>')
+          : '';
+        return sep + '<div class="wa-m ' + esc(m.direction) + '">' + media +
+          (m.body ? esc(m.body) : (media ? '' : '\u2014')) +
+          '<span class="t">' + esc(d.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })) +
+          (m.direction === 'out' ? ' <span class="tick">\u2713\u2713</span>' : '') +
+          (m.author ? ' \u00b7 ' + esc(m.author) : '') + '</span></div>';
       }).join('');
       var nm = t.contact_name || t.contact_phone;
       $('waPane').innerHTML =
-        '<div class="row-between" style="align-items:center;margin-bottom:10px">' +
-          '<div><b style="font-size:15px">' + esc(nm) + '</b>' +
-            '<div class="muted" style="font-size:12px" class="ltr"><bdi>' + esc(t.contact_phone) + '</bdi></div></div>' +
+        '<div class="wa-top">' +
+          '<span class="av">' + esc(String(nm).charAt(0)) + '</span>' +
+          '<div style="flex:1;min-width:0"><b style="font-size:14.5px">' + esc(nm) + '</b>' +
+            '<div class="muted ltr" style="font-size:12px"><bdi>+' + esc(t.contact_phone) + '</bdi></div></div>' +
           (t.lead_id ? '<button class="btn btn-ghost btn-sm" data-waopen="' + esc(t.lead_id) + '">\ud83d\udc64 כרטיס הליד</button>'
                      : '<span class="muted" style="font-size:12px">אין ליד מקושר</span>') +
         '</div>' +
-        '<div class="wa-msgs">' + (msgs || '<p class="empty">אין הודעות</p>') + '</div>' +
-        '<div class="sec-note" style="margin:12px 0 0">\u2139\ufe0f תצוגה בלבד. השיחה מנוהלת ב-Heyy, וכאן היא נשמרת ומקושרת ללקוח.</div>';
-      var b = $('waPane').querySelector('[data-waopen]');
-      if (b) b.addEventListener('click', function () { window.C2B_openLeadCard && window.C2B_openLeadCard(this.dataset.waopen); });
+        '<div class="wa-msgs" id="waMsgs">' + (html || '<p class="empty">אין הודעות</p>') + '</div>' +
+        '<div class="wa-compose"><input class="inp" placeholder="השיחה מנוהלת ב-Heyy \u2014 שליחה מכאן תתווסף בהמשך" disabled>' +
+          '<button class="btn btn-sm" disabled>שליחה</button></div>';
+      var el = $('waMsgs'); if (el) el.scrollTop = el.scrollHeight;
+      var bt = $('waPane').querySelector('[data-waopen]');
+      if (bt) bt.addEventListener('click', function () { window.C2B_openLeadCard && window.C2B_openLeadCard(this.dataset.waopen); });
       db.rpc('wa_mark_read', { p_thread: t.id }).then(function () {}, function () {});
     });
   }
-
-  //  ניהול המספרים ושיוך המשתמשים \u2014 מנהל מערכת בלבד
-  function numbersCard(nums, profs) {
-    var rows = nums.map(function (n) {
-      var who = profs.filter(function (p) { return p.wa_number_id === n.id; }).map(function (p) { return p.full_name; });
-      return '<tr><td class="ltr"><bdi><b>' + esc(n.phone) + '</b></bdi></td>' +
-        '<td>' + esc(n.label || '\u2014') + '</td>' +
-        '<td>' + (n.active ? '<span style="color:var(--ok);font-weight:600">פעיל</span>' : '<span class="muted">כבוי</span>') + '</td>' +
-        '<td>' + (who.length ? esc(who.join(', ')) : '<span class="muted">לא שויך אף אחד</span>') + '</td>' +
-        '<td><button class="btn btn-ghost btn-sm" data-numtog="' + esc(n.id) + '" data-on="' + (n.active ? '0' : '1') + '">' +
-          (n.active ? 'כיבוי' : 'הפעלה') + '</button></td></tr>';
-    }).join('');
-    var opts = function (cur) {
-      return '<option value="">\u2014 ללא \u2014</option>' + nums.map(function (n) {
-        return '<option value="' + esc(n.id) + '"' + (cur === n.id ? ' selected' : '') + '>' + esc(n.phone) + '</option>';
-      }).join('');
-    };
-    var assign = profs.filter(function (p) { return p.active; }).map(function (p) {
-      return '<tr><td><b>' + esc(p.full_name || '\u2014') + '</b> <span class="muted" style="font-size:12px">' + esc(roleLabel(p.role)) + '</span></td>' +
-        '<td><select class="inp" data-waassign="' + esc(p.user_id) + '" style="width:190px">' + opts(p.wa_number_id) + '</select></td></tr>';
-    }).join('');
-    return '<div class="card" style="margin-top:16px"><div class="sec-title">\u2699\ufe0f מספרים מנוהלים</div>' +
-      repTable(['מספר', 'שם', 'מצב', 'משויך ל', ''], rows) +
-      '<div class="row" style="gap:8px;margin-top:12px;flex-wrap:wrap">' +
-        '<input class="inp" id="waNewPhone" placeholder="972500000000" style="width:190px">' +
-        '<input class="inp" id="waNewLabel" placeholder="שם לתצוגה" style="width:190px">' +
-        '<button class="btn btn-sm" id="waAdd">הוספת מספר</button>' +
-        '<span id="waMsg" class="muted" style="font-size:12.5px"></span></div></div>' +
-      '<div class="card" style="margin-top:14px"><div class="sec-title">\ud83d\udc65 שיוך משתמשים למספר</div>' +
-      '<div class="sec-note">כל משתמש רואה אך ורק את השיחות של המספר שמשויך אליו. מנהל מערכת רואה את כולם.</div>' +
-      repTable(['משתמש', 'מספר מנוהל'], assign) + '</div>';
+  function waDay(d) {
+    var now = new Date(), day = function (x) { return x.getFullYear() + '-' + x.getMonth() + '-' + x.getDate(); };
+    if (day(d) === day(now)) return 'היום';
+    var y = new Date(now); y.setDate(y.getDate() - 1);
+    if (day(d) === day(y)) return 'אתמול';
+    return d.toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'long' });
   }
 
-  function wireNumbers() {
+  //  ---------- ערוצי Hey \u00b7 WhatsApp ----------
+  //  יושב כאן ולא במסך השיחות: זו הגדרת הרשאות, ומקומה הטבעי לצד שאר
+  //  ההרשאות של המשתמשים. הרשימה נטענת אסינכרונית ומוזרקת למקומה.
+  function waNumbersCard(profs) {
+    window.__waProfs = profs;
+    setTimeout(function () {
+      db.from('wa_numbers').select('id,phone,label,channel_id,active').order('created_at').then(function (r) {
+        var box = $('waNumsBox'); if (!box) return;
+        if (r.error) { box.innerHTML = '<p class="err">' + esc(r.error.message) + '</p>'; return; }
+        var nums = r.data || [];
+        var rows = nums.map(function (n) {
+          var who = (window.__waProfs || []).filter(function (p) { return p.wa_number_id === n.id; })
+            .map(function (p) { return p.full_name; });
+          return '<tr><td class="ltr"><bdi><b>' + esc(n.phone || '\u2014') + '</b></bdi></td>' +
+            '<td>' + esc(n.label || '\u2014') + '</td>' +
+            '<td class="muted" style="font-size:11px">' + esc(n.channel_id || 'יתמלא מההודעה הראשונה') + '</td>' +
+            '<td>' + (n.active ? '<span style="color:var(--ok);font-weight:600">פעיל</span>' : '<span class="muted">כבוי</span>') + '</td>' +
+            '<td>' + (who.length ? esc(who.join(', ')) : '<span class="muted">לא שויך</span>') + '</td>' +
+            '<td><button class="btn btn-ghost btn-sm" data-numtog="' + esc(n.id) + '" data-on="' + (n.active ? '0' : '1') + '">' +
+              (n.active ? 'כיבוי' : 'הפעלה') + '</button></td></tr>';
+        }).join('');
+        var opts = function (cur) {
+          return '<option value="">\u2014 ללא \u2014</option>' + nums.map(function (n) {
+            return '<option value="' + esc(n.id) + '"' + (cur === n.id ? ' selected' : '') + '>' +
+              esc(n.label || n.phone || 'ערוץ') + '</option>';
+          }).join('');
+        };
+        var assign = (window.__waProfs || []).filter(function (p) { return p.active; }).map(function (p) {
+          return '<tr><td><b>' + esc(p.full_name || '\u2014') + '</b> <span class="muted" style="font-size:12px">' + esc(roleLabel(p.role)) + '</span></td>' +
+            '<td><select class="inp" data-waassign="' + esc(p.user_id) + '" style="width:200px">' + opts(p.wa_number_id) + '</select></td></tr>';
+        }).join('');
+        box.innerHTML =
+          repTable(['מספר', 'שם', 'מזהה ערוץ ב-Heyy', 'מצב', 'משויך ל', ''], rows) +
+          '<div class="row" style="gap:8px;margin-top:12px;flex-wrap:wrap">' +
+            '<input class="inp" id="waNewPhone" placeholder="972500000000" style="width:180px">' +
+            '<input class="inp" id="waNewLabel" placeholder="שם לתצוגה" style="width:180px">' +
+            '<button class="btn btn-sm" id="waAdd">הוספת ערוץ</button>' +
+            '<span id="waMsg" class="muted" style="font-size:12.5px"></span></div>' +
+          '<div class="sec-note" style="margin-top:14px">כל משתמש רואה אך ורק את השיחות של הערוץ שמשויך אליו. מנהל מערכת רואה את כולם.</div>' +
+          repTable(['משתמש', 'ערוץ מנוהל'], assign);
+        wireWaNumbers();
+      });
+    }, 0);
+    return '<div class="card"><div class="sec-title">\ud83d\udfe2 ערוצי Hey \u00b7 WhatsApp</div>' +
+      '<div id="waNumsBox" class="muted" style="font-size:13px">טוען\u2026</div></div>';
+  }
+  function wireWaNumbers() {
+    var box = $('waNumsBox'); if (!box) return;
     var msg = $('waMsg');
-    if ($('waAdd')) $('waAdd').addEventListener('click', function () {
+    if ($('waAdd')) $('waAdd').onclick = function () {
       var ph = ($('waNewPhone').value || '').replace(/\D/g, '');
       if (ph.indexOf('0') === 0) ph = '972' + ph.slice(1);
-      if (ph.length < 9) { msg.style.color = 'var(--danger)'; msg.textContent = 'מספר לא תקין'; return; }
-      db.from('wa_numbers').insert({ phone: ph, label: ($('waNewLabel').value || '').trim() || null }).then(function (r) {
+      if (ph && ph.length < 9) { msg.style.color = 'var(--danger)'; msg.textContent = 'מספר לא תקין'; return; }
+      db.from('wa_numbers').insert({ phone: ph || null, label: ($('waNewLabel').value || '').trim() || null }).then(function (r) {
         if (r.error) { msg.style.color = 'var(--danger)'; msg.textContent = r.error.message; return; }
-        renderHeyy();
+        renderUsers();
       });
-    });
-    $('view').querySelectorAll('[data-numtog]').forEach(function (b) {
-      b.addEventListener('click', function () {
+    };
+    box.querySelectorAll('[data-numtog]').forEach(function (b) {
+      b.onclick = function () {
         db.from('wa_numbers').update({ active: this.dataset.on === '1' }).eq('id', this.dataset.numtog)
-          .then(function () { renderHeyy(); });
-      });
+          .then(function () { renderUsers(); });
+      };
     });
-    $('view').querySelectorAll('[data-waassign]').forEach(function (s) {
-      s.addEventListener('change', function () {
+    box.querySelectorAll('[data-waassign]').forEach(function (sel) {
+      sel.onchange = function () {
         var self = this;
         db.from('profiles').update({ wa_number_id: this.value || null }).eq('user_id', this.dataset.waassign)
           .then(function (r) {
-            msg = $('waMsg');
-            if (msg) { msg.style.color = r.error ? 'var(--danger)' : 'var(--ok)'; msg.textContent = r.error ? r.error.message : '\u2714 השיוך נשמר'; }
+            var m = $('waMsg');
+            if (m) { m.style.color = r.error ? 'var(--danger)' : 'var(--ok)'; m.textContent = r.error ? r.error.message : '\u2714 השיוך נשמר'; }
             self.blur();
           });
-      });
+      };
     });
   }
 
@@ -2362,12 +2427,14 @@
         '<label style="font-size:13px;color:var(--muted);margin-top:12px;display:block">תצוגות שהמשתמש יראה (מוגדר לפי התפקיד — אפשר להוסיף/להוריד):</label><div id="nuViews">' + viewChecks('nv', DEFAULT_VIEWS.sales) + '</div>' +
         '<div style="margin-top:14px"><button class="btn" id="nuCreate">צור משתמש ושלח הזמנה</button> <span id="nuMsg" style="font-size:13px;margin-inline-start:10px"></span></div><div id="nuResult" style="margin-top:12px"></div></div>';
       view('<h2 style="margin:0 0 14px">משתמשים והרשאות</h2>' +
+        (isAdminU ? waNumbersCard(ps) : '') +
         (isAdminU ? '' : '<div class="sec-note">🔑 אתם יכולים ליצור משתמשים, לשנות תפקידים והרשאות ולהפעיל או לכבות אנשי צוות. תפקיד <b>מנהל מערכת</b> שמור לבעל המערכת — אי אפשר ליצור אותו או לערוך משתמש שכבר מוגדר כך.</div>') +
         (canEditUsers ? addForm : '') +
         '<div class="card"><h3>משתמשים קיימים (' + ps.length + ')</h3>' +
         '<div class="table-scroll"><table><thead><tr><th>שם</th><th>תפקיד</th><th>תצוגות מותרות</th><th>פעיל</th><th></th></tr></thead><tbody>' + (rows || '<tr><td colspan="5" class="empty">אין משתמשים</td></tr>') + '</tbody></table></div>' +
         '<div class="muted" style="font-size:12.5px;margin-top:10px">מנהל מערכת רואה הכל. שאר המשתמשים רואים רק את הלידים <b>שהוקצו להם</b> ואת התצוגות שסומנו כאן.</div></div>');
 
+      if (isAdminU) wireWaNumbers();
       if (!canEditUsers) return;                 // אין מאזיני עריכה בתצוגת הצפייה
       // sync the Cloudflare Access gate to the CRM's active users (manager never touches Cloudflare)
       function syncAccessGate() {
