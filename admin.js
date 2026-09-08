@@ -2186,6 +2186,19 @@
       if (res[0].error) return errBox(res[0].error.message);
       var nums = res[0].data || [], me = (res[1].data || [])[0] || {}, threads = res[2].data || [];
       waTpl = res[3].data || []; waCars = res[4].data || [];
+      //  הסטטוס אינו משוכפל לטבלת השיחות: הליד הוא מקור האמת
+      //  היחיד, והמסך קורא וכותב אליו. כך אין סיכוי לחוסר התאמה
+      //  בין מסך הלידים למסך הווטסאפ — זה אותו שדה.
+      var lids = threads.map(function (x) { return x.lead_id; }).filter(Boolean);
+      if (lids.length) {
+        db.from('leads').select('id,status,name,car,assigned_to').in('id', lids.slice(0, 400)).then(function (lr) {
+          waLeads = {}; (lr.data || []).forEach(function (l) { waLeads[l.id] = l; });
+          if ($('waList')) {
+            $('waList').innerHTML = heyyList(shown);
+            if (heyyThread) { var cur = shown.filter(function (x) { return x.id === heyyThread; })[0]; if (cur) openThread(cur); }
+          }
+        });
+      } else { waLeads = {}; }
       var numById = {}; nums.forEach(function (n) { numById[n.id] = n; });
       if (!isAdm) heyyNum = me.wa_number_id || '';
 
@@ -2235,11 +2248,13 @@
   //  נכנסת לתור (wa_outbox) לכשהחיבור יעלה, **וגם** מועתקת ללוח כדי
   //  שהסוכן יוכל להדביק ב-Heyy כבר עכשיו. כפתור שליחה שלא שולח באמת
   //  היה גרוע יותר מכלי שאומר בדיוק מה הוא עושה.
-  var waTpl = [], waCars = [], waDraft = '', waPickedCar = null;
+  var waTpl = [], waCars = [], waDraft = '', waPickedCar = null, waLeads = {};
 
   //  ---------- כרטיס הרכב ----------
   //  רשימת היתר מפורשת. extra מכיל buy_price ו-list_price, ושליפה
   //  גורפת שלו ללקוח הייתה חושפת בדיוק כמה הרווח שלנו על הרכב.
+  //  ערך שנראה כמו תאריך אספקה ולא כמו רשימת צבעים
+  var MONTHS_RE = /ינואר|פברואר|מרץ|אפריל|מאי|יוני|יולי|אוגוסט|ספטמבר|אוקטובר|נובמבר|דצמבר|\d{1,2}\/\d/;
   function carCard(c, brandName) {
     var x = c.extra || {};
     var nis = function (n) { return Number(n).toLocaleString('en-US') + ' \u20aa'; };
@@ -2255,7 +2270,18 @@
     L.push('');
     if (c.monthly) L.push('\ud83d\udcb0 החל מ-*' + nis(c.monthly) + ' לחודש*');
     if (c.price) L.push('\ud83c\udff7\ufe0f מחיר הרכב: ' + nis(c.price));
+    if (x.seats) L.push('\ud83d\udc65 ' + x.seats + ' מקומות ישיבה');
+    //  ברכב יד שנייה יש צבע אחד בפועל; ברכב חדש הרשימה היא מה שאפשר
+    //  להזמין. שדה colors בגיליון מכיל לעיתים תאריך אספקה במקום צבעים
+    //  ("אפריל - מאי"), ולכן ערך שנראה כמו חודש נפסל במקום להישלח ללקוח.
     if (x.color) L.push('\ud83c\udfa8 צבע: ' + x.color);
+    else if (x.colors && !MONTHS_RE.test(String(x.colors))) {
+      var cl = String(x.colors).split(/\s*,\s*/).map(function (v) { return v.trim(); })
+        .filter(Boolean).filter(function (v, i, a) { return a.indexOf(v) === i; });
+      if (cl.length) L.push('\ud83c\udfa8 צבעים זמינים: ' + cl.join(', '));
+    }
+    if (x.security) L.push('\ud83d\udd10 מיגון: ' + x.security);
+    if (x.accessories) L.push('\u2728 אביזרים: ' + x.accessories);
     if (x.km) L.push('\ud83d\udee3\ufe0f ' + Number(x.km).toLocaleString('en-US') + ' ק\u05f4מ');
     L.push('');
     L.push('\u2705 ביטוח מקיף וחובה');
@@ -2466,6 +2492,41 @@
       (isAdm ? '<select class="inp" id="heyyNum" style="width:auto;min-width:210px">' +
         '<option value="">כל הערוצים</option>' + pick + '</select>' : '') + '</div>';
   }
+  //  ---------- סטטוס הליד בתוך השיחה ----------
+  //  אותו שדה בדיוק שמוצג במסך הלידים. שינוי כאן עובר
+  //  דרך changeStatus של מסך הלידים, ולכן נרשם בציר הזמן ומריץ
+  //  אוטומציות בדיוק כמו שינוי משם.
+  //  שיחה שלא התאימה לשום ליד — פתיחת ליד מתוך השיחה,
+  //  כדי שלפונה בווטסאפ יהיה סטטוס, בעלים והיסטוריה כמו לכל ליד.
+  function waCreateLead(t, btn) {
+    btn.disabled = true; btn.textContent = '\u05d9\u05d5\u05e6\u05e8\u2026';
+    var phone = String(t.contact_phone || '');
+    if (phone.indexOf('972') === 0) phone = '0' + phone.slice(3);
+    db.from('leads').insert({
+      name: t.contact_name || '\u05e4\u05d5\u05e0\u05d4 \u05d1\u05d5\u05d5\u05d8\u05e1\u05d0\u05e4', phone: phone,
+      source: '\u05d5\u05d5\u05d0\u05d8\u05e1\u05d0\u05e4', status: 'new',
+    }).select('id,status,name').single().then(function (r) {
+      if (r.error) { btn.disabled = false; btn.textContent = '\u2795 \u05e6\u05d5\u05e8 \u05dc\u05d9\u05d3'; return alert('\u05e9\u05d2\u05d9\u05d0\u05d4: ' + r.error.message); }
+      db.from('wa_threads').update({ lead_id: r.data.id }).eq('id', t.id).then(function () {
+        t.lead_id = r.data.id; waLeads[r.data.id] = r.data; renderHeyy();
+      });
+    });
+  }
+
+  function waStDef(k) {
+    var L = window.C2B_STATUSES || [];
+    for (var i = 0; i < L.length; i++) if (L[i].k === k) return L[i];
+    return { k: k, label: k || '\u2014', icon: '', color: 'var(--muted)' };
+  }
+  function waStatusChip(t, small) {
+    var l = t.lead_id && waLeads[t.lead_id];
+    if (!l) return small ? '' : '<span class="muted" style="font-size:12px">\u05d0\u05d9\u05df \u05dc\u05d9\u05d3 \u05de\u05e7\u05d5\u05e9\u05e8</span>';
+    var d = waStDef(l.status || 'new');
+    return '<span class="wa-st' + (small ? ' sm' : '') + '"' + (small ? '' : ' data-wast="' + esc(t.id) + '"') +
+      ' style="color:' + d.color + ';border-color:' + d.color + '">' + esc(d.icon + ' ' + d.label) +
+      (small ? '' : ' \u25be') + '</span>';
+  }
+
   function heyyEmpty() {
     return '<div class="wa-blank"><div style="font-size:44px">\ud83d\udcac</div>' +
       '<p class="muted" style="margin:10px 0 0">בחרו שיחה מהרשימה</p></div>';
@@ -2490,6 +2551,7 @@
           '<span class="rt">' + esc(waWhen(t.last_at)) + '</span></span>' +
           '<span class="top"><span class="pv">' +
             (t.last_dir === 'out' ? '<span class="tick">\u2713\u2713</span> ' : '') + esc(t.last_text || '\u2014') + '</span>' +
+          waStatusChip(t, true) +
           (t.unread ? '<span class="wa-unread">' + t.unread + '</span>' : '') + '</span></span></div>';
     }).join('');
   }
@@ -2520,8 +2582,9 @@
           '<span class="av">' + esc(String(nm).charAt(0)) + '</span>' +
           '<div style="flex:1;min-width:0"><b style="font-size:14.5px">' + esc(nm) + '</b>' +
             '<div class="muted ltr" style="font-size:12px"><bdi>+' + esc(t.contact_phone) + '</bdi></div></div>' +
+          waStatusChip(t, false) +
           (t.lead_id ? '<button class="btn btn-ghost btn-sm" data-waopen="' + esc(t.lead_id) + '">\ud83d\udc64 כרטיס הליד</button>'
-                     : '<span class="muted" style="font-size:12px">אין ליד מקושר</span>') +
+                     : '<button class="btn btn-sm" data-wanew="' + esc(t.id) + '">\u2795 צור ליד</button>') +
         '</div>' +
         '<div class="wa-msgs" id="waMsgs">' + (html || '<p class="empty">אין הודעות</p>') + '</div>' +
         waTools(t);
@@ -2529,6 +2592,18 @@
       var bt = $('waPane').querySelector('[data-waopen]');
       if (bt) bt.addEventListener('click', function () { window.C2B_openLeadCard && window.C2B_openLeadCard(this.dataset.waopen); });
       wireTools(t);
+      var chip = $('waPane').querySelector('[data-wast]');
+      if (chip) chip.addEventListener('click', function (e) {
+        e.stopPropagation();
+        var l = waLeads[t.lead_id]; if (!l || !window.C2B_openStatusMenu) return;
+        window.C2B_openStatusMenu(chip, l.status || 'new', function (to) {
+          window.C2B_changeStatus(l.id, to, l, function () {
+            l.status = to; renderHeyy();
+          });
+        });
+      });
+      var mk = $('waPane').querySelector('[data-wanew]');
+      if (mk) mk.addEventListener('click', function () { waCreateLead(t, this); });
       db.rpc('wa_mark_read', { p_thread: t.id }).then(function () {}, function () {});
     });
   }

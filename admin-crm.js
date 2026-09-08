@@ -3090,6 +3090,12 @@
 
   // expose the status model for admin.js (bell, reports)
   window.C2B_STATUSES = STATUSES;
+  //  מסך הווטסאפ משנה סטטוס של ליד, וחייב לעשות זאת דרך אותה פונקציה:
+  //  היא זו שרושמת בציר הזמן ומריצה אוטומציות. שכפול שלה היה
+  //  יוצר שינויים שלא מופיעים בהיסטוריה של הליד.
+  window.C2B_changeStatus = changeStatus;
+  window.C2B_openStatusMenu = openStatusMenu;
+  window.C2B_stDef = stDef;
   window.C2B_badge = badge;
   window.C2B_stageDef = stageDef;
 })();
