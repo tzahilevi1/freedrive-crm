@@ -2235,7 +2235,7 @@
   //  נכנסת לתור (wa_outbox) לכשהחיבור יעלה, **וגם** מועתקת ללוח כדי
   //  שהסוכן יוכל להדביק ב-Heyy כבר עכשיו. כפתור שליחה שלא שולח באמת
   //  היה גרוע יותר מכלי שאומר בדיוק מה הוא עושה.
-  var waTpl = [], waCars = [], waDraft = '';
+  var waTpl = [], waCars = [], waDraft = '', waPickedCar = null;
 
   //  ---------- כרטיס הרכב ----------
   //  רשימת היתר מפורשת. extra מכיל buy_price ו-list_price, ושליפה
@@ -2245,7 +2245,12 @@
     var nis = function (n) { return Number(n).toLocaleString('en-US') + ' \u20aa'; };
     var L = [];
     L.push('*' + [c.brand, c.name].filter(Boolean).join(' ') + (c.trim ? ' ' + c.trim : '') + '*');
-    var sub = [c.year, c.condition, c.fuel, x.hand ? 'יד ' + x.hand : null].filter(Boolean).join(' \u00b7 ');
+    var sub = [c.year, c.condition, c.fuel, x.hand ? 'יד ' + x.hand : null]
+      .filter(Boolean).map(String)
+      //  condition \u05d4\u05d5\u05d0 "\u05d9\u05d3 2" \u05d5-extra.hand \u05d4\u05d5\u05d0 "2" \u2014 \u05e9\u05e0\u05d9\u05d4\u05dd \u05de\u05d9\u05d9\u05e6\u05e8\u05d9\u05dd \u05d0\u05d5\u05ea\u05d5
+      //  \u05d8\u05e7\u05e1\u05d8, \u05d5\u05d4\u05e9\u05d5\u05e8\u05d4 \u05d9\u05e6\u05d0\u05d4 "2024 \u00b7 \u05d9\u05d3 2 \u00b7 \u05d3\u05d9\u05d6\u05dc \u00b7 \u05d9\u05d3 2".
+      .filter(function (v, i, a) { return a.indexOf(v) === i; })
+      .join(' \u00b7 ');
     if (sub) L.push(sub);
     L.push('');
     if (c.monthly) L.push('\ud83d\udcb0 החל מ-*' + nis(c.monthly) + ' לחודש*');
@@ -2314,19 +2319,23 @@
     };
     if ($('waCarBtn')) $('waCarBtn').onclick = function () { carPicker(t, body); };
     if ($('waSched')) $('waSched').onclick = function () { schedBox(t, body, say); };
-    if ($('waQueue')) $('waQueue').onclick = function () { queueMsg(t, body.value, null, null, say); };
+    if ($('waQueue')) $('waQueue').onclick = function () {
+      queueMsg(t, body.value, null, waPickedCar, say);
+    };
     loadOutbox(t);
   }
 
-  function queueMsg(t, text, when, carId, say) {
+  function queueMsg(t, text, when, car, say) {
     if (!String(text || '').trim()) return say('ההודעה ריקה', false);
     db.from('wa_outbox').insert({
-      thread_id: t.id, body: text, kind: carId ? 'car' : 'text', car_id: carId || null,
+      thread_id: t.id, body: text, kind: car ? 'car' : 'text', car_id: (car && car.id) || null,
+      media_url: (car && car.img) || null,
       scheduled_at: when || null, created_by: (window.C2B && window.C2B.userId) || null,
     }).then(function (r) {
       if (r.error) return say(r.error.message, false);
       say(when ? '\u2714 תוזמן ל-' + fmtDateTime(when) : '\u2714 נוסף לתור', true);
       var b = $('waBody'); if (b) { b.value = ''; waDraft = ''; }
+      waPickedCar = null;
       loadOutbox(t);
     });
   }
@@ -2383,7 +2392,7 @@
       if (e.target.id === 'waSchedOk') {
         var v = bg.querySelector('#waWhen').value;
         if (!v) return;
-        close(); queueMsg(t, body.value, new Date(v).toISOString(), null, say);
+        close(); queueMsg(t, body.value, new Date(v).toISOString(), waPickedCar, say);
       }
     });
   }
@@ -2429,7 +2438,11 @@
             '<button class="btn btn-ghost btn-sm" id="waCarCopy">\ud83d\udccb העתקה</button>' +
             '<span class="muted" style="font-size:12px">בלי מחיר קנייה ובלי נתונים פנימיים</span></div>';
         bg.querySelector('#waCarUse').onclick = function () {
-          body.value = (body.value ? body.value + '\n\n' : '') + txt; waDraft = body.value; bg.remove(); body.focus();
+          body.value = (body.value ? body.value + '\n\n' : '') + txt; waDraft = body.value;
+          //  נשמר כדי שהתור יקבל גם את מזהה הרכב ואת התמונה: כשחיבור
+          //  השליחה יעלה, הכרטיס צריך לצאת עם התמונה ולא כטקסט בלבד.
+          waPickedCar = { id: c.id, img: c.img || null };
+          bg.remove(); body.focus();
         };
         bg.querySelector('#waCarCopy').onclick = function () {
           navigator.clipboard.writeText(txt + (c.img ? '\n' + c.img : ''));
