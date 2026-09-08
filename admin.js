@@ -2445,7 +2445,8 @@
           bg.remove(); body.focus();
         };
         bg.querySelector('#waCarCopy').onclick = function () {
-          navigator.clipboard.writeText(txt + (c.img ? '\n' + c.img : ''));
+          //  הכתובת המקורית מחזירה 403 מחוץ לאתר המקור; ה-proxy פתוח.
+          navigator.clipboard.writeText(txt + (c.img ? '\n' + carImg(c.img) : ''));
           this.textContent = '\u2714 הועתק';
         };
       }
