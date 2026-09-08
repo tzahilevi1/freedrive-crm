@@ -2407,7 +2407,7 @@
       }).slice(0, 60);
       return list.map(function (c) {
         return '<div class="wa-car" data-car="' + esc(c.id) + '">' +
-          (c.img ? '<img src="' + esc(c.img) + '" alt="">' : '<span class="noimg">\ud83d\ude97</span>') +
+          (c.img ? '<img src="' + esc(carImg(c.img)) + '" alt="">' : '<span class="noimg">\ud83d\ude97</span>') +
           '<span class="mid"><b>' + esc([c.brand, c.name].filter(Boolean).join(' ')) + '</b>' +
             '<span class="muted">' + esc([c.trim, c.year, c.condition].filter(Boolean).join(' \u00b7 ')) + '</span></span>' +
           '<span class="pr">' + (c.monthly ? Number(c.monthly).toLocaleString('en-US') + ' \u20aa/ח' : (c.price ? Number(c.price).toLocaleString('en-US') + ' \u20aa' : '')) + '</span></div>';
@@ -2431,7 +2431,7 @@
         var txt = carCard(c, null);
         bg.querySelector('#waCarPrev').innerHTML =
           '<div class="sec-title" style="margin-top:14px">תצוגה מקדימה</div>' +
-          '<div class="wa-preview">' + (c.img ? '<img src="' + esc(c.img) + '" alt="">' : '') +
+          '<div class="wa-preview">' + (c.img ? '<img src="' + esc(carImg(c.img)) + '" alt="">' : '') +
             '<div class="wa-m out" style="max-width:100%">' + esc(txt) + '</div></div>' +
           '<div class="row" style="gap:8px;margin-top:12px;flex-wrap:wrap">' +
             '<button class="btn btn-sm" id="waCarUse">הוספה להודעה</button>' +
