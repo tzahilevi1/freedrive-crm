@@ -2168,15 +2168,52 @@
       if (!JsPDF) throw new Error('jsPDF לא נטען');
       var pdf = new JsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
       var pw = pdf.internal.pageSize.getWidth(), ph = pdf.internal.pageSize.getHeight();
-      var m = 8, iw = pw - m * 2;
-      var ih = canvas.height * iw / canvas.width;      // גובה התמונה כולה במ"מ
-      var img = canvas.toDataURL('image/jpeg', 0.92);  // JPEG ולא PNG: קובץ קטן פי כמה, ובמסמך טקסט ההבדל לא נראה
-      // חיתוך לעמודים: מזיזים את התמונה כלפי מעלה ומגבילים בחלון העמוד
-      var pageH = ph - m * 2, left = ih, y = 0;
-      while (left > 0.5) {
-        pdf.addImage(img, 'JPEG', m, m - y, iw, ih);
-        left -= pageH; y += pageH;
-        if (left > 0.5) pdf.addPage();
+      var m = 8, iw = pw - m * 2, pageH = ph - m * 2;
+      var pxPerMm = canvas.width / iw, pageHpx = pageH * pxPerMm;
+
+      // חיתוך בגובה קבוע חתך שורות טקסט באמצע — חצי שורה בתחתית עמוד אחד
+      // וחצי בראש הבא. כדי לחתוך ברווח שבין שורות, ממפים אילו שורות בקנבס
+      // ריקות. המיפוי נעשה על עותק מוקטן לרוחב 48 פיקסלים: קריאת כל הקנבס
+      // הייתה עשרות מגה-בייט בזיכרון ונחנקת במכשיר נייד.
+      var blank = null;
+      try {
+        var pw2 = 48, pc = document.createElement('canvas');
+        pc.width = pw2; pc.height = canvas.height;
+        var pctx = pc.getContext('2d');
+        pctx.drawImage(canvas, 0, 0, pw2, canvas.height);
+        var d = pctx.getImageData(0, 0, pw2, canvas.height).data;
+        blank = new Uint8Array(canvas.height);
+        for (var yy = 0; yy < canvas.height; yy++) {
+          var isBlank = 1, base = yy * pw2 * 4;
+          for (var xx = 0; xx < pw2; xx++) {
+            var o = base + xx * 4;
+            if (d[o] < 244 || d[o + 1] < 244 || d[o + 2] < 244) { isBlank = 0; break; }
+          }
+          blank[yy] = isBlank;
+        }
+      } catch (e) { blank = null; }   // קנבס מזוהם — נופלים לחיתוך קבוע
+
+      // מחפשים רווח לאחור מנקודת החיתוך, עד 30% מגובה העמוד. יותר מכך
+      // היה יוצר עמודים ריקים למחציתם.
+      function cutAt(from) {
+        var want = Math.min(from + pageHpx, canvas.height);
+        if (want >= canvas.height || !blank) return want;
+        var min = from + pageHpx * 0.7;
+        for (var y2 = Math.floor(want); y2 > min; y2--) if (blank[y2]) return y2;
+        return want;
+      }
+
+      var tmp = document.createElement('canvas'), tctx = tmp.getContext('2d');
+      var pos = 0, first = true;
+      while (pos < canvas.height - 1) {
+        var to = cutAt(pos), hpx = Math.max(1, Math.round(to - pos));
+        tmp.width = canvas.width; tmp.height = hpx;
+        tctx.fillStyle = '#ffffff'; tctx.fillRect(0, 0, tmp.width, hpx);
+        tctx.drawImage(canvas, 0, pos, canvas.width, hpx, 0, 0, canvas.width, hpx);
+        if (!first) pdf.addPage();
+        // JPEG ולא PNG: קובץ קטן פי כמה, ובמסמך טקסט ההבדל לא נראה
+        pdf.addImage(tmp.toDataURL('image/jpeg', 0.92), 'JPEG', m, m, iw, hpx / pxPerMm);
+        first = false; pos = to;
       }
       var name = (title || 'הסכם').replace(/[\/:*?"<>|]/g, '-').slice(0, 80) + '.pdf';
       pdf.save(name);      // ← יוצר הורדה רגילה, ולכן מופיע ברשימת ההורדות

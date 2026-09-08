@@ -335,6 +335,8 @@
   //  ולכן כפתורי העריכה מוסתרים ממנו במקום להיכשל בשקט.
   var SENIOR_VIEWS = { users: 1, agents: 1 };
   function navAllowed(nav, role) {
+    //  לשוניות משנה ("settings:phone") יורשות את ההרשאה של המסך
+    if (nav && nav.indexOf(':') > 0) nav = nav.split(':')[0];
     if (role === 'admin' || !role) return true;
     if (nav === 'activity' || nav === 'dashboard') return true;   // always available
     if (nav && nav.indexOf('soon:') === 0) return false;
@@ -378,7 +380,7 @@
   // ---------- routing ----------
   function setActive(nav, status) {
     //  פריט האב נשאר מודגש גם כשנמצאים בלשונית משנה שלו
-    var g = subGroup(nav); if (g) nav = g;
+    var g = subGroup(nav); if (g) nav = g; else nav = navBase(nav);
     var items = $('nav').querySelectorAll('.nav-item');
     for (var i = 0; i < items.length; i++) {
       var it = items[i];
@@ -400,6 +402,11 @@
     ],
     settings: [
       ['settings', '\ud83d\udccb רשימות ובחירות'],
+      ['settings:integrations', '\ud83d\udd0c חיבורים'],
+      ['settings:brands', '\ud83c\udff7\ufe0f מותגים'],
+      ['settings:quick', '\ud83d\udcac הודעות מהירות'],
+      ['settings:phone', '\u260e\ufe0f טלפוניה'],
+      ['settings:actions', '\u26a1 פעולות'],
       ['branches', '\ud83c\udfe2 סניפים'],
       ['ctemplates', '\ud83d\udcdc תבניות הסכמים']
     ]
@@ -408,6 +415,8 @@
     for (var g in SUBTABS) if (SUBTABS[g].some(function (t) { return t[0] === nav; })) return g;
     return null;
   }
+  //  שם המסך לניווט, בלי סיומת הלשונית
+  function navBase(nav) { return nav && nav.indexOf(':') > 0 ? nav.split(':')[0] : nav; }
   function drawSubnav(nav) {
     var el = $('subnav'); if (!el) return;
     var g = subGroup(nav);
@@ -439,7 +448,7 @@
     if (nav === 'analytics') return renderAnalytics();
     if (nav === 'reports') return renderReports();
     if (nav === 'ai') return renderAI();
-    if (nav === 'settings') return renderSettings();
+    if (navBase(nav) === 'settings') return renderSettings(nav.indexOf(':') > 0 ? nav.split(':')[1] : 'lists');
     if (nav === 'quotes') return window.C2B_renderQuotes && window.C2B_renderQuotes();
     if (nav === 'documents') return window.C2B_renderDocuments && window.C2B_renderDocuments();
     if (nav === 'whatsapp') return window.C2B_renderComms && window.C2B_renderComms('whatsapp');
@@ -2426,7 +2435,99 @@
     return '<div class="q-doc">' +
       (c.img ? '<img class="q-img" src="' + esc(carImg(c.img)) + '" alt="">' : '') +
       '<div class="q-body">' + body + '</div>' +
-      '<div class="q-foot">פרי דרייב \u00b7 058-470076</div></div>';
+      '<div class="q-foot">פרי דרייב</div></div>';
+  }
+
+  //  ---------- עוזר המכירות ----------
+  //  שולח ל-Claude את כל השיחה, את פרטי הליד ואת המלאי הרלוונטי,
+  //  ומבקש ניסוחים מוכנים לשליחה. המלאי נשלח בלי מחיר קנייה
+  //  ובלי עמלות — אותה רשימת היתר של כרטיס הרכב, כדי שגם הצעה
+  //  שהסוכן מעתיק ישירות לא תחשוף נתונים פנימיים.
+  var COACH_SYS = 'אתה איש מכירות בכיר ומנוסה בתחום ליסינג ומימון רכב בישראל. '
+    + 'אתה מלווה נציג מכירות בשיחת ווטסאפ חיה עם לקוח. '
+    + 'ענה תמיד בעברית. '
+    + 'החזר שלוש הצעות לניסוח הודעה הבאה, כל אחת מוכנה לשליחה כמות שהיא. '
+    + 'פורמט התשובה, בדיוק: שורה שמתחילה ב-### ואחריה כותרת קצרה (עד 4 מילים) שמסבירה את הגישה, '
+    + 'ובשורות שמתחת נוסח ההודעה עצמה. בלי מרכאות ובלי הסברים נוספים. '
+    + 'אחרי שלוש ההצעות הוסף שורה אחת שמתחילה ב-@@ עם קריאת מצב קצרה של השיחה ומה הצעד הבא. '
+    + 'אל תמציא מחירים, דגמים או תנאים שלא נמסרו לך. '
+    + 'אל תבטיח אישור מימון, ריבית סופית או מועד אספקה כוודאי.';
+
+  function salesCoach(t, body, btn) {
+    var old = btn.textContent; btn.disabled = true; btn.textContent = 'חושב\u2026';
+    db.from('wa_messages').select('direction,body,sent_at').eq('thread_id', t.id)
+      .order('sent_at', { ascending: false }).limit(40).then(function (r) {
+      var msgs = (r.data || []).reverse();
+      var lead = t.lead_id && waLeads[t.lead_id];
+      var hist = msgs.map(function (m) {
+        return (m.direction === 'in' ? 'לקוח' : 'נציג') + ': ' + String(m.body || '[קובץ]');
+      }).join('\n') || '(אין עדיין הודעות)';
+      //  מלאי מקוצר ובלי שדות פנימיים
+      var stock = waCars.slice(0, 90).map(function (c) {
+        var x = c.extra || {};
+        return '- ' + [c.brand, c.name, c.trim].filter(Boolean).join(' ') +
+          (c.monthly ? ' | חודשי מ-' + c.monthly + ' \u20aa' : '') +
+          (c.price ? ' | מחיר ' + c.price + ' \u20aa' : '') +
+          (x.seats ? ' | ' + x.seats + ' מקומות' : '') +
+          (c.fuel ? ' | ' + c.fuel : '');
+      }).join('\n');
+      var ctx = 'פרטי הלקוח:\nשם: ' + (t.contact_name || 'לא ידוע') +
+        (lead ? '\nסטטוס במערכת: ' + waStDef(lead.status || 'new').label +
+                (lead.car ? '\nהתעניין ב: ' + lead.car : '') : '\n(אין עדיין ליד במערכת)') +
+        '\n\nהשיחה עד כה:\n' + hist +
+        '\n\nמלאי זמין (חלקי):\n' + stock;
+      db.functions.invoke('ai-assistant', {
+        body: { system: COACH_SYS, prompt: ctx + '\n\nמה כדאי לכתוב ללקוח עכשיו?' }
+      }).then(function (rr) {
+        btn.disabled = false; btn.textContent = old;
+        var d = rr.data || {};
+        var txt = d.text || d.answer || d.content || '';
+        if (rr.error || d.error || !txt) {
+          var msg = (d && d.error) || (rr.error && rr.error.message) || 'לא התקבלה תשובה';
+          return coachBox('<p class="err">' + esc(/ANTHROPIC/.test(msg) ? 'חסר מפתח Claude בהגדרות' : msg) + '</p>', body);
+        }
+        coachBox(coachHtml(txt), body);
+      }, function (e) {
+        btn.disabled = false; btn.textContent = old;
+        coachBox('<p class="err">' + esc(e.message || e) + '</p>', body);
+      });
+    });
+  }
+
+  //  פיצול לפי ### ו-@@. אם המודל חרג מהפורמט — מציגים
+  //  את הטקסט כמות שהוא ולא מסכים מסך ריק.
+  function coachHtml(txt) {
+    var read = (String(txt).match(/^@@\s*(.+)$/m) || [])[1] || '';
+    var parts = String(txt).split(/^###\s*/m).slice(1);
+    if (!parts.length) return '<div class="coach-raw">' + esc(txt) + '</div>';
+    window.__coach = [];
+    var html = (read ? '<div class="coach-read">\ud83d\udd0e ' + esc(read) + '</div>' : '') +
+      parts.map(function (p) {
+        var lines = p.split('\n'), title = (lines.shift() || '').trim();
+        var msgTxt = lines.join('\n').replace(/^@@.*$/m, '').trim();
+        var i = window.__coach.push(msgTxt) - 1;
+        return '<div class="coach-s"><div class="coach-t">' + esc(title) + '</div>' +
+          '<div class="coach-m">' + esc(msgTxt) + '</div>' +
+          '<button class="btn btn-sm" data-coachuse="' + i + '">השתמש בזה</button></div>';
+      }).join('');
+    return html;
+  }
+
+  function coachBox(html, body) {
+    var bg = document.createElement('div'); bg.className = 'adm-bg';
+    bg.innerHTML = '<div class="adm" style="max-width:560px"><div class="adm-hd">' +
+      '<h3>\ud83e\udd16 עוזר מכירות</h3><button class="adm-x" data-admx>\u2715</button></div>' +
+      '<div class="adm-body">' + html + '</div>' +
+      '<div class="adm-meta"><span>הצעות בלבד — עברו על הנוסח לפני שליחה</span></div></div>';
+    document.body.appendChild(bg);
+    bg.addEventListener('click', function (e) {
+      if (e.target === bg || e.target.closest('[data-admx]')) return bg.remove();
+      var u = e.target.closest('[data-coachuse]');
+      if (u && body) {
+        body.value = (body.value ? body.value + '\n' : '') + (window.__coach || [])[+u.dataset.coachuse];
+        waDraft = body.value; bg.remove(); body.focus();
+      }
+    });
   }
 
   function waTools(t) {
@@ -2440,9 +2541,9 @@
       '<div class="wa-compose">' +
         '<textarea class="inp" id="waBody" rows="2" placeholder="כתבו הודעה, או בחרו הודעה מהירה למעלה\u2026">' + esc(waDraft) + '</textarea>' +
         '<div class="wa-btns">' +
+          '<button class="btn btn-ghost btn-sm" id="waCoach" title="הצעות מעוזר המכירות לפי השיחה">\ud83e\udd16 עוזר מכירות</button>' +
           '<button class="btn btn-ghost btn-sm" id="waCarBtn" title="שליחת דגם מהמלאי">\ud83d\ude97 דגם</button>' +
           '<button class="btn btn-ghost btn-sm" id="waQuoteBtn" title="הצעת מחיר מלאה">\ud83d\udcb0 הצעת מחיר</button>' +
-          '<button class="btn btn-ghost btn-sm" id="waCopy" title="העתקה כדי להדביק ב-Heyy">\ud83d\udccb העתקה</button>' +
           '<button class="btn btn-ghost btn-sm" id="waSched" title="תזמון לשעה מאוחרת יותר">\u23f0 תזמון</button>' +
           '<button class="btn btn-sm" id="waQueue">הוספה לתור</button>' +
         '</div>' +
@@ -2474,12 +2575,7 @@
     });
     if (body) body.oninput = function () { waDraft = this.value; };
 
-    if ($('waCopy')) $('waCopy').onclick = function () {
-      if (!body.value.trim()) return say('אין מה להעתיק', false);
-      navigator.clipboard.writeText(body.value).then(
-        function () { say('\u2714 הועתק \u2014 אפשר להדביק ב-Heyy', true); },
-        function () { say('ההעתקה נחסמה בדפדפן', false); });
-    };
+    if ($('waCoach')) $('waCoach').onclick = function () { salesCoach(t, body, this); };
     if ($('waCarBtn')) $('waCarBtn').onclick = function () { carPicker(t, body, false); };
     if ($('waQuoteBtn')) $('waQuoteBtn').onclick = function () { carPicker(t, body, true); };
     if ($('waSched')) $('waSched').onclick = function () { schedBox(t, body, say); };
@@ -3310,7 +3406,11 @@
   }
 
   // ---------- SETTINGS: managed field lists (admin) ----------
-  function renderSettings() {
+  //  המסך החזיק שבע קבוצות בגלילה אחת ארוכה. כל אחת מוצגת
+  //  עכשיו בלשונית משלה, ורק המרנדר הרלוונטי רץ — מסך הטלפוניה
+  //  לא מושך נתונים כשמסתכלים על רשימות.
+  function renderSettings(sec) {
+    sec = sec || 'lists';
     loading();
     db.from('field_options').select('*').order('field', { ascending: true }).order('value', { ascending: true }).then(function (r) {
       var opts = (r && r.data) || [], byField = {}, fieldErr = r && r.error;
@@ -3324,13 +3424,28 @@
           '<div id="chips_' + key + '" style="margin:10px 0;line-height:2.2">' + chips + '</div>' +
           '<div style="display:flex;gap:8px"><input class="inp" data-add="' + key + '" placeholder="ערך חדש…" style="flex:1"><button class="btn btn-sm" data-addbtn="' + key + '">+ הוסף</button></div></div>';
       }).join('');
-      view('<h2 style="margin:0 0 6px">הגדרות ורשימות</h2><p class="muted" style="font-size:13px;margin-bottom:12px">ערכי הרשימות שמופיעים כאפשרויות בחירה בשדות (מותג, מקור הגעה, חברת שיווק, utm_source) — בטופס עריכת ליד ובסינון.</p><div style="margin-bottom:16px"><button class="btn btn-sm" id="seedSources">🎯 טען מקורות מומלצים (מצומצם — מקור הגעה + utm_source)</button></div>' + warn + '<div id="integrationsCard"></div><div id="brandMapCard"></div><div id="quickMsgCard"></div><div id="telephonyCard"></div><div id="manychatCard"></div>' + actionEditorCard() + cards);
-      bindActionEditor();
-      renderIntegrations();
-      renderBrandMap();
-      renderQuickMsgs();
-      renderTelephony();
-      renderManychat();
+      var HEAD = {
+        lists: ['\ud83d\udccb רשימות ובחירות', 'הערכים שמופיעים כאפשרויות בחירה בשדות הליד ובסינון.'],
+        integrations: ['\ud83d\udd0c חיבורים', 'מקורות הלידים החיצוניים והקליטה האוטומטית.'],
+        brands: ['\ud83c\udff7\ufe0f מותגים', 'שיוך כל מותג לחברת השיווק שלו.'],
+        quick: ['\ud83d\udcac הודעות מהירות', 'תבניות לשליחה מהירה מכרטיס הליד.'],
+        phone: ['\u260e\ufe0f טלפוניה', 'חיוג מהמערכת וחיבור ManyChat.'],
+        actions: ['\u26a1 פעולות', 'סרגל הפעולות שמופיע בכרטיס הליד.']
+      };
+      var hd = HEAD[sec] || HEAD.lists, mid = '';
+      if (sec === 'lists') mid = '<div style="margin-bottom:16px"><button class="btn btn-sm" id="seedSources">\ud83c\udfaf טען מקורות מומלצים</button></div>' + warn + cards;
+      else if (sec === 'integrations') mid = '<div id="integrationsCard"></div>';
+      else if (sec === 'brands') mid = '<div id="brandMapCard"></div>';
+      else if (sec === 'quick') mid = '<div id="quickMsgCard"></div>';
+      else if (sec === 'phone') mid = '<div id="telephonyCard"></div><div id="manychatCard"></div>';
+      else if (sec === 'actions') mid = actionEditorCard();
+      view('<h2 style="margin:0 0 4px">' + hd[0] + '</h2>' +
+        '<p class="muted" style="font-size:13px;margin-bottom:14px">' + hd[1] + '</p>' + mid);
+      if (sec === 'actions') bindActionEditor();
+      if (sec === 'integrations') renderIntegrations();
+      if (sec === 'brands') renderBrandMap();
+      if (sec === 'quick') renderQuickMsgs();
+      if (sec === 'phone') { renderTelephony(); renderManychat(); }
       // מחיקת צ'יפ במקום — בלי לרענן את כל הדף
       function bindDel(bEl) {
         bEl.addEventListener('click', function () {
