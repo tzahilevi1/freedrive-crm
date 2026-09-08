@@ -212,6 +212,8 @@
     loadBrandCompanies();
     db.from('profiles').select('role,full_name,views,active,sip_ext,phone').eq('user_id', session.user.id).single().then(function (r) {
       window.C2B.userSip = (r.data && r.data.sip_ext) || '';
+      //  השם המלא משמש בהודעות המהירות של הווטסאפ ({{נציג}})
+      window.C2B.fullName = (r.data && r.data.full_name) || '';
       window.C2B.userPhone = (r.data && r.data.phone) || '';
       // אכיפת השבתה — משתמש לא-פעיל מנותק מיד (בנוסף ל-RLS ו-Cloudflare Access)
       if (r.data && r.data.active === false) {
@@ -2174,10 +2176,16 @@
       db.from('wa_numbers').select('id,phone,label,channel_id,active').order('created_at'),
       db.from('profiles').select('user_id,full_name,wa_number_id').eq('user_id', (window.C2B && window.C2B.userId) || '00000000-0000-0000-0000-000000000000'),
       db.from('wa_threads').select('id,number_id,contact_phone,contact_name,lead_id,last_at,last_text,last_dir,unread')
-        .order('last_at', { ascending: false, nullsFirst: false }).limit(500)
+        .order('last_at', { ascending: false, nullsFirst: false }).limit(500),
+      db.from('wa_templates').select('id,title,body,category,sort_order').eq('active', true).order('sort_order'),
+      //  רק השדות שמותר להראות ללקוח. רשימת היתר ולא רשימת חסימה:
+      //  extra מכיל buy_price, ושליפה גורפת הייתה חושפת את הרווח.
+      db.from('cars').select('id,brand,name,trim,year,fuel,cat,condition,price,monthly,img,extra')
+        .eq('active', true).order('brand').limit(400)
     ]).then(function (res) {
       if (res[0].error) return errBox(res[0].error.message);
       var nums = res[0].data || [], me = (res[1].data || [])[0] || {}, threads = res[2].data || [];
+      waTpl = res[3].data || []; waCars = res[4].data || [];
       var numById = {}; nums.forEach(function (n) { numById[n.id] = n; });
       if (!isAdm) heyyNum = me.wa_number_id || '';
 
@@ -2220,6 +2228,215 @@
       });
       if (heyyThread) openThread(shown.filter(function (t) { return t.id === heyyThread; })[0]);
     }).catch(function (e) { errBox(e.message || e); });
+  }
+
+  //  ---------- כלי הסוכן בשיחה ----------
+  //  אין עדיין API שליחה מ-Heyy, ולכן כל הודעה שנבנית כאן עושה שני דברים:
+  //  נכנסת לתור (wa_outbox) לכשהחיבור יעלה, **וגם** מועתקת ללוח כדי
+  //  שהסוכן יוכל להדביק ב-Heyy כבר עכשיו. כפתור שליחה שלא שולח באמת
+  //  היה גרוע יותר מכלי שאומר בדיוק מה הוא עושה.
+  var waTpl = [], waCars = [], waDraft = '';
+
+  //  ---------- כרטיס הרכב ----------
+  //  רשימת היתר מפורשת. extra מכיל buy_price ו-list_price, ושליפה
+  //  גורפת שלו ללקוח הייתה חושפת בדיוק כמה הרווח שלנו על הרכב.
+  function carCard(c, brandName) {
+    var x = c.extra || {};
+    var nis = function (n) { return Number(n).toLocaleString('en-US') + ' \u20aa'; };
+    var L = [];
+    L.push('*' + [c.brand, c.name].filter(Boolean).join(' ') + (c.trim ? ' ' + c.trim : '') + '*');
+    var sub = [c.year, c.condition, c.fuel, x.hand ? 'יד ' + x.hand : null].filter(Boolean).join(' \u00b7 ');
+    if (sub) L.push(sub);
+    L.push('');
+    if (c.monthly) L.push('\ud83d\udcb0 החל מ-*' + nis(c.monthly) + ' לחודש*');
+    if (c.price) L.push('\ud83c\udff7\ufe0f מחיר הרכב: ' + nis(c.price));
+    if (x.color) L.push('\ud83c\udfa8 צבע: ' + x.color);
+    if (x.km) L.push('\ud83d\udee3\ufe0f ' + Number(x.km).toLocaleString('en-US') + ' ק\u05f4מ');
+    L.push('');
+    L.push('\u2705 ביטוח מקיף וחובה');
+    L.push('\u2705 טיפולים, רישוי וצמיגים');
+    L.push('\u2705 עד 100% מימון');
+    L.push('');
+    L.push('אשמח לענות על כל שאלה \ud83d\ude42');
+    L.push('_' + (brandName || 'פרי דרייב') + '_');
+    return L.join('\n');
+  }
+
+  function waTools(t) {
+    var cats = [];
+    waTpl.forEach(function (x) { if (cats.indexOf(x.category || 'כללי') < 0) cats.push(x.category || 'כללי'); });
+    var chips = waTpl.map(function (x) {
+      return '<button class="wa-chip" data-tpl="' + esc(x.id) + '" title="' + esc(x.body.slice(0, 90)) + '">' + esc(x.title) + '</button>';
+    }).join('');
+    return '<div class="wa-tools">' +
+      '<div class="wa-chips">' + (chips || '<span class="muted" style="font-size:12px">אין הודעות מהירות</span>') + '</div>' +
+      '<div class="wa-compose">' +
+        '<textarea class="inp" id="waBody" rows="2" placeholder="כתבו הודעה, או בחרו הודעה מהירה למעלה\u2026">' + esc(waDraft) + '</textarea>' +
+        '<div class="wa-btns">' +
+          '<button class="btn btn-ghost btn-sm" id="waCarBtn" title="שליחת דגם מהמלאי">\ud83d\ude97 דגם</button>' +
+          '<button class="btn btn-ghost btn-sm" id="waCopy" title="העתקה כדי להדביק ב-Heyy">\ud83d\udccb העתקה</button>' +
+          '<button class="btn btn-ghost btn-sm" id="waSched" title="תזמון לשעה מאוחרת יותר">\u23f0 תזמון</button>' +
+          '<button class="btn btn-sm" id="waQueue">הוספה לתור</button>' +
+        '</div>' +
+      '</div>' +
+      '<div id="waOut" class="wa-out"></div>' +
+    '</div>';
+  }
+
+  function wireTools(t) {
+    var body = $('waBody'), msg = null;
+    var say = function (txt, good) {
+      var o = $('waOut'); if (!o) return;
+      o.innerHTML = '<span style="color:' + (good ? 'var(--ok)' : 'var(--danger)') + '">' + esc(txt) + '</span>';
+    };
+    //  {{שם}} מוחלף בשם איש הקשר, {{נציג}} בשם המשתמש המחובר
+    var fill = function (s2) {
+      return String(s2 || '')
+        .split('{{שם}}').join((t.contact_name || '').split(' ')[0] || 'שלום')
+        .split('{{נציג}}').join((window.C2B && window.C2B.fullName) || '')
+        .split('{{רכב}}').join(t.lead_car || 'הרכב');
+    };
+    $('waPane').querySelectorAll('[data-tpl]').forEach(function (b) {
+      b.onclick = function () {
+        var x = waTpl.filter(function (y) { return y.id === this.dataset.tpl; }.bind(this))[0];
+        if (!x) return;
+        body.value = (body.value ? body.value + '\n' : '') + fill(x.body);
+        waDraft = body.value; body.focus();
+      };
+    });
+    if (body) body.oninput = function () { waDraft = this.value; };
+
+    if ($('waCopy')) $('waCopy').onclick = function () {
+      if (!body.value.trim()) return say('אין מה להעתיק', false);
+      navigator.clipboard.writeText(body.value).then(
+        function () { say('\u2714 הועתק \u2014 אפשר להדביק ב-Heyy', true); },
+        function () { say('ההעתקה נחסמה בדפדפן', false); });
+    };
+    if ($('waCarBtn')) $('waCarBtn').onclick = function () { carPicker(t, body); };
+    if ($('waSched')) $('waSched').onclick = function () { schedBox(t, body, say); };
+    if ($('waQueue')) $('waQueue').onclick = function () { queueMsg(t, body.value, null, null, say); };
+    loadOutbox(t);
+  }
+
+  function queueMsg(t, text, when, carId, say) {
+    if (!String(text || '').trim()) return say('ההודעה ריקה', false);
+    db.from('wa_outbox').insert({
+      thread_id: t.id, body: text, kind: carId ? 'car' : 'text', car_id: carId || null,
+      scheduled_at: when || null, created_by: (window.C2B && window.C2B.userId) || null,
+    }).then(function (r) {
+      if (r.error) return say(r.error.message, false);
+      say(when ? '\u2714 תוזמן ל-' + fmtDateTime(when) : '\u2714 נוסף לתור', true);
+      var b = $('waBody'); if (b) { b.value = ''; waDraft = ''; }
+      loadOutbox(t);
+    });
+  }
+
+  function loadOutbox(t) {
+    var box = $('waOut'); if (!box) return;
+    db.from('wa_outbox').select('id,body,scheduled_at,status,created_at,kind')
+      .eq('thread_id', t.id).eq('status', 'queued').order('created_at', { ascending: false }).limit(20)
+      .then(function (r) {
+        var rows = r.data || [];
+        if (!rows.length) { box.innerHTML = ''; return; }
+        box.innerHTML = '<div class="wa-queue"><b>\u23f3 ' + rows.length + ' ממתינות לשליחה</b>' +
+          '<span class="muted"> \u00b7 יישלחו אוטומטית ברגע שחיבור השליחה ל-Heyy יופעל</span>' +
+          rows.map(function (q) {
+            return '<div class="wa-q"><span>' + (q.kind === 'car' ? '\ud83d\ude97 ' : '') +
+              esc(String(q.body || '').replace(/\n/g, ' ').slice(0, 70)) + '</span>' +
+              '<span class="muted">' + (q.scheduled_at ? '\u23f0 ' + esc(fmtDateTime(q.scheduled_at)) : 'מיד') + '</span>' +
+              '<button class="btn btn-ghost btn-sm" data-qcancel="' + esc(q.id) + '">ביטול</button></div>';
+          }).join('') + '</div>';
+        box.querySelectorAll('[data-qcancel]').forEach(function (b) {
+          b.onclick = function () {
+            db.from('wa_outbox').update({ status: 'cancelled' }).eq('id', this.dataset.qcancel)
+              .then(function () { loadOutbox(t); });
+          };
+        });
+      });
+  }
+
+  function schedBox(t, body, say) {
+    if (!body.value.trim()) return say('כתבו הודעה לפני התזמון', false);
+    var bg = document.createElement('div'); bg.className = 'adm-bg';
+    var d = new Date(Date.now() + 3600000);
+    var pad = function (n) { return String(n).padStart(2, '0'); };
+    var val = d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + 'T' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+    bg.innerHTML = '<div class="adm" style="max-width:420px"><div class="adm-hd"><h3>\u23f0 תזמון הודעה</h3>' +
+      '<button class="adm-x" data-admx>\u2715</button></div><div class="adm-body">' +
+      '<div class="field"><label>מתי לשלוח</label><input class="inp" type="datetime-local" id="waWhen" value="' + val + '"></div>' +
+      '<div class="row" style="gap:8px;flex-wrap:wrap;margin-bottom:12px">' +
+        '<button class="btn btn-ghost btn-sm" data-in="60">בעוד שעה</button>' +
+        '<button class="btn btn-ghost btn-sm" data-in="180">בעוד 3 שעות</button>' +
+        '<button class="btn btn-ghost btn-sm" data-in="1440">מחר באותה שעה</button>' +
+        '<button class="btn btn-ghost btn-sm" data-morning="1">מחר ב-9:00</button></div>' +
+      '<div class="sec-note" style="margin:0 0 12px">' + esc(String(body.value).slice(0, 160)) + '</div>' +
+      '<button class="btn" id="waSchedOk">תזמן</button></div></div>';
+    document.body.appendChild(bg);
+    var close = function () { bg.remove(); };
+    bg.addEventListener('click', function (e) {
+      if (e.target === bg || e.target.closest('[data-admx]')) return close();
+      var q = e.target.closest('[data-in]');
+      if (q) { var n = new Date(Date.now() + (+q.dataset.in) * 60000);
+        bg.querySelector('#waWhen').value = n.getFullYear() + '-' + pad(n.getMonth() + 1) + '-' + pad(n.getDate()) + 'T' + pad(n.getHours()) + ':' + pad(n.getMinutes()); }
+      if (e.target.closest('[data-morning]')) { var m = new Date(); m.setDate(m.getDate() + 1); m.setHours(9, 0, 0, 0);
+        bg.querySelector('#waWhen').value = m.getFullYear() + '-' + pad(m.getMonth() + 1) + '-' + pad(m.getDate()) + 'T09:00'; }
+      if (e.target.id === 'waSchedOk') {
+        var v = bg.querySelector('#waWhen').value;
+        if (!v) return;
+        close(); queueMsg(t, body.value, new Date(v).toISOString(), null, say);
+      }
+    });
+  }
+
+  //  ---------- בורר הדגמים ----------
+  function carPicker(t, body) {
+    var bg = document.createElement('div'); bg.className = 'adm-bg';
+    var render = function (q) {
+      var list = waCars.filter(function (c) {
+        if (!q) return true;
+        return ((c.brand || '') + ' ' + (c.name || '') + ' ' + (c.trim || '')).toLowerCase().indexOf(q.toLowerCase()) >= 0;
+      }).slice(0, 60);
+      return list.map(function (c) {
+        return '<div class="wa-car" data-car="' + esc(c.id) + '">' +
+          (c.img ? '<img src="' + esc(c.img) + '" alt="">' : '<span class="noimg">\ud83d\ude97</span>') +
+          '<span class="mid"><b>' + esc([c.brand, c.name].filter(Boolean).join(' ')) + '</b>' +
+            '<span class="muted">' + esc([c.trim, c.year, c.condition].filter(Boolean).join(' \u00b7 ')) + '</span></span>' +
+          '<span class="pr">' + (c.monthly ? Number(c.monthly).toLocaleString('en-US') + ' \u20aa/ח' : (c.price ? Number(c.price).toLocaleString('en-US') + ' \u20aa' : '')) + '</span></div>';
+      }).join('') || '<p class="empty">לא נמצא דגם</p>';
+    };
+    bg.innerHTML = '<div class="adm" style="max-width:620px"><div class="adm-hd"><h3>\ud83d\ude97 שליחת דגם מהמלאי</h3>' +
+      '<button class="adm-x" data-admx>\u2715</button></div><div class="adm-body">' +
+      '<input class="inp" id="waCarQ" placeholder="חיפוש דגם\u2026" style="margin-bottom:10px">' +
+      '<div class="wa-cars" id="waCarList">' + render('') + '</div>' +
+      '<div id="waCarPrev"></div></div></div>';
+    document.body.appendChild(bg);
+    bg.querySelector('#waCarQ').addEventListener('input', function () {
+      bg.querySelector('#waCarList').innerHTML = render(this.value);
+    });
+    bg.addEventListener('click', function (e) {
+      if (e.target === bg || e.target.closest('[data-admx]')) return bg.remove();
+      var row = e.target.closest('[data-car]');
+      if (row) {
+        var c = waCars.filter(function (x) { return x.id === row.dataset.car; })[0];
+        if (!c) return;
+        var txt = carCard(c, null);
+        bg.querySelector('#waCarPrev').innerHTML =
+          '<div class="sec-title" style="margin-top:14px">תצוגה מקדימה</div>' +
+          '<div class="wa-preview">' + (c.img ? '<img src="' + esc(c.img) + '" alt="">' : '') +
+            '<div class="wa-m out" style="max-width:100%">' + esc(txt) + '</div></div>' +
+          '<div class="row" style="gap:8px;margin-top:12px;flex-wrap:wrap">' +
+            '<button class="btn btn-sm" id="waCarUse">הוספה להודעה</button>' +
+            '<button class="btn btn-ghost btn-sm" id="waCarCopy">\ud83d\udccb העתקה</button>' +
+            '<span class="muted" style="font-size:12px">בלי מחיר קנייה ובלי נתונים פנימיים</span></div>';
+        bg.querySelector('#waCarUse').onclick = function () {
+          body.value = (body.value ? body.value + '\n\n' : '') + txt; waDraft = body.value; bg.remove(); body.focus();
+        };
+        bg.querySelector('#waCarCopy').onclick = function () {
+          navigator.clipboard.writeText(txt + (c.img ? '\n' + c.img : ''));
+          this.textContent = '\u2714 הועתק';
+        };
+      }
+    });
   }
 
   function heyyHead(nums, numById, isAdm, n) {
@@ -2293,11 +2510,11 @@
                      : '<span class="muted" style="font-size:12px">אין ליד מקושר</span>') +
         '</div>' +
         '<div class="wa-msgs" id="waMsgs">' + (html || '<p class="empty">אין הודעות</p>') + '</div>' +
-        '<div class="wa-compose"><input class="inp" placeholder="השיחה מנוהלת ב-Heyy \u2014 שליחה מכאן תתווסף בהמשך" disabled>' +
-          '<button class="btn btn-sm" disabled>שליחה</button></div>';
+        waTools(t);
       var el = $('waMsgs'); if (el) el.scrollTop = el.scrollHeight;
       var bt = $('waPane').querySelector('[data-waopen]');
       if (bt) bt.addEventListener('click', function () { window.C2B_openLeadCard && window.C2B_openLeadCard(this.dataset.waopen); });
+      wireTools(t);
       db.rpc('wa_mark_read', { p_thread: t.id }).then(function () {}, function () {});
     });
   }
