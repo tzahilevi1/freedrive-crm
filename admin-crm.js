@@ -2981,12 +2981,26 @@
     setTimeout(function () { document.addEventListener('click', closeDatePopup, { once: true }); }, 0);
   }
   // drawer popup listing leads → click opens the lead card
-  function leadsPopup(title, list) {
-    C.openDrawer('<div class="dw-head"><h3 style="margin:0">' + esc(title) + ' <span class="muted" style="font-size:13px">(' + list.length + ')</span></h3></div>' +
-      '<div class="dw-body">' + (list.length ? list.map(function (l) {
-        return '<div data-lead="' + l.id + '" style="padding:11px 12px;border-bottom:1px solid var(--line);cursor:pointer;border-radius:8px" onmouseover="this.style.background=\'var(--surface-2)\'" onmouseout="this.style.background=\'\'">' +
+  //  note = משפט שמסביר מאיפה המספר הגיע, כדי שלא יהיה פער שבין
+  //  מה שכתוב בכרטיס לבין מה שרואים ברשימה.
+  //  _date מוצג לכל שורה וגם קובע את המיון (החדש למעלה),
+  //  אלא אם השורה נשאה _sort מפורש. שורה בלי id אינה לחיצה.
+  function leadsPopup(title, list, note) {
+    var rows = list.slice().sort(function (a, b) {
+      if (a._sort != null || b._sort != null) return (a._sort || 0) - (b._sort || 0);
+      return new Date(b._date || 0) - new Date(a._date || 0);
+    });
+    C.openDrawer('<div class="dw-head"><h3 style="margin:0">' + esc(title) + ' <span class="muted" style="font-size:13px">(' + rows.length + ')</span></h3></div>' +
+      '<div class="dw-body">' + (note ? '<div class="dw-note">' + esc(note) + '</div>' : '') +
+      (rows.length ? rows.map(function (l) {
+        var meta = l._meta || [l.phone, l.car, l.brand, l._extra];
+        meta = meta.filter(Boolean).map(function (x) { return esc(x); }).join(' · ');
+        return '<div' + (l.id ? ' data-lead="' + l.id + '"' : '') + ' style="padding:11px 12px;border-bottom:1px solid var(--line);border-radius:8px' + (l.id ? ';cursor:pointer' : '') + '"' +
+          (l.id ? ' onmouseover="this.style.background=\'var(--surface-2)\'" onmouseout="this.style.background=\'\'"' : '') + '>' +
           '<div style="display:flex;justify-content:space-between;gap:8px"><b>' + esc(l.name || 'ליד') + '</b>' + (l.status ? badge(l.status) : '') + '</div>' +
-          '<div class="muted" style="font-size:12.5px;margin-top:3px">' + esc(l.phone || '') + (l.car ? ' · ' + esc(l.car) : '') + (l.brand ? ' · ' + esc(l.brand) : '') + (l._extra ? ' · ' + esc(l._extra) : '') + '</div></div>';
+          (meta ? '<div class="muted" style="font-size:12.5px;margin-top:3px">' + meta + '</div>' : '') +
+          (l._date ? '<div class="dw-row-date">' + esc((l._dateLabel || 'נוצר') + ' ' + fmt(l._date)) + '</div>' : '') +
+          '</div>';
       }).join('') : '<p class="empty">אין רשומות</p>') + '</div>');
     document.getElementById('drawer').querySelectorAll('[data-lead]').forEach(function (el) { el.addEventListener('click', function () { C.closeDrawer(); window.C2B_openLeadCard(el.dataset.lead); }); });
   }
@@ -3003,7 +3017,7 @@
     var dealsQ = db.from('deals').select('id,lead_id,client_name,car_make,car_model,total,stage,status,created_at,signed_at,has_signature');
     if (since) { leadsQ = leadsQ.gte('created_at', since); dealsQ = dealsQ.gte('created_at', since); }
     Promise.all([
-      leadsQ, db.from('tasks').select('done'), db.from('appointments').select('status'),
+      leadsQ, db.from('tasks').select('id,title,due_at,done,lead_id,created_at'), db.from('appointments').select('status'),
       dealsQ, db.from('profiles').select('user_id,full_name')
     ]).then(function (res) {
       if (res[0].error) return errBox(res[0].error.message);
@@ -3048,11 +3062,11 @@
     view(
       pTabs +
       '<div class="cards" style="margin-top:14px">' +
-        C.stat('לידים חדשים היום', todayN, true) + C.stat('נחתמו היום', dealsTodayN, true) +
-        C.stat('סה"כ לידים', leads.length) + C.stat('עסקאות חתומות', deals.length) +
-        C.stat('פגישות נקבעו', by.meeting_set || 0) +
-        C.stat('הצעות פתוחות', openQuotes) + C.stat('אחוז סגירה', conv + '%') +
-        C.stat('זמן תגובה', avgRt ? avgRt + ' דק\'' : '—') + C.stat('משימות פתוחות', openTasks) +
+        C.stat('לידים חדשים היום', todayN, true, 'today') + C.stat('נחתמו היום', dealsTodayN, true, 'signedToday') +
+        C.stat('סה"כ לידים', leads.length, null, 'leads') + C.stat('עסקאות חתומות', deals.length, null, 'deals') +
+        C.stat('פגישות נקבעו', by.meeting_set || 0, null, 'meetings') +
+        C.stat('הצעות פתוחות', openQuotes, null, 'quotes') + C.stat('אחוז סגירה', conv + '%', null, 'conv') +
+        C.stat('זמן תגובה', avgRt ? avgRt + ' דק\'' : '—', null, 'rt') + C.stat('משימות פתוחות', openTasks, null, 'tasks') +
       '</div>' +
       '<div class="grid2">' +
         '<div class="card">' + hdr('לידים לאורך זמן', 'chart') + '<div id="dashChart"></div></div>' +
@@ -3065,6 +3079,64 @@
       '</div>' +
       '<div class="card">' + hdr('מקורות מובילים', 'source') + '<div class="table-scroll"><table><tbody id="dashSource"></tbody></table></div></div>'
     );
+    //  כל כרטיס נגזר מרשימה מסוימת, והלחיצה מחזירה בדיוק את
+    //  אותה רשימה — אחרת המספר והפירוט יסתרו זה את זה.
+    var kLeadById = {}; allLeads.forEach(function (l) { kLeadById[l.id] = l; });
+    function kLead(l) { return { id: l.id, name: l.name, phone: l.phone, car: l.car, brand: l.brand, status: l.status, _date: l.created_at }; }
+    function kDeal(d, dateField, label) {
+      var l = kLeadById[d.lead_id] || {};
+      return { id: d.lead_id, name: d.client_name || l.name, phone: l.phone,
+        car: ((d.car_make || '') + ' ' + (d.car_model || '')).trim() || l.car,
+        brand: l.brand, status: l.status, _extra: d.total ? nis(d.total) : '',
+        _date: dateField === 'signed' ? dealAt(d) : d.created_at, _dateLabel: label };
+    }
+    var rangeTxt = fltLabel(dashRange);
+    var KPI = {
+      today: function () { return ['לידים חדשים היום',
+        allLeads.filter(function (l) { return new Date(l.created_at || 0).getTime() >= todayS; }).map(kLead),
+        'לפי מועד יצירת הליד · כרטיס של היום ולכן אינו מושפע מהמסנן העליון']; },
+      signedToday: function () { return ['נחתמו היום',
+        signed.filter(function (d) { return new Date(dealAt(d) || 0).getTime() >= todayS; }).map(function (d) { return kDeal(d, 'signed', 'נחתם'); }),
+        'לפי מועד החתימה · כרטיס של היום ולכן אינו מושפע מהמסנן העליון']; },
+      leads: function () { return ['סה"כ לידים', leads.map(kLead), rangeTxt]; },
+      deals: function () { return ['עסקאות חתומות',
+        deals.map(function (d) { return kDeal(d, 'signed', 'נחתם'); }),
+        'חתומות ולא מבוטלות · ' + rangeTxt]; },
+      meetings: function () { return ['פגישות נקבעו',
+        leads.filter(function (l) { return (l.status || 'new') === 'meeting_set'; }).map(kLead),
+        'לידים בסטטוס “נקבעה פגישה” · ' + rangeTxt]; },
+      quotes: function () { return ['הצעות פתוחות',
+        allDeals.filter(function (d) { return !d.has_signature && d.status !== 'cancelled' && d.stage !== 'cancelled'; })
+          .map(function (d) { return kDeal(d, 'created', 'נפתח'); }),
+        'תיקים שנפתחו וטרם נחתמו · כל הזמנים, ללא תלות במסנן']; },
+      conv: function () { return ['אחוז סגירה — ' + conv + '%',
+        deals.map(function (d) { return kDeal(d, 'signed', 'נחתם'); }),
+        deals.length + ' עסקאות חתומות מתוך ' + leads.length + ' לידים · ' + rangeTxt]; },
+      rt: function () {
+        var rows = leads.filter(function (l) { return l.first_response_at; }).map(function (l) {
+          var mins = Math.round((new Date(l.first_response_at) - new Date(l.created_at)) / 60000);
+          var r = kLead(l); r._extra = 'נענה תוך ' + mins + ' דק\''; r._sort = -mins; return r;
+        });
+        return ['זמן תגובה ראשון', rows,
+          'ממוצע ' + avgRt + ' דק\' על ' + rows.length + ' לידים שנענו · האיטיים ראשונים · ' + rangeTxt];
+      },
+      tasks: function () { return ['משימות פתוחות',
+        tasks.filter(function (t) { return !t.done; }).map(function (t) {
+          var l = kLeadById[t.lead_id] || {};
+          var over = t.due_at && new Date(t.due_at).getTime() < Date.now();
+          return { id: t.lead_id || null, name: t.title || 'משימה',
+            _meta: [l.name ? 'לקוח: ' + l.name : null,
+                    t.due_at ? (over ? '⚠ באיחור — ' : 'למועד ') + fmt(t.due_at) : 'ללא מועד'],
+            _date: t.created_at };
+        }),
+        'כל המשימות שטרם סומנו כבוצעו · ללא תלות במסנן']; }
+    };
+    C.$('view').querySelectorAll('[data-kpi]').forEach(function (el) {
+      el.addEventListener('click', function () {
+        var f = KPI[el.dataset.kpi]; if (!f) return;
+        var r = f(); leadsPopup(r[0], r[1], r[2]);
+      });
+    });
     C.$('dashPeriod').addEventListener('click', function (e) {
       var b = e.target.closest('[data-p]');
       if (b) {
@@ -3097,6 +3169,8 @@
     var leads = allLeads.filter(function (l) { return inRange(l.created_at, r); });
     var deals = allDeals.filter(function (d) { return inRange(d.created_at, r); });
     var leadById = {}; allLeads.forEach(function (l) { leadById[l.id] = l; });
+    //  הרשימות הנפתחות מציגות תאריך יצירה לכל שורה
+    function leadRowD(l) { return { id: l.id, name: l.name, phone: l.phone, car: l.car, brand: l.brand, status: l.status, _date: l.created_at }; }
     var ff = blockF[k];   // סינון שדה+ערך פר-בלוק
     if (ff && ff.field && ff.value) {
       leads = leads.filter(function (l) { return matchField(l, ff); });
@@ -3109,12 +3183,12 @@
     } else if (k === 'status') {
       var by = {}; leads.forEach(function (l) { by[l.status || 'new'] = (by[l.status || 'new'] || 0) + 1; });
       C.$('dashStatus').innerHTML = STATUSES.filter(function (s) { return by[s.k]; }).map(function (s) { var pct = leads.length ? Math.round(by[s.k] / leads.length * 100) : 0; return '<tr data-status="' + s.k + '" style="cursor:pointer"><td>' + badge(s.k) + '</td><td>' + by[s.k] + '</td><td style="width:45%"><div class="bar"><span style="width:' + pct + '%;background:' + s.color + '"></span></div></td></tr>'; }).join('') || '<tr><td class="empty">אין נתונים</td></tr>';
-      C.$('dashStatus').querySelectorAll('[data-status]').forEach(function (tr) { tr.addEventListener('click', function () { var kk = tr.dataset.status; leadsPopup(stDef(kk).label, leads.filter(function (l) { return (l.status || 'new') === kk; })); }); });
+      C.$('dashStatus').querySelectorAll('[data-status]').forEach(function (tr) { tr.addEventListener('click', function () { var kk = tr.dataset.status; leadsPopup(stDef(kk).label, leads.filter(function (l) { return (l.status || 'new') === kk; }).map(leadRowD), fltLabel(blockR['status'])); }); });
     } else if (k === 'stage') {
       var byStage = {}; DEAL_STAGES.forEach(function (s) { byStage[s.k] = 0; }); deals.forEach(function (d) { byStage[d.stage || 'initial'] = (byStage[d.stage || 'initial'] || 0) + 1; });
       var maxStage = Math.max(1, Math.max.apply(null, DEAL_STAGES.map(function (s) { return byStage[s.k] || 0; })));
       C.$('dashStage').innerHTML = DEAL_STAGES.map(function (s) { var n = byStage[s.k] || 0; return '<tr data-stage="' + s.k + '" style="cursor:pointer"><td>' + stageBadge(s.k) + '</td><td>' + n + '</td><td style="width:55%"><div class="bar"><span style="width:' + Math.round(n / maxStage * 100) + '%;background:' + s.color + '"></span></div></td></tr>'; }).join('');
-      C.$('dashStage').querySelectorAll('[data-stage]').forEach(function (tr) { tr.addEventListener('click', function () { var kk = tr.dataset.stage; var list = deals.filter(function (d) { return (d.stage || 'initial') === kk; }).map(function (d) { var l = leadById[d.lead_id] || {}; return { id: d.lead_id, name: d.client_name || l.name, phone: l.phone, car: ((d.car_make || '') + ' ' + (d.car_model || '')).trim() || l.car, brand: l.brand, status: l.status, _extra: d.total ? nis(d.total) : '' }; }); leadsPopup('שלב תיק: ' + stageDef(kk).label, list); }); });
+      C.$('dashStage').querySelectorAll('[data-stage]').forEach(function (tr) { tr.addEventListener('click', function () { var kk = tr.dataset.stage; var list = deals.filter(function (d) { return (d.stage || 'initial') === kk; }).map(function (d) { var l = leadById[d.lead_id] || {}; return { id: d.lead_id, name: d.client_name || l.name, phone: l.phone, car: ((d.car_make || '') + ' ' + (d.car_model || '')).trim() || l.car, brand: l.brand, status: l.status, _extra: d.total ? nis(d.total) : '', _date: d.created_at }; }); leadsPopup('שלב תיק: ' + stageDef(kk).label, list, 'לפי מועד פתיחת התיק · ' + fltLabel(blockR['stage'])); }); });
     } else if (k === 'brand') {
       // רק המותגים-השיווקיים שלנו (מ-brand_companies) — לא יצרנים/ריקים
       var mkt = (window.C2B && window.C2B.marketingBrands) || [];
@@ -3122,18 +3196,18 @@
       var brands = Object.keys(byBrand).sort(function (a, b) { return byBrand[b] - byBrand[a]; }).slice(0, 10);
       var maxBrand = brands.length ? byBrand[brands[0]] : 1;
       C.$('dashBrand').innerHTML = brands.map(function (b) { return '<tr data-brand="' + esc(b) + '" style="cursor:pointer"><td>' + esc(b) + '</td><td>' + byBrand[b] + '</td><td style="width:50%"><div class="bar"><span style="width:' + Math.round(byBrand[b] / maxBrand * 100) + '%"></span></div></td></tr>'; }).join('') || '<tr><td class="empty">אין נתונים</td></tr>';
-      C.$('dashBrand').querySelectorAll('[data-brand]').forEach(function (tr) { tr.addEventListener('click', function () { var b = tr.dataset.brand; leadsPopup('מותג: ' + b, leads.filter(function (l) { return (l.brand || 'לא ידוע') === b; })); }); });
+      C.$('dashBrand').querySelectorAll('[data-brand]').forEach(function (tr) { tr.addEventListener('click', function () { var b = tr.dataset.brand; leadsPopup('מותג: ' + b, leads.filter(function (l) { return (l.brand || 'לא ידוע') === b; }).map(leadRowD), fltLabel(blockR['brand'])); }); });
     } else if (k === 'agent') {
       var byAgent = {}; leads.forEach(function (l) { var n = prof[l.assigned_to] || 'לא שויך'; byAgent[n] = byAgent[n] || { t: 0, w: 0 }; byAgent[n].t++; if (l.status === 'won') byAgent[n].w++; });
       var agents = Object.keys(byAgent).sort(function (a, b) { return byAgent[b].t - byAgent[a].t; });
       C.$('dashAgent').innerHTML = agents.map(function (n) { return '<tr data-agent="' + esc(n) + '" style="cursor:pointer"><td>' + esc(n) + '</td><td>' + byAgent[n].t + '</td><td>' + byAgent[n].w + '</td></tr>'; }).join('') || '<tr><td class="empty">אין נתונים</td></tr>';
-      C.$('dashAgent').querySelectorAll('[data-agent]').forEach(function (tr) { tr.addEventListener('click', function () { var n = tr.dataset.agent; leadsPopup('סוכן: ' + n, leads.filter(function (l) { return (prof[l.assigned_to] || 'לא שויך') === n; })); }); });
+      C.$('dashAgent').querySelectorAll('[data-agent]').forEach(function (tr) { tr.addEventListener('click', function () { var n = tr.dataset.agent; leadsPopup('סוכן: ' + n, leads.filter(function (l) { return (prof[l.assigned_to] || 'לא שויך') === n; }).map(leadRowD), fltLabel(blockR['agent'])); }); });
     } else if (k === 'source') {
       var bySource = {}; leads.forEach(function (l) { var s = l.source || 'לא ידוע'; bySource[s] = (bySource[s] || 0) + 1; });
       var topSrc = Object.keys(bySource).sort(function (a, b) { return bySource[b] - bySource[a]; }).slice(0, 8);
       var maxSrc = topSrc.length ? bySource[topSrc[0]] : 1;
       C.$('dashSource').innerHTML = topSrc.map(function (s) { return '<tr data-source="' + esc(s) + '" style="cursor:pointer"><td>' + esc(s) + '</td><td>' + bySource[s] + '</td><td style="width:55%"><div class="bar"><span style="width:' + Math.round(bySource[s] / maxSrc * 100) + '%"></span></div></td></tr>'; }).join('') || '<tr><td class="empty">אין נתונים</td></tr>';
-      C.$('dashSource').querySelectorAll('[data-source]').forEach(function (tr) { tr.addEventListener('click', function () { var s = tr.dataset.source; leadsPopup('מקור: ' + s, leads.filter(function (l) { return (l.source || 'לא ידוע') === s; })); }); });
+      C.$('dashSource').querySelectorAll('[data-source]').forEach(function (tr) { tr.addEventListener('click', function () { var s = tr.dataset.source; leadsPopup('מקור: ' + s, leads.filter(function (l) { return (l.source || 'לא ידוע') === s; }).map(leadRowD), fltLabel(blockR['source'])); }); });
     }
   }
   function svgBars(days) {

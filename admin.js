@@ -95,13 +95,14 @@
   function view(html) { $('view').innerHTML = html; }
   function loading() { view('<div class="loading">טוען…</div>'); }
   function errBox(msg) { view('<div class="card"><p class="err">שגיאה: ' + esc(msg) + '</p></div>'); }
-  function stat(k, v, trend) {
+  //  key הופך את הכרטיס ללחיצ, והמסך שמציג אותו רושם מה לפתוח.
+  function stat(k, v, trend, key) {
     // trend===true נועד רק לסמן כרטיס "היום" (לא טקסט מגמה) — בעבר הודפס "true ▲"; עכשיו מוצג תג "היום".
     var live = trend === true;
     var ts = (trend && !live) ? String(trend) : '';
     var t = ts ? '<div class="t ' + (ts[0] === '-' ? 'down' : 'up') + '">' + (ts[0] === '-' ? '▼ ' : '▲ ') + esc(ts) + '</div>'
               : (live ? '<div class="t up">● היום</div>' : '');
-    return '<div class="kpi"><div class="k">' + esc(k) + '</div><div class="v">' + esc(v) + '</div>' + t + '</div>';
+    return '<div class="kpi' + (key ? ' click" data-kpi="' + esc(key) : '') + '"><div class="k">' + esc(k) + '</div><div class="v">' + esc(v) + '</div>' + t + '</div>';
   }
 
   // ---------- drawer ----------
