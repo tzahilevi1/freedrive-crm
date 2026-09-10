@@ -179,16 +179,31 @@
   $('burger').addEventListener('click', function () { var o = $('side').classList.toggle('open'); if (window.innerWidth <= 820) $('overlay').classList.toggle('open', o); });
 
   // ---------- tasks bell ----------
+  //  שתי לשוניות: מה שכבר עבר המועד ומה שעוד לפנינו. חלוקה לפי due_at
+  //  ולא לפי סדר הכנסה — משימה באיחור היא הדבר היחיד שדורש פעולה עכשיו.
+  var bellTab = 'late';
   function loadBell() {
     db.from('tasks').select('id,title,due_at,done,lead_id').eq('done', false).order('due_at', { ascending: true }).then(function (r) {
       var tasks = r.data || [], now = Date.now();
-      var over = tasks.filter(function (t) { return t.due_at && new Date(t.due_at).getTime() < now; });
+      var isLate = function (t) { return t.due_at && new Date(t.due_at).getTime() < now; };
+      var late = tasks.filter(isLate), soon = tasks.filter(function (t) { return !isLate(t); });
       var b = $('bellBadge');
-      if (tasks.length) { b.textContent = tasks.length; b.classList.remove('hidden'); b.style.background = over.length ? 'var(--danger)' : 'var(--ok)'; } else b.classList.add('hidden');
-      $('bellMenu').innerHTML = tasks.map(function (t) {
-        var isOver = t.due_at && new Date(t.due_at).getTime() < now;
-        return '<div class="bt ' + (isOver ? 'over' : 'up') + '"' + (t.lead_id ? ' data-lead="' + t.lead_id + '"' : '') + '><span class="d"></span><div style="flex:1"><div>' + esc(t.title) + '</div><div class="muted" style="font-size:12px">' + (t.due_at ? fmtDateTime(t.due_at) : 'ללא מועד') + '</div></div></div>';
-      }).join('') || '<div class="bt muted">אין משימות פתוחות 🎉</div>';
+      if (tasks.length) { b.textContent = tasks.length; b.classList.remove('hidden'); b.style.background = late.length ? 'var(--danger)' : 'var(--ok)'; } else b.classList.add('hidden');
+      //  אם אין משימות באיחור אין טעם לפתוח על לשונית ריקה
+      if (bellTab === 'late' && !late.length && soon.length) bellTab = 'soon';
+      var list = bellTab === 'late' ? late : soon;
+      $('bellMenu').innerHTML =
+        '<div class="bell-tabs">' +
+          '<button class="late' + (bellTab === 'late' ? ' on' : '') + '" data-btab="late">\u23f0 עבר המועד (' + late.length + ')</button>' +
+          '<button class="soon' + (bellTab === 'soon' ? ' on' : '') + '" data-btab="soon">\u2705 עוד לפנינו (' + soon.length + ')</button>' +
+        '</div>' +
+        (list.map(function (t) {
+          var over = isLate(t);
+          return '<div class="bt ' + (over ? 'over' : 'up') + '"' + (t.lead_id ? ' data-lead="' + t.lead_id + '"' : '') + '><span class="d"></span><div style="flex:1"><div>' + esc(t.title) + '</div><div class="muted" style="font-size:12px">' + (t.due_at ? fmtDateTime(t.due_at) : 'ללא מועד') + '</div></div></div>';
+        }).join('') || '<div class="bt muted">' + (bellTab === 'late' ? 'אין משימות באיחור \ud83c\udf89' : 'אין משימות קרובות') + '</div>');
+      $('bellMenu').querySelectorAll('[data-btab]').forEach(function (el) {
+        el.addEventListener('click', function (e) { e.stopPropagation(); bellTab = el.dataset.btab; loadBell(); });
+      });
       $('bellMenu').querySelectorAll('.bt[data-lead]').forEach(function (el) { el.addEventListener('click', function () { $('bellMenu').classList.add('hidden'); window.C2B_openLeadCard(el.dataset.lead); }); });
     }).catch(function () {});
   }
@@ -2320,7 +2335,7 @@
   //  השיחה שעבורה כבר נפתח בוחר התבניות אוטומטית
   var waAutoTpl = null;
   //  סינון לפי סטטוס ליד, חיפוש בתוך השיחה, והודעה שעונים לה
-  var heyySt = '', waFind = '', waReply = null, waChan = null;
+  var heyySt = '', waReply = null, waChan = null;
 
   //  ---------- כרטיס הרכב ----------
   //  רשימת היתר מפורשת. extra מכיל buy_price ו-list_price, ושליפה
@@ -2886,7 +2901,11 @@
     }).select('id,status,name,car').single().then(function (r) {
       if (r.error) return cb(null, r.error.message);
       db.from('wa_threads').update({ lead_id: r.data.id }).eq('id', t.id).then(function () {
-        t.lead_id = r.data.id; waLeads[r.data.id] = r.data; cb(r.data.id, null);
+        t.lead_id = r.data.id; waLeads[r.data.id] = r.data;
+        //  קבצים שהלקוח שלח לפני שהיה ליד — נכנסים לתיק עכשיו
+        db.functions.invoke('heyy-send', { body: { action: 'import_docs', thread_id: t.id } })
+          .then(function () {}, function () {});
+        cb(r.data.id, null);
       });
     });
   }
@@ -3243,19 +3262,6 @@
 
   //  \u05de\u05e1\u05de\u05e0\u05ea \u05d0\u05ea \u05d4\u05d4\u05d5\u05d3\u05e2\u05d5\u05ea \u05d4\u05ea\u05d5\u05d0\u05de\u05d5\u05ea \u05d5\u05d2\u05d5\u05dc\u05dc\u05ea \u05dc\u05e8\u05d0\u05e9\u05d5\u05e0\u05d4, \u05d1\u05dc\u05d9 \u05dc\u05d2\u05e2\u05ea
   //  \u05d1-DOM \u05de\u05e2\u05d1\u05e8 \u05dc\u05de\u05d7\u05dc\u05e7\u05d4 \u05d0\u05d7\u05ea. \u05d1\u05dc\u05d9 \u05e9\u05dc\u05d9\u05e4\u05d4, \u05d1\u05dc\u05d9 \u05e8\u05d9\u05e0\u05d3\u05d5\u05e8, \u05d1\u05dc\u05d9 \u05e7\u05e4\u05d9\u05e6\u05d4.
-  function waHighlight() {
-    var el = $('waMsgs'); if (!el) return;
-    var q = String(waFind || '').trim().toLowerCase();
-    var first = null, n = 0;
-    el.querySelectorAll('.wa-m').forEach(function (m) {
-      var on = !!q && (m.dataset.txt || '').indexOf(q) >= 0;
-      m.classList.toggle('hit', on);
-      if (on) { n++; if (!first) first = m; }
-    });
-    var cnt = $('waFindN');
-    if (cnt) cnt.textContent = q ? (n ? n + ' \u05ea\u05d5\u05e6\u05d0\u05d5\u05ea' : '\u05d0\u05d9\u05df \u05ea\u05d5\u05e6\u05d0\u05d5\u05ea') : '';
-    if (first) first.scrollIntoView({ block: 'center' });
-  }
 
   //  ---------- \u05e6\u05d9\u05d5\u05e8 \u05d4\u05e8\u05e9\u05d9\u05de\u05d4 \u05d1\u05dc\u05d1\u05d3 ----------
   //  \u05e7\u05d5\u05d3\u05dd \u05db\u05dc \u05d4\u05e7\u05dc\u05d3\u05d4 \u05d1\u05d7\u05d9\u05e4\u05d5\u05e9 \u05d5\u05db\u05dc \u05e9\u05d9\u05e0\u05d5\u05d9 \u05e1\u05d8\u05d8\u05d5\u05e1 \u05e7\u05e8\u05d0\u05d5 \u05dc-renderHeyy,
@@ -3374,25 +3380,11 @@
           (t.lead_id ? '<button class="btn btn-ghost btn-sm" data-waopen="' + esc(t.lead_id) + '">\ud83d\udc64 כרטיס הליד</button>'
                      : '<button class="btn btn-sm" data-wanew="' + esc(t.id) + '">\u2795 צור ליד</button>') +
         '</div>' +
-        '<div class="wa-find"><input class="inp" id="waFind" placeholder="\ud83d\udd0e חיפוש בתוך השיחה\u2026" value="' + esc(waFind) + '">' +
-          '<span class="muted" id="waFindN" style="font-size:12px;align-self:center;white-space:nowrap"></span>' +
-          '<button class="btn btn-ghost btn-sm" id="waFindX">\u2715</button></div>' +
         '<div class="wa-msgs" id="waMsgs">' + (html || '<p class="empty">אין הודעות</p>') + '</div>' +
         waTools(t, winLeft);
       var el = $('waMsgs');
       //  \u05d1\u05d7\u05d9\u05e4\u05d5\u05e9 \u05d2\u05d5\u05dc\u05dc\u05d9\u05dd \u05dc\u05ea\u05d5\u05e6\u05d0\u05d4 \u05d4\u05e8\u05d0\u05e9\u05d5\u05e0\u05d4, \u05d0\u05d7\u05e8\u05ea \u05dc\u05e1\u05d5\u05e3
       if (el) el.scrollTop = el.scrollHeight;
-      var fi = $('waFind');
-      if (fi) {
-        //  \u05e1\u05d9\u05e0\u05d5\u05df \u05d1\u05e6\u05d3 \u05d4\u05dc\u05e7\u05d5\u05d7 \u05d1\u05dc\u05d1\u05d3. \u05e7\u05d5\u05d3\u05dd \u05db\u05dc \u05ea\u05d5 \u05e7\u05e8\u05d0 \u05dc-openThread,
-        //  \u05e9\u05e9\u05d5\u05dc\u05e3 \u05de\u05d7\u05d3\u05e9 \u05de\u05d4\u05de\u05e1\u05d3 \u05d5\u05de\u05e8\u05e0\u05d3\u05e8 \u05d4\u05db\u05dc \u2014 \u05de\u05e9\u05dd \u05d4\u05e7\u05e4\u05d9\u05e6\u05d5\u05ea.
-        fi.addEventListener('input', function () { waFind = this.value; waHighlight(); });
-        if (waFind) { fi.focus(); fi.setSelectionRange(waFind.length, waFind.length); }
-      }
-      if ($('waFindX')) $('waFindX').onclick = function () {
-        waFind = ''; if ($('waFind')) $('waFind').value = ''; waHighlight();
-      };
-      waHighlight();
       if (el) el.addEventListener('click', function (e) {
         var rb = e.target.closest('[data-reply]'); if (!rb) return;
         var m2 = (r.data || []).filter(function (x) { return x.id === rb.dataset.reply; })[0];

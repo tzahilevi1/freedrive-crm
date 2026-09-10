@@ -96,9 +96,13 @@
     var due = new Date().toISOString();
     db.from('profiles').select('user_id').eq('role', 'accounting').eq('active', true).then(function (r) {
       var accs = (r.data || []).map(function (p) { return p.user_id; });
-      var rows = accs.length ? accs.map(function (uid) { return { lead_id: leadId, title: title, assigned_to: uid, due_at: due }; })
-        : [{ lead_id: leadId, title: title, due_at: due }];
-      db.from('tasks').insert(rows).then(function () {});
+      //  בלי מנהלת חשבונות פעילה נוצרה קודם משימה ללא שיוך, והיא צפה
+      //  בפעמון ובמסך המשימות של כולם כאילו היא משימת מכירות. זו התראה
+      //  כספית ולא משימה של סוכן — בלי נמען היא נשארת בציר הזמן בלבד.
+      if (!accs.length) return;
+      db.from('tasks').insert(accs.map(function (uid) {
+        return { lead_id: leadId, title: title, assigned_to: uid, due_at: due };
+      })).then(function () {});
     });
     logActivity(leadId, 'system', 'התראה להנהלת חשבונות: עסקה בוטלה — ' + (reason || ''));
   }
