@@ -2313,6 +2313,8 @@
   //  שהסוכן יוכל להדביק ב-Heyy כבר עכשיו. כפתור שליחה שלא שולח באמת
   //  היה גרוע יותר מכלי שאומר בדיוק מה הוא עושה.
   var waTpl = [], waCars = [], waDraft = '', waPickedCar = null, waLeads = {};
+  //  השיחה שעבורה כבר נפתח בוחר התבניות אוטומטית
+  var waAutoTpl = null;
 
   //  ---------- כרטיס הרכב ----------
   //  רשימת היתר מפורשת. extra מכיל buy_price ו-list_price, ושליפה
@@ -2584,6 +2586,7 @@
         '<div class="wa-line">' +
         '<textarea class="inp" id="waBody" rows="2" placeholder="כתבו הודעה, או בחרו הודעה מהירה למעלה\u2026">' + esc(waDraft) + '</textarea>' +
           '<div class="wa-go">' +
+          '<button class="btn' + (open24 ? ' btn-ghost btn-sm' : '') + '" id="waTplBtn" title="\u05e9\u05dc\u05d9\u05d7\u05ea \u05ea\u05d1\u05e0\u05d9\u05ea \u05de\u05d0\u05d5\u05e9\u05e8\u05ea">\ud83d\udce8 \u05ea\u05d1\u05e0\u05d9\u05ea</button>' +
           '<button class="btn btn-ghost btn-sm" id="waSched" title="תזמון לשעה מאוחרת יותר">\u23f0 תזמון</button>' +
           '<button class="btn btn-sm" id="waSend"' + (open24 ? '' : ' disabled title="\u05d7\u05dc\u05d5\u05df 24 \u05d4\u05e9\u05e2\u05d5\u05ea \u05e1\u05d2\u05d5\u05e8"') + '>\u05e9\u05dc\u05d7 \u27a4</button>' +
           '</div>' +
@@ -2593,7 +2596,6 @@
           '<button class="btn btn-ghost btn-sm" id="waCarBtn" title="שליחת דגם מהמלאי">\ud83d\ude97 דגם</button>' +
           '<button class="btn btn-ghost btn-sm" id="waQuoteBtn" title="הצעת מחיר מלאה">\ud83d\udcb0 הצעת מחיר</button>' +
           '<button class="btn btn-ghost btn-sm" id="waContract" title="\u05de\u05d9\u05dc\u05d5\u05d9 \u05d4\u05e1\u05db\u05dd \u05dc\u05dc\u05e7\u05d5\u05d7">\ud83d\udcc4 \u05d4\u05e1\u05db\u05dd \u05dc\u05d7\u05ea\u05d9\u05de\u05d4</button>' +
-          '<button class="btn btn-ghost btn-sm" id="waTplBtn" title="\u05e9\u05dc\u05d9\u05d7\u05ea \u05ea\u05d1\u05e0\u05d9\u05ea \u05de\u05d0\u05d5\u05e9\u05e8\u05ea">\ud83d\udce8 \u05ea\u05d1\u05e0\u05d9\u05ea</button>' +
           '<button class="btn btn-ghost btn-sm" id="waFileBtn" title="\u05e6\u05e8\u05d5\u05e3 \u05e7\u05d5\u05d1\u05e5 \u05de\u05d4\u05de\u05d7\u05e9\u05d1">\ud83d\udcce \u05e7\u05d5\u05d1\u05e5</button>' +
           '<button class="btn btn-ghost btn-sm" id="waApptBtn" title="\u05e7\u05d1\u05d9\u05e2\u05ea \u05e4\u05d2\u05d9\u05e9\u05d4 \u05e2\u05dd \u05d4\u05dc\u05e7\u05d5\u05d7">\ud83d\udcc5 \u05e4\u05d2\u05d9\u05e9\u05d4</button>' +
           '<button class="btn btn-ghost btn-sm" id="waTaskBtn" title="\u05de\u05e9\u05d9\u05de\u05d4 \u05dc\u05de\u05e2\u05e7\u05d1">\u2705 \u05de\u05e9\u05d9\u05de\u05d4</button>' +
@@ -2604,7 +2606,7 @@
     '</div>';
   }
 
-  function wireTools(t) {
+  function wireTools(t, open24) {
     var body = $('waBody'), msg = null;
     var say = function (txt, good) {
       var o = $('waOut'); if (!o) return;
@@ -2644,6 +2646,13 @@
       if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && $('waSend')) $('waSend').click();
     });
     loadOutbox(t);
+    //  מחוץ לחלון 24 השעות אין מה לעשות עם תיבת הטקסט, ולכן
+    //  רשימת התבניות נפתחת מעצמה במקום לחכות שהנציג יגלה את הכפתור.
+    //  פעם אחת לשיחה, כדי שלא ייפתח שוב בכל רינדור.
+    if (!open24 && $('waTplBtn') && waAutoTpl !== t.id) {
+      waAutoTpl = t.id;
+      setTimeout(function () { if ($('waTplBtn')) $('waTplBtn').click(); }, 400);
+    }
   }
 
   //  השליחה עוברת דרך edge function ולא ישירות מהדפדפן: מפתח
@@ -2926,29 +2935,66 @@
   function tplVars(t, tpl, say) {
     var vars = tpl.variables || [];
     var me = (window.C2B && (window.C2B.fullName || window.C2B.userName)) || '';
-    var guess = function (v) {
+    var lead = t.lead_id && waLeads[t.lead_id];
+    var bodyTxt = String(tpl.body || '');
+    //  ההקשר: 24 התווים שלפני המשתנה בתבנית. "\u05e9\u05dc\u05d5\u05dd {{1}}" \u2190 "\u05e9\u05dc\u05d5\u05dd"
+    var ctxOf = function (v) {
+      var i = bodyTxt.indexOf('{{' + v + '}}');
+      if (i < 0) i = bodyTxt.search(new RegExp('\\\\{\\\\{\\\\s*' + v + '\\\\s*\\\\}\\\\}'));
+      if (i < 0) return '';
+      var before = bodyTxt.slice(Math.max(0, i - 24), i).trim();
+      var after = bodyTxt.slice(i).replace(/^\{\{[^}]*\}\}/, '').slice(0, 14).trim();
+      return (before ? '\u2026' + before + ' ' : '') + '[' + v + ']' + (after ? ' ' + after + '\u2026' : '');
+    };
+    //  ניחוש לפי המיקום בתבניות שלנו: הראשון הוא הלקוח, השני הנציג
+    var guess = function (v, i) {
       var k = String(v).toLowerCase();
       if (/agent|rep|\u05e0\u05e6\u05d9\u05d2|\u05e1\u05d5\u05db\u05df/.test(k)) return me;
-      if (/name|\u05e9\u05dd|first/.test(k)) return t.contact_name || '';
       if (/phone|\u05d8\u05dc\u05e4\u05d5\u05df/.test(k)) return t.contact_phone || '';
+      if (/name|\u05e9\u05dd|first/.test(k)) return t.contact_name || '';
+      var c = ctxOf(v);
+      if (/\u05db\u05d0\u05df$|\u05db\u05d0\u05df \[/.test(c)) return me;
+      if (i === 0) return t.contact_name || '';
+      if (i === 1) return me;
+      if (i === 2 && lead && lead.car) return lead.car;
       return '';
     };
     if (!vars.length) return tplSend(t, tpl, {}, say);
     var bg = document.createElement('div'); bg.className = 'adm-bg';
     bg.innerHTML = '<div class="adm" style="max-width:440px"><div class="adm-hd">' +
       '<h3>' + esc(tpl.name || '\u05ea\u05d1\u05e0\u05d9\u05ea') + '</h3><button class="adm-x" data-admx>\u2715</button></div>' +
-      '<div class="adm-body"><div class="sec-note" style="margin:0 0 12px">' + esc(String(tpl.body || '').slice(0, 220)) + '</div>' +
-      vars.map(function (v) {
-        return '<div class="field"><label>' + esc(v) + '</label>' +
-          '<input class="inp" data-var="' + esc(v) + '" value="' + esc(guess(v)) + '"></div>';
+      '<div class="adm-body"><div class="sec-note" id="tplPrev" style="margin:0 0 12px">' + esc(String(tpl.body || '')) + '</div>' +
+      vars.map(function (v, i) {
+        return '<div class="field"><label>' + esc(ctxOf(v) || v) + '</label>' +
+          '<input class="inp" data-var="' + esc(v) + '" value="' + esc(guess(v, i)) + '"></div>';
       }).join('') +
       '<button class="btn" id="tplGo">\u05e9\u05dc\u05d7</button></div></div>';
     document.body.appendChild(bg);
+    //  תצוגה מקדימה חיה: הנציג רואה בדיוק מה הלקוח יקבל
+    var paintPrev = function () {
+      var out = bodyTxt;
+      bg.querySelectorAll('[data-var]').forEach(function (i) {
+        out = out.split('{{' + i.dataset.var + '}}').join(i.value || '[' + i.dataset.var + ']');
+      });
+      bg.querySelector('#tplPrev').textContent = out;
+    };
+    bg.querySelectorAll('[data-var]').forEach(function (i) { i.addEventListener('input', paintPrev); });
+    paintPrev();
     bg.addEventListener('click', function (e) {
       if (e.target === bg || e.target.closest('[data-admx]')) return bg.remove();
       if (!e.target.closest('#tplGo')) return;
-      var vals = {};
-      bg.querySelectorAll('[data-var]').forEach(function (i) { vals[i.dataset.var] = i.value; });
+      var vals = {}, missing = 0;
+      bg.querySelectorAll('[data-var]').forEach(function (i) {
+        var v = String(i.value || '').trim();
+        if (!v) { missing++; i.style.borderColor = 'var(--danger)'; }
+        vals[i.dataset.var] = v;
+      });
+      //  משתנה ריק נשלח ללקוח כשם המשתנה עצמו ("שלום 1") — עוצרים כאן
+      if (missing) { var e2 = bg.querySelector('.err') || bg.querySelector('.adm-body');
+        var w = bg.querySelector('#tplWarn');
+        if (!w) { w = document.createElement('p'); w.id = 'tplWarn'; w.className = 'err'; e2.appendChild(w); }
+        w.textContent = '\u05d9\u05e9 \u05dc\u05de\u05dc\u05d0 \u05d0\u05ea \u05db\u05dc \u05d4\u05e9\u05d3\u05d5\u05ea \u2014 \u05e9\u05d3\u05d4 \u05e8\u05d9\u05e7 \u05d9\u05d9\u05e9\u05dc\u05d7 \u05dc\u05dc\u05e7\u05d5\u05d7 \u05db\u05de\u05e1\u05e4\u05e8';
+        return; }
       bg.remove(); tplSend(t, tpl, vals, say);
     });
   }
@@ -3225,7 +3271,7 @@
       var el = $('waMsgs'); if (el) el.scrollTop = el.scrollHeight;
       var bt = $('waPane').querySelector('[data-waopen]');
       if (bt) bt.addEventListener('click', function () { window.C2B_openLeadCard && window.C2B_openLeadCard(this.dataset.waopen); });
-      wireTools(t);
+      wireTools(t, winLeft > 0);
       var chip = $('waPane').querySelector('[data-wast]');
       if (chip) chip.addEventListener('click', function (e) {
         e.stopPropagation();
