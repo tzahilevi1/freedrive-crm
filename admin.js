@@ -434,7 +434,8 @@
     if (window.C2B && window.C2B.role && !navAllowed(nav, window.C2B.role)) { nav = 'dashboard'; opts = {}; }
     drawSubnav(nav);
     if (nav === 'users') { setActive(nav); if (window.innerWidth <= 820) { $('side').classList.remove('open'); $('overlay').classList.remove('open'); } return renderUsers(); }
-    if (nav === 'heyy') { setActive(nav); if (window.innerWidth <= 820) { $('side').classList.remove('open'); $('overlay').classList.remove('open'); } return renderHeyy(); }
+    if (nav !== 'heyy') waUnwatch();
+    if (nav === 'heyy') { waWatch(); setActive(nav); if (window.innerWidth <= 820) { $('side').classList.remove('open'); $('overlay').classList.remove('open'); } return renderHeyy(); }
     if (nav === 'agents') { setActive(nav); if (window.innerWidth <= 820) { $('side').classList.remove('open'); $('overlay').classList.remove('open'); } return renderAgents(); }
     setActive(nav, opts.status);
     if (window.innerWidth <= 820) { $('side').classList.remove('open'); $('overlay').classList.remove('open'); }
@@ -2274,6 +2275,12 @@
 
       var shown = threads.filter(function (t) {
         if (heyyNum && t.number_id !== heyyNum) return false;
+        //  סינון לפי סטטוס הליד — במאתיים שיחות זה מה שחוסך גלילה
+        if (heyySt) {
+          var lz = t.lead_id && waLeads[t.lead_id];
+          if (heyySt === '__none') { if (t.lead_id) return false; }
+          else if (!lz || (lz.status || 'new') !== heyySt) return false;
+        }
         if (!heyyQ) return true;
         var q = heyyQ.toLowerCase();
         return ((t.contact_name || '') + ' ' + t.contact_phone + ' ' + (t.last_text || '')).toLowerCase().indexOf(q) >= 0;
@@ -2282,12 +2289,19 @@
         '<div class="wa-wrap">' +
           '<div class="card wa-side">' +
             '<div class="wa-search"><input class="inp" id="waQ" placeholder="\ud83d\udd0d חיפוש שיחה\u2026" value="' + esc(heyyQ) + '"></div>' +
+            '<div class="wa-filter"><select class="inp" id="waStFil">' +
+              '<option value="">כל הסטטוסים</option>' +
+              '<option value="__none"' + (heyySt === '__none' ? ' selected' : '') + '>ללא ליד</option>' +
+              (window.C2B_STATUSES || []).map(function (s) {
+                return '<option value="' + esc(s.k) + '"' + (heyySt === s.k ? ' selected' : '') + '>' + esc(s.icon + ' ' + s.label) + '</option>';
+              }).join('') + '</select></div>' +
             '<div class="wa-list" id="waList">' + heyyList(shown) + '</div>' +
           '</div>' +
           '<div class="card wa-pane" id="waPane">' + heyyEmpty() + '</div>' +
         '</div>');
 
       if ($('heyyNum')) $('heyyNum').addEventListener('change', function () { heyyNum = this.value; heyyThread = ''; renderHeyy(); });
+      if ($('waStFil')) $('waStFil').addEventListener('change', function () { heyySt = this.value; renderHeyy(); });
       if ($('waNewChat')) $('waNewChat').addEventListener('click', function () { newChatBox(nums, isAdm); });
       var q = $('waQ');
       if (q) {
@@ -2315,6 +2329,8 @@
   var waTpl = [], waCars = [], waDraft = '', waPickedCar = null, waLeads = {};
   //  השיחה שעבורה כבר נפתח בוחר התבניות אוטומטית
   var waAutoTpl = null;
+  //  סינון לפי סטטוס ליד, חיפוש בתוך השיחה, והודעה שעונים לה
+  var heyySt = '', waFind = '', waReply = null, waChan = null;
 
   //  ---------- כרטיס הרכב ----------
   //  רשימת היתר מפורשת. extra מכיל buy_price ו-list_price, ושליפה
@@ -2580,7 +2596,11 @@
           : '')
       : '<div class="wa-win">\ud83d\udd12 \u05d7\u05dc\u05d5\u05df 24 \u05d4\u05e9\u05e2\u05d5\u05ea \u05e1\u05d2\u05d5\u05e8 \u2014 \u05d4\u05dc\u05e7\u05d5\u05d7 \u05dc\u05d0 \u05db\u05ea\u05d1 \u05d1-24 \u05d4\u05e9\u05e2\u05d5\u05ea \u05d4\u05d0\u05d7\u05e8\u05d5\u05e0\u05d5\u05ea.<br>' +
         '\u05d0\u05e4\u05e9\u05e8 \u05dc\u05e9\u05dc\u05d5\u05d7 \u05dc\u05d5 \u05e8\u05e7 <b>\u05ea\u05d1\u05e0\u05d9\u05ea \u05de\u05d0\u05d5\u05e9\u05e8\u05ea</b>. \u05d6\u05d5 \u05de\u05d2\u05d1\u05dc\u05d4 \u05e9\u05dc Meta \u05d5\u05dc\u05d0 \u05e9\u05dc \u05d4\u05de\u05e2\u05e8\u05db\u05ea.</div>';
-    return '<div class="wa-tools">' + banner +
+    //  \u05de\u05d4 \u05e9\u05e2\u05d5\u05e0\u05d9\u05dd \u05dc\u05d5, \u05e2\u05dd \u05d0\u05e4\u05e9\u05e8\u05d5\u05ea \u05dc\u05d1\u05d8\u05dc
+    var rep = waReply ? '<div class="wa-reply"><b>\u21a9 \u05de\u05e9\u05d9\u05d1 \u05dc:</b><span>' +
+      esc(String(waReply.body).slice(0, 90)) + '</span>' +
+      '<button class="btn btn-ghost btn-sm" id="waRepX">\u2715</button></div>' : '';
+    return '<div class="wa-tools">' + banner + rep +
       '<div class="wa-chips">' + (chips || '<span class="muted" style="font-size:12px">אין הודעות מהירות</span>') + '</div>' +
       '<div class="wa-compose">' +
         '<div class="wa-line">' +
@@ -2633,6 +2653,7 @@
     if ($('waQuoteBtn')) $('waQuoteBtn').onclick = function () { carPicker(t, body, true); };
     if ($('waContract')) $('waContract').onclick = function () { waContract(t, this, say); };
     if ($('waTplBtn')) $('waTplBtn').onclick = function () { tplPicker(t, this, say); };
+    if ($('waRepX')) $('waRepX').onclick = function () { waReply = null; openThread(t); };
     if ($('waFileBtn')) $('waFileBtn').onclick = function () { $('waFileIn').click(); };
     if ($('waFileIn')) $('waFileIn').onchange = function () { waSendFile(t, this, say); };
     if ($('waApptBtn')) $('waApptBtn').onclick = function () { waAppt(t, this, say); };
@@ -2668,6 +2689,7 @@
         thread_id: t.id, body: text,
         media_url: (car && car.img) ? carImg(car.img) : null,
         scheduled_at: when || null,
+        reply_to: (waReply && waReply.id) || null,
       }
     }).then(function (r) {
       if (btn) { btn.disabled = false; btn.textContent = old; }
@@ -2678,7 +2700,7 @@
       }
       say(when ? '\u2714 תוזמן ל-' + fmtDateTime(when) : '\u2714 נשלח' + (d.note ? ' · ' + d.note : ''), true);
       var b = $('waBody'); if (b) { b.value = ''; waDraft = ''; }
-      waPickedCar = null;
+      waPickedCar = null; waReply = null;
       openThread(t);
     }, function (e) {
       if (btn) { btn.disabled = false; btn.textContent = old; }
@@ -3188,6 +3210,39 @@
     });
   }
 
+  //  ---------- \u05e8\u05e2\u05e0\u05d5\u05df \u05d7\u05d9 ----------
+  //  \u05dc\u05dc\u05d0 \u05d6\u05d4 \u05d4\u05e0\u05e6\u05d9\u05d2 \u05d4\u05d9\u05d4 \u05e6\u05e8\u05d9\u05da \u05dc\u05e8\u05e2\u05e0\u05df \u05d9\u05d3\u05e0\u05d9\u05ea \u05db\u05d3\u05d9 \u05dc\u05e8\u05d0\u05d5\u05ea \u05ea\u05e9\u05d5\u05d1\u05d4.
+  //  \u05e0\u05e8\u05e9\u05de\u05d9\u05dd \u05e4\u05e2\u05dd \u05d0\u05d7\u05ea \u05d1\u05dc\u05d1\u05d3 \u05d5\u05de\u05d1\u05d8\u05dc\u05d9\u05dd \u05d1\u05d9\u05e6\u05d9\u05d0\u05d4 \u05de\u05d4\u05de\u05e1\u05da:
+  //  \u05de\u05e0\u05d5\u05d9 \u05db\u05e4\u05d5\u05dc \u05d4\u05d9\u05d4 \u05de\u05e8\u05e0\u05d3\u05e8 \u05d0\u05ea \u05d4\u05e9\u05d9\u05d7\u05d4 \u05e4\u05e2\u05de\u05d9\u05d9\u05dd \u05e2\u05dc \u05db\u05dc \u05d4\u05d5\u05d3\u05e2\u05d4.
+  //  \u05d4\u05e8\u05d9\u05e0\u05d3\u05d5\u05e8 \u05de\u05e2\u05d5\u05db\u05d1 \u05d1-250ms \u05db\u05d3\u05d9 \u05e9\u05e8\u05e6\u05e3 \u05d0\u05d9\u05e8\u05d5\u05e2\u05d9\u05dd (\u05d4\u05d5\u05d3\u05e2\u05d4 + \u05e2\u05d3\u05db\u05d5\u05df
+  //  \u05d4\u05e9\u05d9\u05d7\u05d4 + \u05e1\u05d8\u05d8\u05d5\u05e1) \u05d9\u05d2\u05e8\u05d5\u05e8 \u05e8\u05e0\u05d3\u05d5\u05e8 \u05d0\u05d7\u05d3 \u05d5\u05dc\u05d0 \u05e9\u05dc\u05d5\u05e9\u05d4.
+  var waRtTimer = null;
+  function waRefresh(soft) {
+    clearTimeout(waRtTimer);
+    waRtTimer = setTimeout(function () {
+      //  אין משתנה גלובלי למסך הנוכחי — הפריט הפעיל בתפריט הוא מקור האמת
+      var act = $('nav').querySelector('.nav-item.active');
+      if (!act || act.dataset.nav !== 'heyy' || !$('waList')) return;
+      //  \u05d0\u05dd \u05d4\u05e0\u05e6\u05d9\u05d2 \u05d1\u05d0\u05de\u05e6\u05e2 \u05d4\u05e7\u05dc\u05d3\u05d4 \u05dc\u05d0 \u05e0\u05d3\u05e8\u05d5\u05e1 \u05dc\u05d5 \u05d0\u05ea \u05d4\u05d8\u05d9\u05d5\u05d8\u05d4
+      var b = $('waBody'); if (b) waDraft = b.value;
+      renderHeyy();
+    }, soft ? 250 : 0);
+  }
+  function waWatch() {
+    if (waChan) return;
+    try {
+      waChan = db.channel('wa-live')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'wa_messages' }, function () { waRefresh(true); })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'wa_threads' }, function () { waRefresh(true); })
+        .subscribe();
+    } catch (e) { waChan = null; }   //  \u05d1\u05dc\u05d9 realtime \u05d4\u05de\u05e1\u05da \u05e2\u05d5\u05d3\u05e0\u05d5 \u05e2\u05d5\u05d1\u05d3, \u05e8\u05e7 \u05d1\u05dc\u05d9 \u05e8\u05e2\u05e0\u05d5\u05df \u05e2\u05e6\u05de\u05d9
+  }
+  function waUnwatch() {
+    if (!waChan) return;
+    try { db.removeChannel(waChan); } catch (e) { /* \u05e0\u05d5\u05ea\u05e7 \u05d1\u05dc\u05d0\u05d5 \u05d4\u05db\u05d9 */ }
+    waChan = null; clearTimeout(waRtTimer);
+  }
+
   function waStDef(k) {
     var L = window.C2B_STATUSES || [];
     for (var i = 0; i < L.length; i++) if (L[i].k === k) return L[i];
@@ -3234,9 +3289,11 @@
   function openThread(t) {
     if (!t) { $('waPane').innerHTML = heyyEmpty(); return; }
     $('waPane').innerHTML = '<div class="loading">טוען\u2026</div>';
-    db.from('wa_messages').select('id,direction,body,media_url,media_type,author,sent_at')
+    db.from('wa_messages').select('id,direction,body,media_url,media_type,author,sent_at,status,reply_to,provider_msg_id')
       .eq('thread_id', t.id).order('sent_at').limit(500).then(function (r) {
       if (r.error) return ($('waPane').innerHTML = '<p class="err">' + esc(r.error.message) + '</p>');
+      //  מפתח לציטוט: reply_to מחזיק את provider_msg_id של המקור
+      var byId = {}; (r.data || []).forEach(function (m) { if (m.provider_msg_id) byId[m.provider_msg_id] = m; });
       var last = '', html = (r.data || []).map(function (m) {
         //  מפריד תאריך בין ימים, כמו בווטסאפ
         var d = new Date(m.sent_at), key = d.toDateString(), sep = '';
@@ -3245,11 +3302,22 @@
           ? (/image/i.test(m.media_type || '') ? '<img src="' + esc(m.media_url) + '" alt="">'
              : '<a href="' + esc(m.media_url) + '" target="_blank" rel="noopener">\ud83d\udcce קובץ מצורף</a>')
           : '';
-        return sep + '<div class="wa-m ' + esc(m.direction) + '">' + media +
-          (m.body ? esc(m.body) : (media ? '' : '\u2014')) +
+        //  \u05e1\u05d9\u05de\u05d5\u05e0\u05d9 \u05de\u05e1\u05d9\u05e8\u05d4 \u05db\u05de\u05d5 \u05d1\u05d5\u05d5\u05d8\u05e1\u05d0\u05e4: \u05d0\u05d7\u05d3 \u05e0\u05e9\u05dc\u05d7, \u05e9\u05e0\u05d9\u05d9\u05dd \u05e0\u05de\u05e1\u05e8,
+        //  \u05d5\u05db\u05d7\u05d5\u05dc \u05e0\u05e7\u05e8\u05d0. \u05de\u05d2\u05d9\u05e2 \u05de\u05d0\u05d9\u05e8\u05d5\u05e2 message.updated \u05e9\u05dc Heyy.
+        var st = String(m.status || '').toLowerCase();
+        var tick = st === 'read' ? '<span class="tick read">\u2713\u2713</span>'
+          : (st === 'delivered' ? '<span class="tick">\u2713\u2713</span>'
+          : (st === 'failed' ? '<span class="tick" style="color:var(--danger)">\u26a0</span>' : '<span class="tick">\u2713</span>'));
+        var q = waFind.trim().toLowerCase();
+        var hit = q && String(m.body || '').toLowerCase().indexOf(q) >= 0;
+        var rp = m.reply_to ? byId[m.reply_to] : null;
+        return sep + '<div class="wa-m ' + esc(m.direction) + (hit ? ' hit' : '') + '" data-mid="' + esc(m.id) + '">' +
+          (rp ? '<span class="rep">' + esc(String(rp.body || '[\u05e7\u05d5\u05d1\u05e5]').slice(0, 90)) + '</span>' : '') +
+          media + (m.body ? esc(m.body) : (media ? '' : '\u2014')) +
           '<span class="t">' + esc(d.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })) +
-          (m.direction === 'out' ? ' <span class="tick">\u2713\u2713</span>' : '') +
-          (m.author ? ' \u00b7 ' + esc(m.author) : '') + '</span></div>';
+          (m.direction === 'out' ? ' ' + tick : '') +
+          (m.author ? ' \u00b7 ' + esc(m.author) : '') + '</span>' +
+          '<button class="rbtn" data-reply="' + esc(m.id) + '" title="\u05d4\u05e9\u05d1 \u05dc\u05d4\u05d5\u05d3\u05e2\u05d4 \u05d4\u05d6\u05d5">\u21a9</button></div>';
       }).join('');
       //  מטא מגבילה טקסט חופשי ל-24 שעות מההודעה האחרונה של
       //  הלקוח. מחוץ לחלון ניתן לשלוח רק תבנית מאושרת.
@@ -3266,9 +3334,35 @@
           (t.lead_id ? '<button class="btn btn-ghost btn-sm" data-waopen="' + esc(t.lead_id) + '">\ud83d\udc64 כרטיס הליד</button>'
                      : '<button class="btn btn-sm" data-wanew="' + esc(t.id) + '">\u2795 צור ליד</button>') +
         '</div>' +
+        '<div class="wa-find"><input class="inp" id="waFind" placeholder="\ud83d\udd0e חיפוש בתוך השיחה\u2026" value="' + esc(waFind) + '">' +
+          (waFind ? '<button class="btn btn-ghost btn-sm" id="waFindX">\u2715</button>' : '') + '</div>' +
         '<div class="wa-msgs" id="waMsgs">' + (html || '<p class="empty">אין הודעות</p>') + '</div>' +
         waTools(t, winLeft);
-      var el = $('waMsgs'); if (el) el.scrollTop = el.scrollHeight;
+      var el = $('waMsgs');
+      //  \u05d1\u05d7\u05d9\u05e4\u05d5\u05e9 \u05d2\u05d5\u05dc\u05dc\u05d9\u05dd \u05dc\u05ea\u05d5\u05e6\u05d0\u05d4 \u05d4\u05e8\u05d0\u05e9\u05d5\u05e0\u05d4, \u05d0\u05d7\u05e8\u05ea \u05dc\u05e1\u05d5\u05e3
+      if (el) { var h1 = el.querySelector('.wa-m.hit');
+        if (h1) h1.scrollIntoView({ block: 'center' }); else el.scrollTop = el.scrollHeight; }
+      var fi = $('waFind');
+      if (fi) {
+        fi.addEventListener('input', function () { waFind = this.value; openThread(t); });
+        if (waFind) { fi.focus(); fi.setSelectionRange(waFind.length, waFind.length); }
+      }
+      if ($('waFindX')) $('waFindX').onclick = function () { waFind = ''; openThread(t); };
+      if (el) el.addEventListener('click', function (e) {
+        var rb = e.target.closest('[data-reply]'); if (!rb) return;
+        var m2 = (r.data || []).filter(function (x) { return x.id === rb.dataset.reply; })[0];
+        if (!m2) return;
+        waReply = { id: m2.provider_msg_id || null, body: m2.body || '[\u05e7\u05d5\u05d1\u05e5]', dir: m2.direction };
+        openThread(t);
+      });
+      //  \u05e4\u05ea\u05d9\u05d7\u05ea \u05e9\u05d9\u05d7\u05d4 = \u05e0\u05e7\u05e8\u05d0\u05d4. \u05d4\u05e2\u05de\u05d5\u05d3\u05d4 \u05d4\u05ea\u05de\u05dc\u05d0\u05d4 \u05d5\u05de\u05e2\u05d5\u05dc\u05dd \u05dc\u05d0 \u05d4\u05ea\u05d0\u05e4\u05e1\u05d4
+      if (t.unread) {
+        db.from('wa_threads').update({ unread: 0 }).eq('id', t.id).then(function () {
+          t.unread = 0;
+          var row = $('waList') && $('waList').querySelector('[data-th="' + t.id + '"] .wa-unread');
+          if (row) row.remove();
+        });
+      }
       var bt = $('waPane').querySelector('[data-waopen]');
       if (bt) bt.addEventListener('click', function () { window.C2B_openLeadCard && window.C2B_openLeadCard(this.dataset.waopen); });
       wireTools(t, winLeft > 0);
