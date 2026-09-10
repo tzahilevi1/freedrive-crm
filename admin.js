@@ -2546,7 +2546,7 @@
           '<button class="btn btn-ghost btn-sm" id="waCarBtn" title="שליחת דגם מהמלאי">\ud83d\ude97 דגם</button>' +
           '<button class="btn btn-ghost btn-sm" id="waQuoteBtn" title="הצעת מחיר מלאה">\ud83d\udcb0 הצעת מחיר</button>' +
           '<button class="btn btn-ghost btn-sm" id="waSched" title="תזמון לשעה מאוחרת יותר">\u23f0 תזמון</button>' +
-          '<button class="btn btn-sm" id="waQueue">הוספה לתור</button>' +
+          '<button class="btn btn-sm" id="waSend">שלח \u27a4</button>' +
         '</div>' +
       '</div>' +
       '<div id="waOut" class="wa-out"></div>' +
@@ -2580,10 +2580,45 @@
     if ($('waCarBtn')) $('waCarBtn').onclick = function () { carPicker(t, body, false); };
     if ($('waQuoteBtn')) $('waQuoteBtn').onclick = function () { carPicker(t, body, true); };
     if ($('waSched')) $('waSched').onclick = function () { schedBox(t, body, say); };
-    if ($('waQueue')) $('waQueue').onclick = function () {
-      queueMsg(t, body.value, null, waPickedCar, say);
+    if ($('waSend')) $('waSend').onclick = function () {
+      sendMsg(t, body.value, null, waPickedCar, say, this);
     };
+    //  Ctrl+Enter שולח, כמו בכל לקוח ווטסאפ שולחני
+    if (body) body.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && $('waSend')) $('waSend').click();
+    });
     loadOutbox(t);
+  }
+
+  //  השליחה עוברת דרך edge function ולא ישירות מהדפדפן: מפתח
+  //  ה-API של Heyy הוא מפתח כתיבה לכל חשבון הווטסאפ, ובצד-לקוח
+  //  הוא היה גלוי לכל מי שפותח את המסך.
+  function sendMsg(t, text, when, car, say, btn) {
+    text = String(text || '').trim();
+    if (!text && !car) return say('ההודעה ריקה', false);
+    var old = btn ? btn.textContent : '';
+    if (btn) { btn.disabled = true; btn.textContent = 'שולח\u2026'; }
+    db.functions.invoke('heyy-send', {
+      body: {
+        thread_id: t.id, body: text,
+        media_url: (car && car.img) ? carImg(car.img) : null,
+        scheduled_at: when || null,
+      }
+    }).then(function (r) {
+      if (btn) { btn.disabled = false; btn.textContent = old; }
+      var d = r.data || {};
+      if (r.error || d.error) {
+        var m = d.error || (r.error && r.error.message) || 'השליחה נכשלה';
+        return say(/HEYY_API_KEY/.test(m) ? 'חסר מפתח API של Heyy בהגדרות' : m, false);
+      }
+      say(when ? '\u2714 תוזמן ל-' + fmtDateTime(when) : '\u2714 נשלח' + (d.note ? ' · ' + d.note : ''), true);
+      var b = $('waBody'); if (b) { b.value = ''; waDraft = ''; }
+      waPickedCar = null;
+      openThread(t);
+    }, function (e) {
+      if (btn) { btn.disabled = false; btn.textContent = old; }
+      say('שגיאת רשת: ' + (e && e.message || e), false);
+    });
   }
 
   function queueMsg(t, text, when, car, say) {
@@ -2614,8 +2649,21 @@
             return '<div class="wa-q"><span>' + (q.kind === 'car' ? '\ud83d\ude97 ' : '') +
               esc(String(q.body || '').replace(/\n/g, ' ').slice(0, 70)) + '</span>' +
               '<span class="muted">' + (q.scheduled_at ? '\u23f0 ' + esc(fmtDateTime(q.scheduled_at)) : 'מיד') + '</span>' +
+              '<button class="btn btn-sm" data-qsend="' + esc(q.id) + '">שלח עכשיו</button>' +
               '<button class="btn btn-ghost btn-sm" data-qcancel="' + esc(q.id) + '">ביטול</button></div>';
           }).join('') + '</div>';
+        box.querySelectorAll('[data-qsend]').forEach(function (b) {
+          b.onclick = function () {
+            var q = rows.filter(function (x) { return x.id === b.dataset.qsend; })[0];
+            var self = this; self.disabled = true; self.textContent = 'שולח…';
+            db.functions.invoke('heyy-send', { body: { thread_id: t.id, body: q.body, outbox_id: q.id } })
+              .then(function (r) {
+                var d = r.data || {};
+                if (r.error || d.error) { self.disabled = false; self.textContent = 'שלח עכשיו'; return alert(d.error || (r.error && r.error.message)); }
+                openThread(t);
+              });
+          };
+        });
         box.querySelectorAll('[data-qcancel]').forEach(function (b) {
           b.onclick = function () {
             db.from('wa_outbox').update({ status: 'cancelled' }).eq('id', this.dataset.qcancel)
@@ -2653,7 +2701,7 @@
       if (e.target.id === 'waSchedOk') {
         var v = bg.querySelector('#waWhen').value;
         if (!v) return;
-        close(); queueMsg(t, body.value, new Date(v).toISOString(), waPickedCar, say);
+        close(); sendMsg(t, body.value, new Date(v).toISOString(), waPickedCar, say, null);
       }
     });
   }
