@@ -2273,18 +2273,8 @@
           'מנהל המערכת משייך מספר למשתמש במסך <b>משתמשים והרשאות</b>, ואז השיחות של אותו מספר יופיעו כאן.</p></div>');
       }
 
-      var shown = threads.filter(function (t) {
-        if (heyyNum && t.number_id !== heyyNum) return false;
-        //  סינון לפי סטטוס הליד — במאתיים שיחות זה מה שחוסך גלילה
-        if (heyySt) {
-          var lz = t.lead_id && waLeads[t.lead_id];
-          if (heyySt === '__none') { if (t.lead_id) return false; }
-          else if (!lz || (lz.status || 'new') !== heyySt) return false;
-        }
-        if (!heyyQ) return true;
-        var q = heyyQ.toLowerCase();
-        return ((t.contact_name || '') + ' ' + t.contact_phone + ' ' + (t.last_text || '')).toLowerCase().indexOf(q) >= 0;
-      });
+      waThreads = threads;
+      var shown = waPick();
       view(heyyHead(nums, numById, isAdm, shown.length) +
         '<div class="wa-wrap">' +
           '<div class="card wa-side">' +
@@ -2301,13 +2291,13 @@
         '</div>');
 
       if ($('heyyNum')) $('heyyNum').addEventListener('change', function () { heyyNum = this.value; heyyThread = ''; renderHeyy(); });
-      if ($('waStFil')) $('waStFil').addEventListener('change', function () { heyySt = this.value; renderHeyy(); });
+      if ($('waStFil')) $('waStFil').addEventListener('change', function () { heyySt = this.value; waListPaint(); });
       if ($('waNewChat')) $('waNewChat').addEventListener('click', function () { newChatBox(nums, isAdm); });
       var q = $('waQ');
       if (q) {
         //  שמירת מיקום הסמן: renderHeyy נקרא מחדש בכל הקלדה, ובלי זה
         //  הסמן קופץ לתחילת השדה אחרי כל אות.
-        q.addEventListener('input', function () { heyyQ = this.value; renderHeyy(); });
+        q.addEventListener('input', function () { heyyQ = this.value; waListPaint(); });
         if (heyyQ) { q.focus(); q.setSelectionRange(heyyQ.length, heyyQ.length); }
       }
       $('waList').addEventListener('click', function (e) {
@@ -3265,6 +3255,33 @@
     var cnt = $('waFindN');
     if (cnt) cnt.textContent = q ? (n ? n + ' \u05ea\u05d5\u05e6\u05d0\u05d5\u05ea' : '\u05d0\u05d9\u05df \u05ea\u05d5\u05e6\u05d0\u05d5\u05ea') : '';
     if (first) first.scrollIntoView({ block: 'center' });
+  }
+
+  //  ---------- \u05e6\u05d9\u05d5\u05e8 \u05d4\u05e8\u05e9\u05d9\u05de\u05d4 \u05d1\u05dc\u05d1\u05d3 ----------
+  //  \u05e7\u05d5\u05d3\u05dd \u05db\u05dc \u05d4\u05e7\u05dc\u05d3\u05d4 \u05d1\u05d7\u05d9\u05e4\u05d5\u05e9 \u05d5\u05db\u05dc \u05e9\u05d9\u05e0\u05d5\u05d9 \u05e1\u05d8\u05d8\u05d5\u05e1 \u05e7\u05e8\u05d0\u05d5 \u05dc-renderHeyy,
+  //  \u05e9\u05e9\u05d5\u05dc\u05e3 \u05de\u05d7\u05d3\u05e9 \u05de\u05d4\u05de\u05e1\u05d3 \u05d5\u05de\u05e8\u05e0\u05d3\u05e8 \u05d0\u05ea \u05db\u05dc \u05d4\u05de\u05e1\u05da \u2014 \u05de\u05db\u05d0\u05df \u05d4\u05e7\u05e4\u05d9\u05e6\u05d5\u05ea,
+  //  \u05d0\u05d9\u05d1\u05d5\u05d3 \u05d4\u05e4\u05d5\u05e7\u05d5\u05e1 \u05d5\u05e1\u05d2\u05d9\u05e8\u05ea \u05d4\u05ea\u05e4\u05e8\u05d9\u05d8 \u05d4\u05e0\u05e4\u05ea\u05d7. \u05d4\u05e9\u05d9\u05d7\u05d5\u05ea \u05db\u05d1\u05e8 \u05d1\u05d6\u05d9\u05db\u05e8\u05d5\u05df.
+  var waThreads = [];
+  function waPick() {
+    return waThreads.filter(function (t) {
+      if (heyyNum && t.number_id !== heyyNum) return false;
+      if (heyySt) {
+        var lz = t.lead_id && waLeads[t.lead_id];
+        if (heyySt === '__none') { if (t.lead_id) return false; }
+        else if (!lz || (lz.status || 'new') !== heyySt) return false;
+      }
+      if (!heyyQ) return true;
+      var q = String(heyyQ).toLowerCase();
+      return ((t.contact_name || '') + ' ' + t.contact_phone + ' ' + (t.last_text || '')).toLowerCase().indexOf(q) >= 0;
+    });
+  }
+  function waListPaint() {
+    var box = $('waList'); if (!box) return;
+    var shown = waPick();
+    box.innerHTML = heyyList(shown);
+    //  \u05de\u05d5\u05e0\u05d4 \u05d4\u05e9\u05d9\u05d7\u05d5\u05ea \u05d1\u05db\u05d5\u05ea\u05e8\u05ea \u05de\u05ea\u05e2\u05d3\u05db\u05df \u05d1\u05de\u05e7\u05d5\u05dd, \u05d1\u05dc\u05d9 \u05dc\u05d1\u05e0\u05d5\u05ea \u05d0\u05ea \u05d4\u05db\u05d5\u05ea\u05e8\u05ea \u05de\u05d7\u05d3\u05e9
+    var sub = document.querySelector('#view p.muted');
+    if (sub) sub.innerHTML = String(sub.innerHTML).replace(/\u00b7\s*\d+\s*\u05e9\u05d9\u05d7\u05d5\u05ea/, '\u00b7 ' + shown.length + ' \u05e9\u05d9\u05d7\u05d5\u05ea');
   }
 
   function waStDef(k) {
