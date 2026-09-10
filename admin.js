@@ -2594,6 +2594,10 @@
           '<button class="btn btn-ghost btn-sm" id="waQuoteBtn" title="הצעת מחיר מלאה">\ud83d\udcb0 הצעת מחיר</button>' +
           '<button class="btn btn-ghost btn-sm" id="waContract" title="\u05de\u05d9\u05dc\u05d5\u05d9 \u05d4\u05e1\u05db\u05dd \u05dc\u05dc\u05e7\u05d5\u05d7">\ud83d\udcc4 \u05d4\u05e1\u05db\u05dd \u05dc\u05d7\u05ea\u05d9\u05de\u05d4</button>' +
           '<button class="btn btn-ghost btn-sm" id="waTplBtn" title="\u05e9\u05dc\u05d9\u05d7\u05ea \u05ea\u05d1\u05e0\u05d9\u05ea \u05de\u05d0\u05d5\u05e9\u05e8\u05ea">\ud83d\udce8 \u05ea\u05d1\u05e0\u05d9\u05ea</button>' +
+          '<button class="btn btn-ghost btn-sm" id="waFileBtn" title="\u05e6\u05e8\u05d5\u05e3 \u05e7\u05d5\u05d1\u05e5 \u05de\u05d4\u05de\u05d7\u05e9\u05d1">\ud83d\udcce \u05e7\u05d5\u05d1\u05e5</button>' +
+          '<button class="btn btn-ghost btn-sm" id="waApptBtn" title="\u05e7\u05d1\u05d9\u05e2\u05ea \u05e4\u05d2\u05d9\u05e9\u05d4 \u05e2\u05dd \u05d4\u05dc\u05e7\u05d5\u05d7">\ud83d\udcc5 \u05e4\u05d2\u05d9\u05e9\u05d4</button>' +
+          '<button class="btn btn-ghost btn-sm" id="waTaskBtn" title="\u05de\u05e9\u05d9\u05de\u05d4 \u05dc\u05de\u05e2\u05e7\u05d1">\u2705 \u05de\u05e9\u05d9\u05de\u05d4</button>' +
+          '<input type="file" id="waFileIn" style="display:none">' +
         '</div>' +
       '</div>' +
       '<div id="waOut" class="wa-out"></div>' +
@@ -2627,6 +2631,10 @@
     if ($('waQuoteBtn')) $('waQuoteBtn').onclick = function () { carPicker(t, body, true); };
     if ($('waContract')) $('waContract').onclick = function () { waContract(t, this, say); };
     if ($('waTplBtn')) $('waTplBtn').onclick = function () { tplPicker(t, this, say); };
+    if ($('waFileBtn')) $('waFileBtn').onclick = function () { $('waFileIn').click(); };
+    if ($('waFileIn')) $('waFileIn').onchange = function () { waSendFile(t, this, say); };
+    if ($('waApptBtn')) $('waApptBtn').onclick = function () { waAppt(t, this, say); };
+    if ($('waTaskBtn')) $('waTaskBtn').onclick = function () { waTask(t, this, say); };
     if ($('waSched')) $('waSched').onclick = function () { schedBox(t, body, say); };
     if ($('waSend')) $('waSend').onclick = function () {
       sendMsg(t, body.value, null, waPickedCar, say, this);
@@ -3002,6 +3010,133 @@
             if (err) alert('\u05d4\u05e9\u05d9\u05d7\u05d4 \u05e0\u05e4\u05ea\u05d7\u05d4 \u05d0\u05d1\u05dc \u05d4\u05dc\u05d9\u05d3 \u05dc\u05d0 \u05e0\u05d5\u05e6\u05e8: ' + err);
             heyyThread = r.data.id; renderHeyy();
           });
+        });
+      });
+    });
+  }
+
+  //  ---------- \u05e7\u05d5\u05d1\u05e5 \u05de\u05d4\u05de\u05d7\u05e9\u05d1 ----------
+  //  \u05d4\u05e7\u05d5\u05d1\u05e5 \u05e2\u05d5\u05d1\u05e8 \u05d1-base64 \u05dc-edge function \u05e9\u05de\u05e2\u05dc\u05d4 \u05d0\u05d5\u05ea\u05d5 \u05dc-Heyy.
+  //  \u05dc\u05d0 \u05de\u05e2\u05dc\u05d9\u05dd \u05d9\u05e9\u05d9\u05e8\u05d5\u05ea \u05de\u05d4\u05d3\u05e4\u05d3\u05e4\u05df \u05db\u05d3\u05d9 \u05e9\u05de\u05e4\u05ea\u05d7 \u05d4-API \u05dc\u05d0 \u05d9\u05d7\u05e9\u05e3.
+  var WA_MAX_MB = 15;
+  function waSendFile(t, input, say) {
+    var f = input.files && input.files[0]; if (!f) return;
+    input.value = '';
+    if (f.size > WA_MAX_MB * 1024 * 1024) return say('\u05d4\u05e7\u05d5\u05d1\u05e5 \u05d2\u05d3\u05d5\u05dc \u05de-' + WA_MAX_MB + 'MB', false);
+    say('\u05de\u05e2\u05dc\u05d4 \u05d0\u05ea ' + f.name + '\u2026', true);
+    var fr = new FileReader();
+    fr.onload = function () {
+      var b64 = String(fr.result).split(',')[1] || '';
+      db.functions.invoke('heyy-send', {
+        body: { thread_id: t.id, body: ($('waBody') || {}).value || '',
+                file_b64: b64, file_name: f.name, file_type: f.type || 'application/octet-stream' }
+      }).then(function (r) {
+        var d = r.data || {};
+        if (r.error || d.error) return say(d.error || (r.error && r.error.message) || '\u05d4\u05e2\u05dc\u05d0\u05d4 \u05e0\u05db\u05e9\u05dc\u05d4', false);
+        say('\u2714 \u05d4\u05e7\u05d5\u05d1\u05e5 \u05e0\u05e9\u05dc\u05d7', true);
+        var b = $('waBody'); if (b) { b.value = ''; waDraft = ''; }
+        openThread(t);
+      });
+    };
+    fr.readAsDataURL(f);
+  }
+
+  //  ---------- \u05e4\u05d2\u05d9\u05e9\u05d4 \u05d5\u05de\u05e9\u05d9\u05de\u05d4 \u05de\u05ea\u05d5\u05da \u05d4\u05e9\u05d9\u05d7\u05d4 ----------
+  //  \u05e9\u05e0\u05d9\u05d4\u05dd \u05e0\u05e9\u05e2\u05e0\u05d9\u05dd \u05e2\u05dc \u05dc\u05d9\u05d3, \u05d5\u05dc\u05db\u05df \u05e9\u05d9\u05d7\u05d4 \u05d1\u05dc\u05d9 \u05dc\u05d9\u05d3 \u05de\u05e7\u05d1\u05dc\u05ea \u05d0\u05d7\u05d3 \u05e7\u05d5\u05d3\u05dd.
+  function withLead(t, btn, label, say, cb) {
+    if (t.lead_id) return cb(t.lead_id);
+    var old = btn.textContent; btn.disabled = true; btn.textContent = '\u05d9\u05d5\u05e6\u05e8 \u05dc\u05d9\u05d3\u2026';
+    waNewLead(t, function (id, err) {
+      btn.disabled = false; btn.textContent = old;
+      if (err) return say(err, false);
+      cb(id);
+    });
+  }
+
+  function pad2(n) { return String(n).padStart(2, '0'); }
+  function localVal(d) {
+    return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()) +
+      'T' + pad2(d.getHours()) + ':' + pad2(d.getMinutes());
+  }
+
+  function waAppt(t, btn, say) {
+    withLead(t, btn, '\ud83d\udcc5', say, function (leadId) {
+      var d = new Date(Date.now() + 864e5); d.setHours(10, 0, 0, 0);
+      var branches = (window.C2B && window.C2B.lists && window.C2B.lists.branch) || [];
+      var bg = document.createElement('div'); bg.className = 'adm-bg';
+      bg.innerHTML = '<div class="adm" style="max-width:430px"><div class="adm-hd">' +
+        '<h3>\ud83d\udcc5 \u05e7\u05d1\u05d9\u05e2\u05ea \u05e4\u05d2\u05d9\u05e9\u05d4</h3><button class="adm-x" data-admx>\u2715</button></div>' +
+        '<div class="adm-body">' +
+        '<div class="field"><label>\u05de\u05ea\u05d9</label><input class="inp" type="datetime-local" id="apWhen" value="' + localVal(d) + '"></div>' +
+        '<div class="field"><label>\u05d0\u05d5\u05e4\u05df</label><select class="inp" id="apMode">' +
+          '<option value="\u05d1\u05e1\u05e0\u05d9\u05e3">\u05d1\u05e1\u05e0\u05d9\u05e3</option><option value="\u05d8\u05dc\u05e4\u05d5\u05e0\u05d9\u05ea">\u05d8\u05dc\u05e4\u05d5\u05e0\u05d9\u05ea</option>' +
+          '<option value="\u05d5\u05d9\u05d3\u05d0\u05d5">\u05d5\u05d9\u05d3\u05d0\u05d5</option></select></div>' +
+        (branches.length ? '<div class="field"><label>\u05e1\u05e0\u05d9\u05e3</label><select class="inp" id="apBranch"><option value="">\u2014</option>' +
+          branches.map(function (x) { var v = x.value || x; return '<option>' + esc(v) + '</option>'; }).join('') + '</select></div>' : '') +
+        '<div class="field"><label>\u05d4\u05e2\u05e8\u05d4</label><input class="inp" id="apNote"></div>' +
+        '<label style="display:flex;gap:7px;align-items:center;font-size:13px;margin-bottom:12px">' +
+          '<input type="checkbox" id="apRemind" checked> \u05ea\u05d6\u05db\u05d5\u05e8\u05ea \u05dc\u05d9 \u05e9\u05e2\u05d4 \u05dc\u05e4\u05e0\u05d9 \u05d5-4 \u05d3\u05e7\u05d5\u05ea \u05dc\u05e4\u05e0\u05d9</label>' +
+        '<button class="btn" id="apGo">\u05e7\u05d1\u05e2 \u05e4\u05d2\u05d9\u05e9\u05d4</button><p class="err" id="apErr"></p></div></div>';
+      document.body.appendChild(bg);
+      bg.addEventListener('click', function (e) {
+        if (e.target === bg || e.target.closest('[data-admx]')) return bg.remove();
+        if (!e.target.closest('#apGo')) return;
+        var v = $('apWhen').value; if (!v) return ($('apErr').textContent = '\u05d7\u05e1\u05e8 \u05de\u05d5\u05e2\u05d3');
+        var at = new Date(v); if (isNaN(at.getTime())) return ($('apErr').textContent = '\u05de\u05d5\u05e2\u05d3 \u05dc\u05d0 \u05ea\u05e7\u05d9\u05df');
+        var go = e.target.closest('#apGo'); go.disabled = true; go.textContent = '\u05e7\u05d5\u05d1\u05e2\u2026';
+        var l = waLeads[leadId] || {};
+        var disp = pad2(at.getDate()) + '/' + pad2(at.getMonth() + 1) + '/' + at.getFullYear();
+        var hhmm = pad2(at.getHours()) + ':' + pad2(at.getMinutes());
+        db.from('appointments').insert({
+          lead_id: leadId, name: l.name || t.contact_name || null, phone: t.contact_phone || null,
+          type: l.car || '\u05e4\u05d2\u05d9\u05e9\u05d4', brand: l.brand || null,
+          appt_mode: $('apMode').value, branch: ($('apBranch') ? $('apBranch').value : '') || null,
+          note: ($('apNote').value || '').trim() || null,
+          appt_date: disp, appt_time: hhmm, appt_at: at.toISOString(), status: 'new',
+        }).then(function (r) {
+          if (r.error) { go.disabled = false; go.textContent = '\u05e7\u05d1\u05e2 \u05e4\u05d2\u05d9\u05e9\u05d4'; return ($('apErr').textContent = r.error.message); }
+          //  \u05d4\u05ea\u05d6\u05db\u05d5\u05e8\u05d5\u05ea \u05e0\u05e8\u05e9\u05de\u05d5\u05ea \u05db\u05de\u05e9\u05d9\u05de\u05d5\u05ea: \u05d4\u05e4\u05e2\u05de\u05d5\u05df \u05db\u05d1\u05e8 \u05e7\u05d5\u05e8\u05d0 \u05de\u05e9\u05d9\u05de\u05d5\u05ea
+          //  \u05e4\u05ea\u05d5\u05d7\u05d5\u05ea \u05d5\u05de\u05d0\u05d3\u05d9\u05dd \u05d0\u05d5\u05ea\u05df \u05db\u05e9\u05e2\u05d1\u05e8 \u05d4\u05de\u05d5\u05e2\u05d3 \u2014 \u05d0\u05d9\u05df \u05e6\u05d5\u05e8\u05da \u05d1\u05de\u05e0\u05d2\u05e0\u05d5\u05df \u05e0\u05d5\u05e1\u05e3.
+          var rows = [];
+          if ($('apRemind').checked) {
+            var who = (window.C2B && window.C2B.userId) || null;
+            var nm = l.name || t.contact_name || t.contact_phone;
+            [[60, '\u05e9\u05e2\u05d4'], [4, '4 \u05d3\u05e7\u05d5\u05ea']].forEach(function (x) {
+              var due = new Date(at.getTime() - x[0] * 60000);
+              if (due > new Date()) rows.push({ lead_id: leadId, assigned_to: who, done: false,
+                title: '\u23f0 \u05e4\u05d2\u05d9\u05e9\u05d4 \u05e2\u05dd ' + nm + ' \u05d1\u05e2\u05d5\u05d3 ' + x[1] + ' (' + hhmm + ')', due_at: due.toISOString() });
+            });
+          }
+          var done = function () { bg.remove(); say('\u2714 \u05d4\u05e4\u05d2\u05d9\u05e9\u05d4 \u05e0\u05e7\u05d1\u05e2\u05d4 \u05dc-' + disp + ' ' + hhmm, true); };
+          if (rows.length) db.from('tasks').insert(rows).then(done); else done();
+        });
+      });
+    });
+  }
+
+  function waTask(t, btn, say) {
+    withLead(t, btn, '\u2705', say, function (leadId) {
+      var d = new Date(Date.now() + 36e5);
+      var bg = document.createElement('div'); bg.className = 'adm-bg';
+      bg.innerHTML = '<div class="adm" style="max-width:400px"><div class="adm-hd">' +
+        '<h3>\u2705 \u05de\u05e9\u05d9\u05de\u05d4 \u05d7\u05d3\u05e9\u05d4</h3><button class="adm-x" data-admx>\u2715</button></div>' +
+        '<div class="adm-body">' +
+        '<div class="field"><label>\u05de\u05d4 \u05dc\u05e2\u05e9\u05d5\u05ea</label><input class="inp" id="tkTitle" value="\u05dc\u05d7\u05d6\u05d5\u05e8 \u05dc' +
+          esc(t.contact_name || '\u05dc\u05e7\u05d5\u05d7') + '"></div>' +
+        '<div class="field"><label>\u05dc\u05de\u05ea\u05d9</label><input class="inp" type="datetime-local" id="tkWhen" value="' + localVal(d) + '"></div>' +
+        '<button class="btn" id="tkGo">\u05e6\u05d5\u05e8 \u05de\u05e9\u05d9\u05de\u05d4</button><p class="err" id="tkErr"></p></div></div>';
+      document.body.appendChild(bg);
+      bg.addEventListener('click', function (e) {
+        if (e.target === bg || e.target.closest('[data-admx]')) return bg.remove();
+        if (!e.target.closest('#tkGo')) return;
+        var title = ($('tkTitle').value || '').trim();
+        if (!title) return ($('tkErr').textContent = '\u05d7\u05e1\u05e8\u05d4 \u05db\u05d5\u05ea\u05e8\u05ea');
+        var w = $('tkWhen').value ? new Date($('tkWhen').value).toISOString() : null;
+        var go = e.target.closest('#tkGo'); go.disabled = true; go.textContent = '\u05d9\u05d5\u05e6\u05e8\u2026';
+        db.from('tasks').insert({ lead_id: leadId, title: title, due_at: w, done: false,
+          assigned_to: (window.C2B && window.C2B.userId) || null }).then(function (r) {
+          if (r.error) { go.disabled = false; go.textContent = '\u05e6\u05d5\u05e8 \u05de\u05e9\u05d9\u05de\u05d4'; return ($('tkErr').textContent = r.error.message); }
+          bg.remove(); say('\u2714 \u05d4\u05de\u05e9\u05d9\u05de\u05d4 \u05e0\u05d5\u05e6\u05e8\u05d4', true);
         });
       });
     });
