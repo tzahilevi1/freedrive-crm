@@ -2276,6 +2276,7 @@
         '</div>');
 
       if ($('heyyNum')) $('heyyNum').addEventListener('change', function () { heyyNum = this.value; heyyThread = ''; renderHeyy(); });
+      if ($('waNewChat')) $('waNewChat').addEventListener('click', function () { newChatBox(nums, isAdm); });
       var q = $('waQ');
       if (q) {
         //  שמירת מיקום הסמן: renderHeyy נקרא מחדש בכל הקלדה, ובלי זה
@@ -2535,13 +2536,24 @@
     });
   }
 
-  function waTools(t) {
+  function waTools(t, winLeft) {
     var cats = [];
     waTpl.forEach(function (x) { if (cats.indexOf(x.category || 'כללי') < 0) cats.push(x.category || 'כללי'); });
     var chips = waTpl.map(function (x) {
       return '<button class="wa-chip" data-tpl="' + esc(x.id) + '" title="' + esc(x.body.slice(0, 90)) + '">' + esc(x.title) + '</button>';
     }).join('');
-    return '<div class="wa-tools">' +
+    //  \u05de\u05d7\u05d5\u05e5 \u05dc\u05d7\u05dc\u05d5\u05df \u05d4\u05d8\u05e7\u05e1\u05d8 \u05d4\u05d7\u05d5\u05e4\u05e9\u05d9 \u05d7\u05e1\u05d5\u05dd \u05e2"\u05d9 Meta.
+    //  \u05e2\u05d3\u05d9\u05e3 \u05dc\u05d4\u05e1\u05d1\u05d9\u05e8 \u05de\u05e8\u05d0\u05e9 \u05de\u05d0\u05e9\u05e8 \u05dc\u05e7\u05d1\u05dc \u05e9\u05d2\u05d9\u05d0\u05d4 \u05d0\u05d7\u05e8\u05d9 \u05dc\u05d7\u05d9\u05e6\u05d4.
+    var open24 = winLeft > 0;
+    var hrs = Math.floor(winLeft / 3600e3), mins = Math.round((winLeft % 3600e3) / 60000);
+    var banner = open24
+      ? (winLeft < 3 * 3600e3
+          ? '<div class="wa-win">\u23f3 \u05e0\u05d5\u05ea\u05e8\u05d5 ' + hrs + ':' + String(mins).padStart(2, '0') +
+            ' \u05e9\u05e2\u05d5\u05ea \u05dc\u05e9\u05dc\u05d9\u05d7\u05d4 \u05d7\u05d5\u05e4\u05e9\u05d9\u05ea. \u05d0\u05d7\u05e8 \u05db\u05da \u05e0\u05d9\u05ea\u05df \u05dc\u05e9\u05dc\u05d5\u05d7 \u05e8\u05e7 \u05ea\u05d1\u05e0\u05d9\u05ea \u05de\u05d0\u05d5\u05e9\u05e8\u05ea.</div>'
+          : '')
+      : '<div class="wa-win">\ud83d\udd12 \u05d7\u05dc\u05d5\u05df 24 \u05d4\u05e9\u05e2\u05d5\u05ea \u05e1\u05d2\u05d5\u05e8 \u2014 \u05d4\u05dc\u05e7\u05d5\u05d7 \u05dc\u05d0 \u05db\u05ea\u05d1 \u05d1-24 \u05d4\u05e9\u05e2\u05d5\u05ea \u05d4\u05d0\u05d7\u05e8\u05d5\u05e0\u05d5\u05ea.<br>' +
+        '\u05d0\u05e4\u05e9\u05e8 \u05dc\u05e9\u05dc\u05d5\u05d7 \u05dc\u05d5 \u05e8\u05e7 <b>\u05ea\u05d1\u05e0\u05d9\u05ea \u05de\u05d0\u05d5\u05e9\u05e8\u05ea</b>. \u05d6\u05d5 \u05de\u05d2\u05d1\u05dc\u05d4 \u05e9\u05dc Meta \u05d5\u05dc\u05d0 \u05e9\u05dc \u05d4\u05de\u05e2\u05e8\u05db\u05ea.</div>';
+    return '<div class="wa-tools">' + banner +
       '<div class="wa-chips">' + (chips || '<span class="muted" style="font-size:12px">אין הודעות מהירות</span>') + '</div>' +
       '<div class="wa-compose">' +
         '<textarea class="inp" id="waBody" rows="2" placeholder="כתבו הודעה, או בחרו הודעה מהירה למעלה\u2026">' + esc(waDraft) + '</textarea>' +
@@ -2551,7 +2563,8 @@
           '<button class="btn btn-ghost btn-sm" id="waQuoteBtn" title="הצעת מחיר מלאה">\ud83d\udcb0 הצעת מחיר</button>' +
           '<button class="btn btn-ghost btn-sm" id="waContract" title="\u05de\u05d9\u05dc\u05d5\u05d9 \u05d4\u05e1\u05db\u05dd \u05dc\u05dc\u05e7\u05d5\u05d7">\ud83d\udcc4 \u05d4\u05e1\u05db\u05dd \u05dc\u05d7\u05ea\u05d9\u05de\u05d4</button>' +
           '<button class="btn btn-ghost btn-sm" id="waSched" title="תזמון לשעה מאוחרת יותר">\u23f0 תזמון</button>' +
-          '<button class="btn btn-sm" id="waSend">שלח \u27a4</button>' +
+          '<button class="btn btn-ghost btn-sm" id="waTplBtn" title="\u05e9\u05dc\u05d9\u05d7\u05ea \u05ea\u05d1\u05e0\u05d9\u05ea \u05de\u05d0\u05d5\u05e9\u05e8\u05ea">\ud83d\udce8 \u05ea\u05d1\u05e0\u05d9\u05ea</button>' +
+          '<button class="btn btn-sm" id="waSend"' + (open24 ? '' : ' disabled title="\u05d7\u05dc\u05d5\u05df 24 \u05d4\u05e9\u05e2\u05d5\u05ea \u05e1\u05d2\u05d5\u05e8"') + '>\u05e9\u05dc\u05d7 \u27a4</button>' +
         '</div>' +
       '</div>' +
       '<div id="waOut" class="wa-out"></div>' +
@@ -2585,6 +2598,7 @@
     if ($('waCarBtn')) $('waCarBtn').onclick = function () { carPicker(t, body, false); };
     if ($('waQuoteBtn')) $('waQuoteBtn').onclick = function () { carPicker(t, body, true); };
     if ($('waContract')) $('waContract').onclick = function () { waContract(t, this, say); };
+    if ($('waTplBtn')) $('waTplBtn').onclick = function () { tplPicker(t, this, say); };
     if ($('waSched')) $('waSched').onclick = function () { schedBox(t, body, say); };
     if ($('waSend')) $('waSend').onclick = function () {
       sendMsg(t, body.value, null, waPickedCar, say, this);
@@ -2787,8 +2801,10 @@
         '<p class="muted" style="margin:0;font-size:13px">' +
           (isAdm ? 'כל הערוצים המנוהלים' : 'הערוץ שלך: <b>' + esc((numById[heyyNum] || {}).label || (numById[heyyNum] || {}).phone || '\u2014') + '</b>') +
           ' \u00b7 ' + n + ' שיחות</p></div>' +
+      '<div class="row" style="gap:8px;align-items:center">' +
       (isAdm ? '<select class="inp" id="heyyNum" style="width:auto;min-width:210px">' +
-        '<option value="">כל הערוצים</option>' + pick + '</select>' : '') + '</div>';
+        '<option value="">כל הערוצים</option>' + pick + '</select>' : '') +
+      '<button class="btn btn-sm" id="waNewChat">\u2795 \u05e9\u05d9\u05d7\u05d4 \u05d7\u05d3\u05e9\u05d4</button></div></div>';
   }
   //  ---------- סטטוס הליד בתוך השיחה ----------
   //  אותו שדה בדיוק שמוצג במסך הלידים. שינוי כאן עובר
@@ -2836,6 +2852,131 @@
       btn.disabled = false; btn.textContent = '\ud83d\udcc4 \u05d4\u05e1\u05db\u05dd \u05dc\u05d7\u05ea\u05d9\u05de\u05d4';
       if (err) return say(err, false);
       window.C2B_openContract(leadId);
+    });
+  }
+
+  //  \u05d4\u05ea\u05d1\u05e0\u05d9\u05d5\u05ea \u05e0\u05de\u05e9\u05db\u05d5\u05ea \u05de-Heyy \u05d1\u05db\u05dc \u05e4\u05ea\u05d9\u05d7\u05d4 \u05d5\u05dc\u05d0 \u05e0\u05e9\u05de\u05e8\u05d5\u05ea \u05d0\u05e6\u05dc\u05e0\u05d5:
+  //  \u05d0\u05d9\u05e9\u05d5\u05e8 \u05e9\u05dc Meta \u05e0\u05e9\u05dc\u05dc \u05d5\u05de\u05ea\u05d7\u05d3\u05e9 \u05d1\u05dc\u05d9 \u05e9\u05e0\u05d3\u05e2, \u05d5\u05e8\u05e9\u05d9\u05de\u05d4 \u05de\u05d9\u05d5\u05e9\u05e0\u05ea
+  //  \u05d4\u05d9\u05d9\u05ea\u05d4 \u05de\u05e6\u05d9\u05d2\u05d4 \u05ea\u05d1\u05e0\u05d9\u05ea \u05e9\u05ea\u05d9\u05e4\u05d5\u05dc \u05d1\u05e9\u05dc\u05d9\u05d7\u05d4.
+  function tplPicker(t, btn, say) {
+    var old = btn.textContent; btn.disabled = true; btn.textContent = '\u05d8\u05d5\u05e2\u05df\u2026';
+    db.functions.invoke('heyy-send', { body: { action: 'templates', thread_id: t.id } }).then(function (r) {
+      btn.disabled = false; btn.textContent = old;
+      var d = r.data || {};
+      if (r.error || d.error) return say(d.error || (r.error && r.error.message) || '\u05d8\u05e2\u05d9\u05e0\u05ea \u05d4\u05ea\u05d1\u05e0\u05d9\u05d5\u05ea \u05e0\u05db\u05e9\u05dc\u05d4', false);
+      var list = d.templates || [];
+      var bg = document.createElement('div'); bg.className = 'adm-bg';
+      bg.innerHTML = '<div class="adm" style="max-width:520px"><div class="adm-hd">' +
+        '<h3>\ud83d\udce8 \u05e9\u05dc\u05d9\u05d7\u05ea \u05ea\u05d1\u05e0\u05d9\u05ea</h3><button class="adm-x" data-admx>\u2715</button></div>' +
+        '<div class="adm-body">' + (list.length
+          ? list.map(function (x, i) {
+              return '<div class="tpl-row" data-tpl-i="' + i + '"><b>' + esc(x.name || '\u05ea\u05d1\u05e0\u05d9\u05ea') + '</b>' +
+                (x.language ? ' <span class="muted" style="font-size:11.5px">' + esc(x.language) + '</span>' : '') +
+                '<div class="bd">' + esc(String(x.body || '').slice(0, 240)) + '</div></div>';
+            }).join('')
+          : '<p class="empty">\u05d0\u05d9\u05df \u05ea\u05d1\u05e0\u05d9\u05d5\u05ea \u05de\u05d0\u05d5\u05e9\u05e8\u05d5\u05ea \u05dc\u05e2\u05e8\u05d5\u05e5 \u05d4\u05d6\u05d4.<br>' +
+            '\u05d9\u05d5\u05e6\u05e8\u05d9\u05dd \u05d0\u05d5\u05ea\u05df \u05d1-Heyy \u05ea\u05d7\u05ea Message templates \u05d5\u05e9\u05d5\u05dc\u05d7\u05d9\u05dd \u05dc\u05d0\u05d9\u05e9\u05d5\u05e8 Meta.</p>') +
+        '</div></div>';
+      document.body.appendChild(bg);
+      bg.addEventListener('click', function (e) {
+        if (e.target === bg || e.target.closest('[data-admx]')) return bg.remove();
+        var row = e.target.closest('[data-tpl-i]'); if (!row) return;
+        var tpl = list[+row.dataset.tplI]; bg.remove(); tplVars(t, tpl, say);
+      });
+    });
+  }
+
+  //  \u05dc\u05ea\u05d1\u05e0\u05d9\u05ea \u05d9\u05db\u05d5\u05dc\u05d9\u05dd \u05dc\u05d4\u05d9\u05d5\u05ea \u05de\u05e9\u05ea\u05e0\u05d9\u05dd. \u05de\u05de\u05dc\u05d0\u05d9\u05dd \u05de\u05e8\u05d0\u05e9 \u05de\u05d4 \u05e9\u05d9\u05d3\u05d5\u05e2
+  //  \u05dc\u05e0\u05d5 \u2014 \u05e9\u05dd \u05d4\u05dc\u05e7\u05d5\u05d7 \u05d5\u05e9\u05dd \u05d4\u05e0\u05e6\u05d9\u05d2 \u05d4\u05de\u05d7\u05d5\u05d1\u05e8 \u2014 \u05db\u05d3\u05d9 \u05dc\u05d0 \u05dc\u05d4\u05e7\u05dc\u05d9\u05d3 \u05e9\u05d5\u05d1.
+  function tplVars(t, tpl, say) {
+    var vars = tpl.variables || [];
+    var me = (window.C2B && (window.C2B.fullName || window.C2B.userName)) || '';
+    var guess = function (v) {
+      var k = String(v).toLowerCase();
+      if (/agent|rep|\u05e0\u05e6\u05d9\u05d2|\u05e1\u05d5\u05db\u05df/.test(k)) return me;
+      if (/name|\u05e9\u05dd|first/.test(k)) return t.contact_name || '';
+      if (/phone|\u05d8\u05dc\u05e4\u05d5\u05df/.test(k)) return t.contact_phone || '';
+      return '';
+    };
+    if (!vars.length) return tplSend(t, tpl, {}, say);
+    var bg = document.createElement('div'); bg.className = 'adm-bg';
+    bg.innerHTML = '<div class="adm" style="max-width:440px"><div class="adm-hd">' +
+      '<h3>' + esc(tpl.name || '\u05ea\u05d1\u05e0\u05d9\u05ea') + '</h3><button class="adm-x" data-admx>\u2715</button></div>' +
+      '<div class="adm-body"><div class="sec-note" style="margin:0 0 12px">' + esc(String(tpl.body || '').slice(0, 220)) + '</div>' +
+      vars.map(function (v) {
+        return '<div class="field"><label>' + esc(v) + '</label>' +
+          '<input class="inp" data-var="' + esc(v) + '" value="' + esc(guess(v)) + '"></div>';
+      }).join('') +
+      '<button class="btn" id="tplGo">\u05e9\u05dc\u05d7</button></div></div>';
+    document.body.appendChild(bg);
+    bg.addEventListener('click', function (e) {
+      if (e.target === bg || e.target.closest('[data-admx]')) return bg.remove();
+      if (!e.target.closest('#tplGo')) return;
+      var vals = {};
+      bg.querySelectorAll('[data-var]').forEach(function (i) { vals[i.dataset.var] = i.value; });
+      bg.remove(); tplSend(t, tpl, vals, say);
+    });
+  }
+
+  function tplSend(t, tpl, vals, say) {
+    say('\u05e9\u05d5\u05dc\u05d7 \u05ea\u05d1\u05e0\u05d9\u05ea\u2026', true);
+    db.functions.invoke('heyy-send', {
+      body: { thread_id: t.id, template_id: tpl.id, variables: vals }
+    }).then(function (r) {
+      var d = r.data || {};
+      if (r.error || d.error) return say(d.error || (r.error && r.error.message) || '\u05d4\u05e9\u05dc\u05d9\u05d7\u05d4 \u05e0\u05db\u05e9\u05dc\u05d4', false);
+      say('\u2714 \u05d4\u05ea\u05d1\u05e0\u05d9\u05ea \u05e0\u05e9\u05dc\u05d7\u05d4', true);
+      openThread(t);
+    });
+  }
+
+  //  \u05e4\u05ea\u05d9\u05d7\u05ea \u05e9\u05d9\u05d7\u05d4 \u05d9\u05d6\u05d5\u05de\u05d4: \u05e0\u05d5\u05e6\u05e8 \u05dc\u05d9\u05d3 \u05e2\u05dd \u05d0\u05d5\u05ea\u05d5 \u05d9\u05d9\u05d7\u05d5\u05e1 \u05e9\u05dc \u05dc\u05d9\u05d3 \u05e0\u05db\u05e0\u05e1
+  //  \u05de\u05d5\u05d5\u05d8\u05e1\u05d0\u05e4, \u05d5\u05e9\u05d9\u05d7\u05d4 \u05e8\u05d9\u05e7\u05d4 \u05e9\u05de\u05d7\u05db\u05d4 \u05dc\u05d4\u05d5\u05d3\u05e2\u05d4 \u05d4\u05e8\u05d0\u05e9\u05d5\u05e0\u05d4. \u05de\u05db\u05d9\u05d5\u05d5\u05df \u05e9\u05d4\u05dc\u05e7\u05d5\u05d7
+  //  \u05e2\u05d5\u05d3 \u05dc\u05d0 \u05db\u05ea\u05d1 \u2014 \u05d7\u05dc\u05d5\u05df 24 \u05d4\u05e9\u05e2\u05d5\u05ea \u05e1\u05d2\u05d5\u05e8, \u05d5\u05d4\u05e4\u05ea\u05d9\u05d7\u05d4 \u05d7\u05d9\u05d9\u05d1\u05ea \u05dc\u05d4\u05d9\u05d5\u05ea \u05ea\u05d1\u05e0\u05d9\u05ea.
+  function newChatBox(nums, isAdm) {
+    var usable = nums.filter(function (n) { return n.channel_id && n.active !== false; });
+    if (!usable.length) return alert('\u05d0\u05d9\u05df \u05de\u05e1\u05e4\u05e8 \u05de\u05d7\u05d5\u05d1\u05e8 \u05dc-Heyy');
+    var bg = document.createElement('div'); bg.className = 'adm-bg';
+    bg.innerHTML = '<div class="adm" style="max-width:420px"><div class="adm-hd">' +
+      '<h3>\u2795 \u05e9\u05d9\u05d7\u05d4 \u05d5\u05dc\u05d9\u05d3 \u05d7\u05d3\u05e9</h3><button class="adm-x" data-admx>\u2715</button></div>' +
+      '<div class="adm-body">' +
+      (usable.length > 1 ? '<div class="field"><label>\u05de\u05d0\u05d9\u05d6\u05d4 \u05de\u05e1\u05e4\u05e8</label><select class="inp" id="ncNum">' +
+        usable.map(function (n) { return '<option value="' + esc(n.id) + '">' + esc(n.label || n.phone) + '</option>'; }).join('') +
+        '</select></div>' : '') +
+      '<div class="field"><label>\u05d8\u05dc\u05e4\u05d5\u05df \u05d4\u05dc\u05e7\u05d5\u05d7</label><input class="inp ltr" id="ncPhone" placeholder="0501234567" inputmode="tel"></div>' +
+      '<div class="field"><label>\u05e9\u05dd (\u05dc\u05d0 \u05d7\u05d5\u05d1\u05d4)</label><input class="inp" id="ncName"></div>' +
+      '<div class="sec-note" style="margin:0 0 12px">\u05d9\u05d9\u05d5\u05d5\u05e6\u05e8 \u05d2\u05dd \u05dc\u05d9\u05d3 \u05e2\u05dd \u05de\u05e7\u05d5\u05e8 \u05d4\u05d2\u05e2\u05d4 \u05d5\u05d5\u05d0\u05d8\u05e1\u05d0\u05e4. \u05dc\u05dc\u05e7\u05d5\u05d7 \u05e9\u05dc\u05d0 \u05db\u05ea\u05d1 \u05e7\u05d5\u05d3\u05dd \u05e0\u05d9\u05ea\u05df \u05dc\u05e9\u05dc\u05d5\u05d7 \u05e8\u05e7 \u05ea\u05d1\u05e0\u05d9\u05ea \u05de\u05d0\u05d5\u05e9\u05e8\u05ea.</div>' +
+      '<button class="btn" id="ncGo">\u05e6\u05d5\u05e8 \u05d5\u05e4\u05ea\u05d7 \u05e9\u05d9\u05d7\u05d4</button>' +
+      '<p class="err" id="ncErr"></p></div></div>';
+    document.body.appendChild(bg);
+    bg.addEventListener('click', function (e) {
+      if (e.target === bg || e.target.closest('[data-admx]')) return bg.remove();
+      if (!e.target.closest('#ncGo')) return;
+      var raw = String(($('ncPhone') || {}).value || '').replace(/[^0-9+]/g, '');
+      //  \u05de\u05e0\u05e8\u05de\u05dc\u05d9\u05dd \u05dc-E.164 \u05d1\u05dc\u05d9 \u05e4\u05dc\u05d5\u05e1: \u05d6\u05d4 \u05d4\u05e4\u05d5\u05e8\u05de\u05d8 \u05e9\u05d1\u05d5 \u05e9\u05de\u05d5\u05e8\u05d5\u05ea \u05db\u05dc \u05d4\u05e9\u05d9\u05d7\u05d5\u05ea,
+      //  \u05d5\u05d1\u05dc\u05e2\u05d3\u05d9\u05d5 \u05d4\u05d5\u05d5\u05d1\u05d4\u05d5\u05e7 \u05d4\u05d9\u05d4 \u05e4\u05d5\u05ea\u05d7 \u05e9\u05d9\u05d7\u05d4 \u05e9\u05e0\u05d9\u05d9\u05d4 \u05dc\u05d0\u05d5\u05ea\u05d5 \u05d0\u05d3\u05dd.
+      var e164 = raw.replace(/^\+/, '');
+      if (/^0/.test(e164)) e164 = '972' + e164.slice(1);
+      if (!/^9725\d{8}$/.test(e164) && !/^\d{10,15}$/.test(e164)) {
+        return ($('ncErr').textContent = '\u05de\u05e1\u05e4\u05e8 \u05dc\u05d0 \u05ea\u05e7\u05d9\u05df');
+      }
+      var numId = $('ncNum') ? $('ncNum').value : usable[0].id;
+      var nm = String(($('ncName') || {}).value || '').trim();
+      var go = e.target.closest('#ncGo'); go.disabled = true; go.textContent = '\u05d9\u05d5\u05e6\u05e8\u2026';
+      db.from('wa_threads').select('id').eq('number_id', numId).eq('contact_phone', e164).maybeSingle().then(function (ex) {
+        if (ex.data) { bg.remove(); heyyThread = ex.data.id; return renderHeyy(); }
+        db.from('wa_threads').insert({
+          number_id: numId, contact_phone: e164, contact_name: nm || null,
+          last_at: new Date().toISOString(), last_text: null, last_dir: 'out', unread: 0,
+        }).select('id,contact_name,contact_phone,number_id,lead_id,provider_chat_id').single().then(function (r) {
+          if (r.error) { go.disabled = false; go.textContent = '\u05e6\u05d5\u05e8 \u05d5\u05e4\u05ea\u05d7 \u05e9\u05d9\u05d7\u05d4'; return ($('ncErr').textContent = r.error.message); }
+          waNewLead(r.data, function (leadId, err) {
+            bg.remove();
+            if (err) alert('\u05d4\u05e9\u05d9\u05d7\u05d4 \u05e0\u05e4\u05ea\u05d7\u05d4 \u05d0\u05d1\u05dc \u05d4\u05dc\u05d9\u05d3 \u05dc\u05d0 \u05e0\u05d5\u05e6\u05e8: ' + err);
+            heyyThread = r.data.id; renderHeyy();
+          });
+        });
+      });
     });
   }
 
@@ -2902,6 +3043,11 @@
           (m.direction === 'out' ? ' <span class="tick">\u2713\u2713</span>' : '') +
           (m.author ? ' \u00b7 ' + esc(m.author) : '') + '</span></div>';
       }).join('');
+      //  מטא מגבילה טקסט חופשי ל-24 שעות מההודעה האחרונה של
+      //  הלקוח. מחוץ לחלון ניתן לשלוח רק תבנית מאושרת.
+      var ins = (r.data || []).filter(function (m) { return m.direction === 'in'; });
+      var lastIn = ins.length ? new Date(ins[ins.length - 1].sent_at).getTime() : 0;
+      var winLeft = lastIn ? Math.max(0, 24 * 3600e3 - (Date.now() - lastIn)) : 0;
       var nm = t.contact_name || t.contact_phone;
       $('waPane').innerHTML =
         '<div class="wa-top">' +
@@ -2913,7 +3059,7 @@
                      : '<button class="btn btn-sm" data-wanew="' + esc(t.id) + '">\u2795 צור ליד</button>') +
         '</div>' +
         '<div class="wa-msgs" id="waMsgs">' + (html || '<p class="empty">אין הודעות</p>') + '</div>' +
-        waTools(t);
+        waTools(t, winLeft);
       var el = $('waMsgs'); if (el) el.scrollTop = el.scrollHeight;
       var bt = $('waPane').querySelector('[data-waopen]');
       if (bt) bt.addEventListener('click', function () { window.C2B_openLeadCard && window.C2B_openLeadCard(this.dataset.waopen); });
