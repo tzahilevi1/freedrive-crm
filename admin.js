@@ -2530,10 +2530,23 @@
       if (e.target === bg || e.target.closest('[data-admx]')) return bg.remove();
       var u = e.target.closest('[data-coachuse]');
       if (u && body) {
-        body.value = (body.value ? body.value + '\n' : '') + (window.__coach || [])[+u.dataset.coachuse];
-        waDraft = body.value; bg.remove(); body.focus();
+        waPut(body, (window.__coach || [])[+u.dataset.coachuse]);
+        bg.remove();
       }
     });
+  }
+
+  //  \u05d4\u05ea\u05d9\u05d1\u05d4 \u05e0\u05de\u05e6\u05d0\u05ea \u05de\u05d7\u05d3\u05e9 \u05d1\u05db\u05dc \u05d4\u05d6\u05e8\u05e7\u05d4 \u05d5\u05dc\u05d0 \u05de\u05d4\u05e4\u05e0\u05d9\u05d4 \u05e9\u05e0\u05ea\u05e4\u05e1\u05d4
+  //  \u05db\u05e9\u05d4\u05e1\u05e8\u05d2\u05dc \u05e0\u05d1\u05e0\u05d4: \u05e8\u05d9\u05e0\u05d3\u05d5\u05e8 \u05de\u05d7\u05d3\u05e9 \u05e9\u05dc \u05d4\u05e9\u05d9\u05d7\u05d4 \u05de\u05d7\u05dc\u05d9\u05e3 \u05d0\u05ea \u05d4-textarea,
+  //  \u05d5\u05db\u05ea\u05d9\u05d1\u05d4 \u05dc\u05d0\u05dc\u05de\u05e0\u05d8 \u05d4\u05de\u05e0\u05d5\u05ea\u05e7 \u05e0\u05e2\u05dc\u05de\u05ea \u05d1\u05dc\u05d9 \u05e9\u05d5\u05dd \u05e1\u05d9\u05de\u05df.
+  function waPut(fallback, txt, sep) {
+    var el = $('waBody') || fallback;
+    if (!el) return false;
+    el.value = (el.value ? el.value + (sep || '\n') : '') + txt;
+    waDraft = el.value;
+    el.focus();
+    try { el.setSelectionRange(el.value.length, el.value.length); } catch (e) { /* \u05dc\u05d0 \u05e7\u05e8\u05d9\u05d8\u05d9 */ }
+    return true;
   }
 
   function waTools(t, winLeft) {
@@ -2588,8 +2601,7 @@
       b.onclick = function () {
         var x = waTpl.filter(function (y) { return y.id === this.dataset.tpl; }.bind(this))[0];
         if (!x) return;
-        body.value = (body.value ? body.value + '\n' : '') + fill(x.body);
-        waDraft = body.value; body.focus();
+        waPut(body, fill(x.body));
       };
     });
     if (body) body.oninput = function () { waDraft = this.value; };
@@ -2770,7 +2782,7 @@
             '<span class="muted" style="font-size:12px">בלי מחיר קנייה ובלי נתונים פנימיים</span></div>' +
           (quoteMode ? '<div id="waQDoc" style="position:fixed;left:-9999px;top:0">' + quoteHtml(c, txt) + '</div>' : '');
         bg.querySelector('#waCarUse').onclick = function () {
-          body.value = (body.value ? body.value + '\n\n' : '') + txt; waDraft = body.value;
+          waPut(body, txt, '\n\n');
           //  נשמר כדי שהתור יקבל גם את מזהה הרכב ואת התמונה: כשחיבור
           //  השליחה יעלה, הכרטיס צריך לצאת עם התמונה ולא כטקסט בלבד.
           waPickedCar = { id: c.id, img: c.img || null };
