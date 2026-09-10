@@ -3249,6 +3249,22 @@
     waChan = null; clearTimeout(waRtTimer);
   }
 
+  //  \u05de\u05e1\u05de\u05e0\u05ea \u05d0\u05ea \u05d4\u05d4\u05d5\u05d3\u05e2\u05d5\u05ea \u05d4\u05ea\u05d5\u05d0\u05de\u05d5\u05ea \u05d5\u05d2\u05d5\u05dc\u05dc\u05ea \u05dc\u05e8\u05d0\u05e9\u05d5\u05e0\u05d4, \u05d1\u05dc\u05d9 \u05dc\u05d2\u05e2\u05ea
+  //  \u05d1-DOM \u05de\u05e2\u05d1\u05e8 \u05dc\u05de\u05d7\u05dc\u05e7\u05d4 \u05d0\u05d7\u05ea. \u05d1\u05dc\u05d9 \u05e9\u05dc\u05d9\u05e4\u05d4, \u05d1\u05dc\u05d9 \u05e8\u05d9\u05e0\u05d3\u05d5\u05e8, \u05d1\u05dc\u05d9 \u05e7\u05e4\u05d9\u05e6\u05d4.
+  function waHighlight() {
+    var el = $('waMsgs'); if (!el) return;
+    var q = String(waFind || '').trim().toLowerCase();
+    var first = null, n = 0;
+    el.querySelectorAll('.wa-m').forEach(function (m) {
+      var on = !!q && (m.dataset.txt || '').indexOf(q) >= 0;
+      m.classList.toggle('hit', on);
+      if (on) { n++; if (!first) first = m; }
+    });
+    var cnt = $('waFindN');
+    if (cnt) cnt.textContent = q ? (n ? n + ' \u05ea\u05d5\u05e6\u05d0\u05d5\u05ea' : '\u05d0\u05d9\u05df \u05ea\u05d5\u05e6\u05d0\u05d5\u05ea') : '';
+    if (first) first.scrollIntoView({ block: 'center' });
+  }
+
   function waStDef(k) {
     var L = window.C2B_STATUSES || [];
     for (var i = 0; i < L.length; i++) if (L[i].k === k) return L[i];
@@ -3314,10 +3330,9 @@
         var tick = st === 'read' ? '<span class="tick read">\u2713\u2713</span>'
           : (st === 'delivered' ? '<span class="tick">\u2713\u2713</span>'
           : (st === 'failed' ? '<span class="tick" style="color:var(--danger)">\u26a0</span>' : '<span class="tick">\u2713</span>'));
-        var q = waFind.trim().toLowerCase();
-        var hit = q && String(m.body || '').toLowerCase().indexOf(q) >= 0;
         var rp = m.reply_to ? byId[m.reply_to] : null;
-        return sep + '<div class="wa-m ' + esc(m.direction) + (hit ? ' hit' : '') + '" data-mid="' + esc(m.id) + '">' +
+        return sep + '<div class="wa-m ' + esc(m.direction) + '" data-mid="' + esc(m.id) + '"' +
+          ' data-txt="' + esc(String(m.body || '').toLowerCase()) + '">' +
           (rp ? '<span class="rep">' + esc(String(rp.body || '[\u05e7\u05d5\u05d1\u05e5]').slice(0, 90)) + '</span>' : '') +
           media + (m.body ? esc(m.body) : (media ? '' : '\u2014')) +
           '<span class="t">' + esc(d.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })) +
@@ -3341,19 +3356,24 @@
                      : '<button class="btn btn-sm" data-wanew="' + esc(t.id) + '">\u2795 צור ליד</button>') +
         '</div>' +
         '<div class="wa-find"><input class="inp" id="waFind" placeholder="\ud83d\udd0e חיפוש בתוך השיחה\u2026" value="' + esc(waFind) + '">' +
-          (waFind ? '<button class="btn btn-ghost btn-sm" id="waFindX">\u2715</button>' : '') + '</div>' +
+          '<span class="muted" id="waFindN" style="font-size:12px;align-self:center;white-space:nowrap"></span>' +
+          '<button class="btn btn-ghost btn-sm" id="waFindX">\u2715</button></div>' +
         '<div class="wa-msgs" id="waMsgs">' + (html || '<p class="empty">אין הודעות</p>') + '</div>' +
         waTools(t, winLeft);
       var el = $('waMsgs');
       //  \u05d1\u05d7\u05d9\u05e4\u05d5\u05e9 \u05d2\u05d5\u05dc\u05dc\u05d9\u05dd \u05dc\u05ea\u05d5\u05e6\u05d0\u05d4 \u05d4\u05e8\u05d0\u05e9\u05d5\u05e0\u05d4, \u05d0\u05d7\u05e8\u05ea \u05dc\u05e1\u05d5\u05e3
-      if (el) { var h1 = el.querySelector('.wa-m.hit');
-        if (h1) h1.scrollIntoView({ block: 'center' }); else el.scrollTop = el.scrollHeight; }
+      if (el) el.scrollTop = el.scrollHeight;
       var fi = $('waFind');
       if (fi) {
-        fi.addEventListener('input', function () { waFind = this.value; openThread(t); });
+        //  \u05e1\u05d9\u05e0\u05d5\u05df \u05d1\u05e6\u05d3 \u05d4\u05dc\u05e7\u05d5\u05d7 \u05d1\u05dc\u05d1\u05d3. \u05e7\u05d5\u05d3\u05dd \u05db\u05dc \u05ea\u05d5 \u05e7\u05e8\u05d0 \u05dc-openThread,
+        //  \u05e9\u05e9\u05d5\u05dc\u05e3 \u05de\u05d7\u05d3\u05e9 \u05de\u05d4\u05de\u05e1\u05d3 \u05d5\u05de\u05e8\u05e0\u05d3\u05e8 \u05d4\u05db\u05dc \u2014 \u05de\u05e9\u05dd \u05d4\u05e7\u05e4\u05d9\u05e6\u05d5\u05ea.
+        fi.addEventListener('input', function () { waFind = this.value; waHighlight(); });
         if (waFind) { fi.focus(); fi.setSelectionRange(waFind.length, waFind.length); }
       }
-      if ($('waFindX')) $('waFindX').onclick = function () { waFind = ''; openThread(t); };
+      if ($('waFindX')) $('waFindX').onclick = function () {
+        waFind = ''; if ($('waFind')) $('waFind').value = ''; waHighlight();
+      };
+      waHighlight();
       if (el) el.addEventListener('click', function (e) {
         var rb = e.target.closest('[data-reply]'); if (!rb) return;
         var m2 = (r.data || []).filter(function (x) { return x.id === rb.dataset.reply; })[0];
