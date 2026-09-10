@@ -2606,9 +2606,11 @@
         '<div class="wa-line">' +
         '<textarea class="inp" id="waBody" rows="2" placeholder="כתבו הודעה, או בחרו הודעה מהירה למעלה\u2026">' + esc(waDraft) + '</textarea>' +
           '<div class="wa-go">' +
+          '<button class="btn btn-sm" id="waSend"' + (open24 ? '' : ' disabled title="\u05d7\u05dc\u05d5\u05df 24 \u05d4\u05e9\u05e2\u05d5\u05ea \u05e1\u05d2\u05d5\u05e8"') + '>\u05e9\u05dc\u05d7 \u27a4</button>' +
+          '<div class="wa-go2">' +
           '<button class="btn' + (open24 ? ' btn-ghost btn-sm' : '') + '" id="waTplBtn" title="\u05e9\u05dc\u05d9\u05d7\u05ea \u05ea\u05d1\u05e0\u05d9\u05ea \u05de\u05d0\u05d5\u05e9\u05e8\u05ea">\ud83d\udce8 \u05ea\u05d1\u05e0\u05d9\u05ea</button>' +
           '<button class="btn btn-ghost btn-sm" id="waSched" title="תזמון לשעה מאוחרת יותר">\u23f0 תזמון</button>' +
-          '<button class="btn btn-sm" id="waSend"' + (open24 ? '' : ' disabled title="\u05d7\u05dc\u05d5\u05df 24 \u05d4\u05e9\u05e2\u05d5\u05ea \u05e1\u05d2\u05d5\u05e8"') + '>\u05e9\u05dc\u05d7 \u27a4</button>' +
+          '</div>' +
           '</div>' +
         '</div>' +
         '<div class="wa-btns">' +
