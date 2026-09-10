@@ -3223,10 +3223,16 @@
       //  אין משתנה גלובלי למסך הנוכחי — הפריט הפעיל בתפריט הוא מקור האמת
       var act = $('nav').querySelector('.nav-item.active');
       if (!act || act.dataset.nav !== 'heyy' || !$('waList')) return;
+      //  לא דורסים את המסך תוך כדי עבודה: חלון פתוח, גרירה, או שדה
+      //  שהמשתמש נמצא בו. הרינדור יקרה באירוע הבא, אחרי שהוא סיים.
+      if (document.querySelector('.adm-bg')) return;
+      var f = document.activeElement;
+      if (f && /INPUT|TEXTAREA|SELECT/.test(f.tagName) && f.id !== 'waBody') return;
+      if (document.querySelector('.cp-dragging, .cp-reordering')) return;
       //  \u05d0\u05dd \u05d4\u05e0\u05e6\u05d9\u05d2 \u05d1\u05d0\u05de\u05e6\u05e2 \u05d4\u05e7\u05dc\u05d3\u05d4 \u05dc\u05d0 \u05e0\u05d3\u05e8\u05d5\u05e1 \u05dc\u05d5 \u05d0\u05ea \u05d4\u05d8\u05d9\u05d5\u05d8\u05d4
       var b = $('waBody'); if (b) waDraft = b.value;
       renderHeyy();
-    }, soft ? 250 : 0);
+    }, soft ? 1200 : 0);
   }
   function waWatch() {
     if (waChan) return;
@@ -3960,7 +3966,7 @@
         integrations: ['\ud83d\udd0c חיבורים', 'מקורות הלידים החיצוניים והקליטה האוטומטית.'],
         brands: ['\ud83c\udff7\ufe0f מותגים', 'שיוך כל מותג לחברת השיווק שלו.'],
         quick: ['\ud83d\udcac הודעות מהירות', 'תבניות לשליחה מהירה מכרטיס הליד.'],
-        phone: ['\u260e\ufe0f טלפוניה', 'חיוג מהמערכת וחיבור ManyChat.'],
+        phone: ['\u260e\ufe0f טלפוניה וווטסאפ', 'חיוג מהמערכת, וכל החיבור של Hey · WhatsApp.'],
         actions: ['\u26a1 פעולות', 'סרגל הפעולות שמופיע בכרטיס הליד.']
       };
       var hd = HEAD[sec] || HEAD.lists, mid = '';
@@ -3968,7 +3974,7 @@
       else if (sec === 'integrations') mid = '<div id="integrationsCard"></div>';
       else if (sec === 'brands') mid = '<div id="brandMapCard"></div>';
       else if (sec === 'quick') mid = '<div id="quickMsgCard"></div>';
-      else if (sec === 'phone') mid = '<div id="telephonyCard"></div><div id="manychatCard"></div>';
+      else if (sec === 'phone') mid = '<div id="telephonyCard"></div><div id="heyCard"></div>';
       else if (sec === 'actions') mid = actionEditorCard();
       view('<h2 style="margin:0 0 4px">' + hd[0] + '</h2>' +
         '<p class="muted" style="font-size:13px;margin-bottom:14px">' + hd[1] + '</p>' + mid);
@@ -3976,7 +3982,7 @@
       if (sec === 'integrations') renderIntegrations();
       if (sec === 'brands') renderBrandMap();
       if (sec === 'quick') renderQuickMsgs();
-      if (sec === 'phone') { renderTelephony(); renderManychat(); }
+      if (sec === 'phone') { renderTelephony(); renderHeyCfg(); }
       // מחיקת צ'יפ במקום — בלי לרענן את כל הדף
       function bindDel(bEl) {
         bEl.addEventListener('click', function () {
@@ -4160,6 +4166,139 @@
       }
       host.querySelectorAll('.qm-edit').forEach(bindItem);
       $('qmAdd').addEventListener('click', function () { var box = $('qmNew'); if (box.querySelector('.qm-edit')) return; box.innerHTML = itemHtml({}, true); bindItem(box.querySelector('.qm-edit')); });
+    });
+  }
+
+  //  ---------- \u05d4\u05d2\u05d3\u05e8\u05d5\u05ea Hey \u00b7 WhatsApp ----------
+  //  \u05db\u05dc \u05de\u05d4 \u05e9\u05d4\u05d5\u05d2\u05d3\u05e8 \u05d1\u05de\u05d4\u05dc\u05da \u05d4\u05d7\u05d9\u05d1\u05d5\u05e8, \u05d1\u05de\u05e7\u05d5\u05dd \u05d0\u05d7\u05d3 \u05d5\u05e0\u05d9\u05ea\u05df \u05dc\u05e2\u05e8\u05d9\u05db\u05d4.
+  //  \u05d4\u05e1\u05d5\u05d3\u05d5\u05ea \u05e2\u05e6\u05de\u05dd \u05d0\u05d9\u05e0\u05dd \u05de\u05d5\u05e6\u05d2\u05d9\u05dd \u05d5\u05dc\u05d0 \u05e0\u05d9\u05ea\u05e0\u05d9\u05dd \u05dc\u05e9\u05dc\u05d9\u05e4\u05d4 \u05de\u05db\u05d0\u05df \u2014 \u05e8\u05e7 \u05d4\u05d0\u05dd \u05d4\u05dd
+  //  \u05de\u05d5\u05d2\u05d3\u05e8\u05d9\u05dd. \u05de\u05e4\u05ea\u05d7 \u05db\u05ea\u05d9\u05d1\u05d4 \u05dc\u05d5\u05d5\u05d8\u05e1\u05d0\u05e4 \u05dc\u05d0 \u05e6\u05e8\u05d9\u05da \u05dc\u05d4\u05d2\u05d9\u05e2 \u05dc\u05d3\u05e4\u05d3\u05e4\u05df.
+  function renderHeyCfg() {
+    var host = $('heyCard'); if (!host) return;
+    host.innerHTML = '<div class="card"><h3>\ud83d\udfe2 Hey \u00b7 WhatsApp</h3><p class="muted" style="font-size:13px">\u05d8\u05d5\u05e2\u05df\\u2026</p></div>';
+    Promise.all([
+      db.from('wa_numbers').select('id,phone,label,channel_id,active').order('created_at'),
+      db.from('profiles').select('user_id,full_name,role,wa_number_id').eq('active', true).order('full_name'),
+      db.from('wa_threads').select('id', { count: 'exact', head: true }),
+      db.from('wa_outbox').select('id', { count: 'exact', head: true }).eq('status', 'queued'),
+    ]).then(function (r) {
+      var nums = r[0].data || [], profs = r[1].data || [];
+      var nThreads = r[2].count || 0, nQueued = r[3].count || 0;
+      var byNum = {}; nums.forEach(function (n) { byNum[n.id] = n; });
+      var rows = nums.map(function (n) {
+        var owners = profs.filter(function (x) { return x.wa_number_id === n.id; })
+          .map(function (x) { return x.full_name; });
+        return '<tr data-num="' + esc(n.id) + '">' +
+          '<td><b>' + esc(n.label || '\u05dc\u05dc\u05d0 \u05e9\u05dd') + '</b></td>' +
+          '<td class="ltr"><bdi>' + esc(n.phone || '\u2014') + '</bdi></td>' +
+          '<td>' + (n.channel_id
+            ? '<span style="color:var(--ok)">\u25cf \u05de\u05d7\u05d5\u05d1\u05e8</span><div class="muted" style="font-size:11px">' + esc(String(n.channel_id).slice(0, 13)) + '\u2026</div>'
+            : '<span style="color:var(--warn)">\u25cb \u05de\u05de\u05ea\u05d9\u05df \u05dc\u05d4\u05d5\u05d3\u05e2\u05d4 \u05e8\u05d0\u05e9\u05d5\u05e0\u05d4</span>') + '</td>' +
+          '<td>' + (owners.length ? esc(owners.join(', ')) : '<span class="muted">\u05db\u05dc \u05de\u05e0\u05d4\u05dc\u05d9 \u05d4\u05de\u05e2\u05e8\u05db\u05ea</span>') + '</td>' +
+          '<td><button class="btn btn-ghost btn-sm" data-numedit="' + esc(n.id) + '">\u05e2\u05e8\u05d9\u05db\u05d4</button></td></tr>';
+      }).join('');
+
+      host.innerHTML =
+        '<div class="card"><div class="row-between"><h3 style="margin:0">\ud83d\udfe2 \u05de\u05e1\u05e4\u05e8\u05d9 \u05d5\u05d5\u05d8\u05e1\u05d0\u05e4</h3>' +
+          '<button class="btn btn-ghost btn-sm" id="heyAddNum">\u2795 \u05de\u05e1\u05e4\u05e8</button></div>' +
+          '<div class="table-scroll" style="margin-top:10px"><table><thead><tr>' +
+          '<th>\u05e9\u05dd</th><th>\u05de\u05e1\u05e4\u05e8</th><th>\u05de\u05e6\u05d1</th><th>\u05de\u05e9\u05d5\u05d9\u05da \u05dc</th><th></th>' +
+          '</tr></thead><tbody id="heyNums">' + (rows || '<tr><td colspan="5" class="empty">\u05d0\u05d9\u05df \u05de\u05e1\u05e4\u05e8\u05d9\u05dd</td></tr>') + '</tbody></table></div>' +
+          '<p class="muted" style="font-size:12px;margin:10px 0 0">\u05e9\u05d9\u05d5\u05da \u05de\u05e1\u05e4\u05e8 \u05dc\u05e0\u05e6\u05d9\u05d2 \u05e0\u05e2\u05e9\u05d4 \u05d1\u05de\u05e1\u05da <b>\u05de\u05e9\u05ea\u05de\u05e9\u05d9\u05dd \u05d5\u05d4\u05e8\u05e9\u05d0\u05d5\u05ea</b>. \u05e0\u05e6\u05d9\u05d2 \u05e8\u05d5\u05d0\u05d4 \u05e8\u05e7 \u05d0\u05ea \u05d4\u05e9\u05d9\u05d7\u05d5\u05ea \u05e9\u05dc \u05d4\u05de\u05e1\u05e4\u05e8 \u05e9\u05dc\u05d5.</p></div>' +
+
+        '<div class="card"><h3>\ud83d\udd0c \u05d4\u05d7\u05d9\u05d1\u05d5\u05e8 \u05dc-Heyy</h3>' +
+          '<div class="table-scroll"><table><tbody>' +
+          '<tr><td style="width:180px">\u05db\u05ea\u05d5\u05d1\u05ea \u05d4\u05d5\u05d5\u05d1\u05d4\u05d5\u05e7</td><td class="ltr"><bdi style="font-size:12px">' +
+            esc(SUPABASE_URL + '/functions/v1/heyy-webhook/<\u05d4\u05e1\u05d5\u05d3>') + '</bdi>' +
+            '<div class="muted" style="font-size:11.5px">\u05e0\u05e8\u05e9\u05de\u05ea \u05d1-app.heyy.io \u2190 Settings \u2190 Webhooks. \u05d0\u05d9\u05e8\u05d5\u05e2\u05d9\u05dd: Message received + Message sent</div></td></tr>' +
+          '<tr><td>\u05de\u05e4\u05ea\u05d7 API</td><td><span id="heyKeyState" class="muted">\u05d1\u05d5\u05d3\u05e7\\u2026</span>' +
+            '<div class="muted" style="font-size:11.5px">\u05e0\u05e9\u05de\u05e8 \u05d1-Supabase \u05db-HEYY_API_KEY. \u05e0\u05d5\u05e6\u05e8 \u05d1-app.heyy.io/settings/api-keys</div></td></tr>' +
+          '<tr><td>\u05e9\u05e2\u05d5\u05df \u05d4\u05ea\u05d6\u05de\u05d5\u05df</td><td>\u05e8\u05e5 \u05db\u05dc \u05d3\u05e7\u05d4 \u00b7 ' + nQueued + ' \u05de\u05de\u05ea\u05d9\u05e0\u05d5\u05ea \u05dc\u05e9\u05dc\u05d9\u05d7\u05d4</td></tr>' +
+          '<tr><td>\u05e9\u05d9\u05d7\u05d5\u05ea \u05d1\u05de\u05e2\u05e8\u05db\u05ea</td><td>' + nThreads + '</td></tr>' +
+          '</tbody></table></div>' +
+          '<div class="row" style="gap:8px;margin-top:12px;flex-wrap:wrap">' +
+            '<button class="btn btn-ghost btn-sm" id="heyTpls">\ud83d\udce8 \u05d4\u05e6\u05d2 \u05ea\u05d1\u05e0\u05d9\u05d5\u05ea \u05de\u05d0\u05d5\u05e9\u05e8\u05d5\u05ea</button>' +
+            '<button class="btn btn-ghost btn-sm" id="heyLog">\ud83d\udcdc \u05d9\u05d5\u05de\u05df \u05d4\u05d5\u05d5\u05d1\u05d4\u05d5\u05e7</button>' +
+          '</div><div id="heyOut" style="margin-top:12px"></div></div>';
+
+      //  \u05de\u05e6\u05d1 \u05d4\u05de\u05e4\u05ea\u05d7 \u05e0\u05d1\u05d3\u05e7 \u05d3\u05e8\u05da \u05e7\u05e8\u05d9\u05d0\u05d4 \u05d0\u05de\u05d9\u05ea\u05d9\u05ea \u05d5\u05dc\u05d0 \u05de\u05d5\u05e6\u05d2 \u05e2\u05e8\u05db\u05d5
+      db.functions.invoke('heyy-send', { body: { action: 'templates' } }).then(function (rr) {
+        var d = rr.data || {}, el = $('heyKeyState'); if (!el) return;
+        if (d.ok) { el.style.color = 'var(--ok)'; el.textContent = '\u25cf \u05de\u05d5\u05d2\u05d3\u05e8 \u05d5\u05e2\u05d5\u05d1\u05d3'; }
+        else { el.style.color = 'var(--danger)'; el.textContent = '\u25cb ' + (d.error || '\u05dc\u05d0 \u05e0\u05d1\u05d3\u05e7'); }
+      });
+
+      if ($('heyAddNum')) $('heyAddNum').onclick = function () { heyNumBox(null); };
+      host.querySelectorAll('[data-numedit]').forEach(function (b) {
+        b.onclick = function () { heyNumBox(byNum[b.dataset.numedit]); };
+      });
+      if ($('heyTpls')) $('heyTpls').onclick = function () {
+        var o = $('heyOut'); o.innerHTML = '<p class="muted">\u05d8\u05d5\u05e2\u05df\\u2026</p>';
+        db.functions.invoke('heyy-send', { body: { action: 'templates' } }).then(function (rr) {
+          var d = rr.data || {};
+          if (d.error) return (o.innerHTML = '<p class="err">' + esc(d.error) + '</p>');
+          var L = d.templates || [];
+          o.innerHTML = '<div class="table-scroll"><table><thead><tr><th>\u05e9\u05dd</th><th>\u05e1\u05d5\u05d2</th><th>\u05d8\u05e7\u05e1\u05d8</th></tr></thead><tbody>' +
+            (L.map(function (x) {
+              return '<tr><td><b>' + esc(x.name) + '</b></td><td>' + esc(x.category || '') + '</td>' +
+                '<td class="muted" style="font-size:12px">' + esc(String(x.body || '').slice(0, 110)) + '</td></tr>';
+            }).join('') || '<tr><td colspan="3" class="empty">\u05d0\u05d9\u05df \u05ea\u05d1\u05e0\u05d9\u05d5\u05ea \u05de\u05d0\u05d5\u05e9\u05e8\u05d5\u05ea</td></tr>') + '</tbody></table></div>';
+        });
+      };
+      if ($('heyLog')) $('heyLog').onclick = function () {
+        var o = $('heyOut'); o.innerHTML = '<p class="muted">\u05d8\u05d5\u05e2\u05df\\u2026</p>';
+        db.from('wa_hook_log').select('at,ok,note').order('at', { ascending: false }).limit(25).then(function (rr) {
+          var L = rr.data || [];
+          o.innerHTML = '<div class="table-scroll"><table><thead><tr><th>\u05de\u05ea\u05d9</th><th></th><th>\u05de\u05d4</th></tr></thead><tbody>' +
+            (L.map(function (x) {
+              return '<tr><td class="muted" style="font-size:12px">' + esc(fmtDateTime(x.at)) + '</td>' +
+                '<td>' + (x.ok ? '\u2714' : '<span style="color:var(--danger)">\u2716</span>') + '</td>' +
+                '<td>' + esc(x.note || '') + '</td></tr>';
+            }).join('') || '<tr><td colspan="3" class="empty">\u05e8\u05d9\u05e7</td></tr>') + '</tbody></table></div>';
+        });
+      };
+    });
+  }
+
+  //  \u05e2\u05e8\u05d9\u05db\u05d4 \u05d9\u05d3\u05e0\u05d9\u05ea \u05e9\u05dc \u05de\u05e1\u05e4\u05e8: \u05e9\u05dd, \u05d8\u05dc\u05e4\u05d5\u05df, \u05de\u05d6\u05d4\u05d4 \u05e2\u05e8\u05d5\u05e5 \u05d5\u05d4\u05e4\u05e2\u05dc\u05d4
+  function heyNumBox(n) {
+    n = n || {};
+    var bg = document.createElement('div'); bg.className = 'adm-bg';
+    bg.innerHTML = '<div class="adm" style="max-width:430px"><div class="adm-hd">' +
+      '<h3>' + (n.id ? '\u05e2\u05e8\u05d9\u05db\u05ea \u05de\u05e1\u05e4\u05e8' : '\u05de\u05e1\u05e4\u05e8 \u05d7\u05d3\u05e9') + '</h3><button class="adm-x" data-admx>\u2715</button></div>' +
+      '<div class="adm-body">' +
+      '<div class="field"><label>\u05e9\u05dd \u05dc\u05ea\u05e6\u05d5\u05d2\u05d4</label><input class="inp" id="hnLabel" value="' + esc(n.label || '') + '"></div>' +
+      '<div class="field"><label>\u05de\u05e1\u05e4\u05e8 (\u05dc\u05dc\u05d0 \u05e4\u05dc\u05d5\u05e1, \u05dc\u05de\u05e9\u05dc 972534495185)</label>' +
+        '<input class="inp ltr" id="hnPhone" value="' + esc(n.phone || '') + '"></div>' +
+      '<div class="field"><label>\u05de\u05d6\u05d4\u05d4 \u05d4\u05e2\u05e8\u05d5\u05e5 \u05d1-Heyy</label>' +
+        '<input class="inp ltr" id="hnChan" value="' + esc(n.channel_id || '') + '" placeholder="\u05e8\u05d9\u05e7 = \u05d9\u05d0\u05d5\u05de\u05e5 \u05d1\u05d4\u05d5\u05d3\u05e2\u05d4 \u05d4\u05e8\u05d0\u05e9\u05d5\u05e0\u05d4"></div>' +
+      '<label style="display:flex;gap:7px;align-items:center;font-size:13px;margin-bottom:12px">' +
+        '<input type="checkbox" id="hnActive"' + (n.active === false ? '' : ' checked') + '> \u05e4\u05e2\u05d9\u05dc</label>' +
+      '<div class="row" style="gap:8px"><button class="btn" id="hnGo">\u05e9\u05de\u05d5\u05e8</button>' +
+      (n.id ? '<button class="btn btn-ghost btn-sm" id="hnDel">\u05de\u05d7\u05e7</button>' : '') + '</div>' +
+      '<p class="err" id="hnErr"></p></div></div>';
+    document.body.appendChild(bg);
+    bg.addEventListener('click', function (e) {
+      if (e.target === bg || e.target.closest('[data-admx]')) return bg.remove();
+      if (e.target.closest('#hnDel')) {
+        if (!confirm('\u05dc\u05de\u05d7\u05d5\u05e7 \u05d0\u05ea \u05d4\u05de\u05e1\u05e4\u05e8? \u05d4\u05e9\u05d9\u05d7\u05d5\u05ea \u05e9\u05dc\u05d5 \u05d9\u05d9\u05de\u05d7\u05e7\u05d5 \u05d0\u05d9\u05ea\u05d5.')) return;
+        return db.from('wa_numbers').delete().eq('id', n.id).then(function (r) {
+          if (r.error) return ($('hnErr').textContent = r.error.message);
+          bg.remove(); renderHeyCfg();
+        });
+      }
+      if (!e.target.closest('#hnGo')) return;
+      var row = {
+        label: ($('hnLabel').value || '').trim() || null,
+        phone: ($('hnPhone').value || '').replace(/[^0-9]/g, '') || null,
+        channel_id: ($('hnChan').value || '').trim() || null,
+        active: $('hnActive').checked,
+      };
+      var q = n.id ? db.from('wa_numbers').update(row).eq('id', n.id) : db.from('wa_numbers').insert(row);
+      q.then(function (r) {
+        if (r.error) return ($('hnErr').textContent = r.error.message);
+        bg.remove(); renderHeyCfg();
+      });
     });
   }
 
