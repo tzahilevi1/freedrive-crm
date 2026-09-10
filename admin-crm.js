@@ -2849,6 +2849,10 @@
     { key: 'created', label: 'נוצר', def: false, cell: function (d) { return '<td class="muted">' + fmt(d.created_at) + '</td>'; } }
   ];
   var fileCols = null;
+  //  פתיחת טופס ההסכם לליד ממסך הווטסאפ. אין עסקה?
+  //  נפתח טופס ריק למילוי — אותו מסך של תיקי הלקוחות.
+  window.C2B_openContract = openFileView;
+
   window.C2B_renderFiles = function (stageFilter) {
     loading(); selectedDeals = {};
     db.from('deals').select('id,lead_id,order_no,brand,stage,status,client_name,client_phone,car_make,car_model,total,commission,salesperson,created_at,updated_at,checklist,cancel_reason,acct_status,has_contract,has_signature').is('deleted_at', null).order('created_at', { ascending: false }).limit(2000).then(function (r) {

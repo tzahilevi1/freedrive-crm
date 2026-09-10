@@ -314,9 +314,9 @@
     // סוכן מכירות: כל התפעול שלו — בלי כספים, בלי דוחות/אנליטיקס, בלי ערוצי הודעות
     sales: ['dashboard', 'leads', 'files', 'cars', 'appointments', 'tasks', 'ai', 'quotes', 'documents', 'heyy'],
     // מנהלת תיקי לקוחות: דשבורד, תיקי לקוחות, רכבים, יומן, משימות, הצעות מחיר, מסמכים והסכמים
-    files: ['dashboard', 'files', 'cars', 'appointments', 'tasks', 'quotes', 'documents'],
+    files: ['dashboard', 'files', 'cars', 'appointments', 'tasks', 'quotes', 'documents', 'heyy'],
     // מנהלת חשבונות: דשבורד, הנהלת חשבונות, רכבים, יומן, משימות, דוחות, עוזר AI, הצעות מחיר, מסמכים והסכמים
-    accounting: ['dashboard', 'accounting', 'cars', 'appointments', 'tasks', 'reports', 'ai', 'quotes', 'documents'],
+    accounting: ['dashboard', 'accounting', 'cars', 'appointments', 'tasks', 'reports', 'ai', 'quotes', 'documents', 'heyy'],
     // מנהל סניף: רואה הכל, למעט מסכי הניהול של המערכת (משתמשים, הגדרות, אוטומציות)
     branch: ['dashboard', 'leads', 'files', 'accounting', 'cars', 'appointments', 'tasks', 'analytics',
              'reports', 'agents', 'ai', 'quotes', 'documents', 'whatsapp', 'heyy', 'emails', 'sms', 'users', 'audit']
@@ -2379,7 +2379,7 @@
     L.push('\u2705 אספקה מהירה \ud83d\ude9a');
     L.push('\u2705 עד 40% הנחה בביטוח חובה ומקיף \ud83d\udee1\ufe0f');
     L.push('\u2705 אגרת רישוי ראשונה כלולה \ud83e\uddfe');
-    L.push('\u2705 פתיחת תיק ב-EURO-LEASE \ud83d\udcc2');
+    L.push('\u2705 פתיחת תיק ב-פרי דרייב \ud83d\udcc2');
     L.push('\u2705 איש מימון צמוד שידאג להשיג עבורך את הריביות הנמוכות ביותר \ud83e\udd1d');
     L.push('\u2705 אביזרים ומיגונים בהתאם לדרישות חברת הביטוח \ud83e\uddf0');
     L.push('\u2705 מערכת איתור לרכב \ud83d\udce1');
@@ -2452,7 +2452,8 @@
     + 'ובשורות שמתחת נוסח ההודעה עצמה. בלי מרכאות ובלי הסברים נוספים. '
     + 'אחרי שלוש ההצעות הוסף שורה אחת שמתחילה ב-@@ עם קריאת מצב קצרה של השיחה ומה הצעד הבא. '
     + 'אל תמציא מחירים, דגמים או תנאים שלא נמסרו לך. '
-    + 'אל תבטיח אישור מימון, ריבית סופית או מועד אספקה כוודאי.';
+    + 'אל תבטיח אישור מימון, ריבית סופית או מועד אספקה כוודאי. '
+    + 'כשהנציג מציג את עצמו — השתמש בשם הנציג שנמסר לך, ולעולם אל תמציא שם אחר.';
 
   function salesCoach(t, body, btn) {
     var old = btn.textContent; btn.disabled = true; btn.textContent = 'חושב\u2026';
@@ -2472,7 +2473,10 @@
           (x.seats ? ' | ' + x.seats + ' מקומות' : '') +
           (c.fuel ? ' | ' + c.fuel : '');
       }).join('\n');
-      var ctx = 'פרטי הלקוח:\nשם: ' + (t.contact_name || 'לא ידוע') +
+      //  הנציג מציג את עצמו בשמו האמיתי. בלי זה המודל ממציא שם.
+      var me = (window.C2B && (window.C2B.fullName || window.C2B.userName)) || '';
+      var ctx = (me ? 'שם הנציג שכותב עכשיו: ' + me + '\n\n' : '') +
+        'פרטי הלקוח:\nשם: ' + (t.contact_name || 'לא ידוע') +
         (lead ? '\nסטטוס במערכת: ' + waStDef(lead.status || 'new').label +
                 (lead.car ? '\nהתעניין ב: ' + lead.car : '') : '\n(אין עדיין ליד במערכת)') +
         '\n\nהשיחה עד כה:\n' + hist +
@@ -2545,6 +2549,7 @@
           '<button class="btn btn-ghost btn-sm" id="waCoach" title="הצעות מעוזר המכירות לפי השיחה">\ud83e\udd16 עוזר מכירות</button>' +
           '<button class="btn btn-ghost btn-sm" id="waCarBtn" title="שליחת דגם מהמלאי">\ud83d\ude97 דגם</button>' +
           '<button class="btn btn-ghost btn-sm" id="waQuoteBtn" title="הצעת מחיר מלאה">\ud83d\udcb0 הצעת מחיר</button>' +
+          '<button class="btn btn-ghost btn-sm" id="waContract" title="\u05de\u05d9\u05dc\u05d5\u05d9 \u05d4\u05e1\u05db\u05dd \u05dc\u05dc\u05e7\u05d5\u05d7">\ud83d\udcc4 \u05d4\u05e1\u05db\u05dd \u05dc\u05d7\u05ea\u05d9\u05de\u05d4</button>' +
           '<button class="btn btn-ghost btn-sm" id="waSched" title="תזמון לשעה מאוחרת יותר">\u23f0 תזמון</button>' +
           '<button class="btn btn-sm" id="waSend">שלח \u27a4</button>' +
         '</div>' +
@@ -2579,6 +2584,7 @@
     if ($('waCoach')) $('waCoach').onclick = function () { salesCoach(t, body, this); };
     if ($('waCarBtn')) $('waCarBtn').onclick = function () { carPicker(t, body, false); };
     if ($('waQuoteBtn')) $('waQuoteBtn').onclick = function () { carPicker(t, body, true); };
+    if ($('waContract')) $('waContract').onclick = function () { waContract(t, this, say); };
     if ($('waSched')) $('waSched').onclick = function () { schedBox(t, body, say); };
     if ($('waSend')) $('waSend').onclick = function () {
       sendMsg(t, body.value, null, waPickedCar, say, this);
@@ -2790,18 +2796,46 @@
   //  אוטומציות בדיוק כמו שינוי משם.
   //  שיחה שלא התאימה לשום ליד — פתיחת ליד מתוך השיחה,
   //  כדי שלפונה בווטסאפ יהיה סטטוס, בעלים והיסטוריה כמו לכל ליד.
-  function waCreateLead(t, btn) {
-    btn.disabled = true; btn.textContent = '\u05d9\u05d5\u05e6\u05e8\u2026';
+  //  \u05dc\u05d9\u05d3 \u05e9\u05e0\u05d5\u05dc\u05d3 \u05d1\u05d5\u05d5\u05d8\u05e1\u05d0\u05e4 \u05e0\u05d5\u05e9\u05d0 \u05d9\u05d9\u05d7\u05d5\u05e1 \u05de\u05dc\u05d0
+  //  \u05db\u05d1\u05e8 \u05d1\u05e8\u05d2\u05e2 \u05d4\u05d9\u05e6\u05d9\u05e8\u05d4. \u05d1\u05dc\u05e2\u05d3\u05d9\u05d5 \u05d4\u05d5\u05d0 \u05e0\u05d5\u05e4\u05dc \u05d1\u05d3\u05d5\u05d7\u05d5\u05ea
+  //  \u05dc\u05ea\u05d5\u05da "\u05dc\u05dc\u05d0 \u05d9\u05d9\u05d7\u05d5\u05e1". \u05d4\u05e2\u05e8\u05db\u05d9\u05dd \u05d1\u05d0\u05d5\u05ea\u05d9\u05d5\u05ea \u05e7\u05d8\u05e0\u05d5\u05ea
+  //  \u05db\u05de\u05d5 \u05d1\u05e9\u05d0\u05e8 \u05d4\u05de\u05e2\u05e8\u05db\u05ea (seo, facebook), \u05d0\u05d7\u05e8\u05ea \u05d4\u05e7\u05d9\u05d1\u05d5\u05e5
+  //  \u05d1\u05d3\u05d5\u05d7\u05d5\u05ea \u05de\u05e4\u05e6\u05dc \u05d0\u05d5\u05ea\u05dd \u05dc\u05e9\u05ea\u05d9 \u05e9\u05d5\u05e8\u05d5\u05ea \u05e0\u05e4\u05e8\u05d3\u05d5\u05ea.
+  function waNewLead(t, cb) {
     var phone = String(t.contact_phone || '');
     if (phone.indexOf('972') === 0) phone = '0' + phone.slice(3);
     db.from('leads').insert({
       name: t.contact_name || '\u05e4\u05d5\u05e0\u05d4 \u05d1\u05d5\u05d5\u05d8\u05e1\u05d0\u05e4', phone: phone,
       source: '\u05d5\u05d5\u05d0\u05d8\u05e1\u05d0\u05e4', status: 'new',
-    }).select('id,status,name').single().then(function (r) {
-      if (r.error) { btn.disabled = false; btn.textContent = '\u2795 \u05e6\u05d5\u05e8 \u05dc\u05d9\u05d3'; return alert('\u05e9\u05d2\u05d9\u05d0\u05d4: ' + r.error.message); }
+      brand: 'פרי דרייב', marketing_company: '\u05e9\u05d9\u05d5\u05d5\u05e7 \u05e4\u05e0\u05d9\u05de\u05d9',
+      utm_source: 'whatsapp', utm_medium: 'seo',
+    }).select('id,status,name,car').single().then(function (r) {
+      if (r.error) return cb(null, r.error.message);
       db.from('wa_threads').update({ lead_id: r.data.id }).eq('id', t.id).then(function () {
-        t.lead_id = r.data.id; waLeads[r.data.id] = r.data; renderHeyy();
+        t.lead_id = r.data.id; waLeads[r.data.id] = r.data; cb(r.data.id, null);
       });
+    });
+  }
+
+  function waCreateLead(t, btn) {
+    btn.disabled = true; btn.textContent = '\u05d9\u05d5\u05e6\u05e8\u2026';
+    waNewLead(t, function (id, err) {
+      if (err) { btn.disabled = false; btn.textContent = '\u2795 \u05e6\u05d5\u05e8 \u05dc\u05d9\u05d3'; return alert('\u05e9\u05d2\u05d9\u05d0\u05d4: ' + err); }
+      renderHeyy();
+    });
+  }
+
+  //  \u05d4\u05d4\u05e1\u05db\u05dd \u05e0\u05e9\u05e2\u05df \u05e2\u05dc \u05dc\u05d9\u05d3, \u05d5\u05dc\u05db\u05df \u05e9\u05d9\u05d7\u05d4 \u05d1\u05dc\u05d9 \u05dc\u05d9\u05d3
+  //  \u05de\u05e7\u05d1\u05dc\u05ea \u05d0\u05d7\u05d3 \u05e2\u05db\u05e9\u05d9\u05d5, \u05d1\u05de\u05e7\u05d5\u05dd \u05dc\u05d4\u05e6\u05d9\u05d2 \u05e9\u05d2\u05d9\u05d0\u05d4 \u05d5\u05dc\u05d4\u05e9\u05d0\u05d9\u05e8
+  //  \u05d0\u05ea \u05d4\u05e0\u05e6\u05d9\u05d2 \u05dc\u05d7\u05e4\u05e9 \u05d0\u05ea \u05d4\u05db\u05e4\u05ea\u05d5\u05e8 \u05d4\u05e0\u05db\u05d5\u05df \u05d1\u05de\u05e1\u05da \u05d0\u05d7\u05e8.
+  function waContract(t, btn, say) {
+    if (!window.C2B_openContract) return say('\u05de\u05e1\u05da \u05d4\u05d4\u05e1\u05db\u05de\u05d9\u05dd \u05dc\u05d0 \u05e0\u05d8\u05e2\u05df', false);
+    if (t.lead_id) return window.C2B_openContract(t.lead_id);
+    btn.disabled = true; btn.textContent = '\u05d9\u05d5\u05e6\u05e8 \u05dc\u05d9\u05d3\u2026';
+    waNewLead(t, function (leadId, err) {
+      btn.disabled = false; btn.textContent = '\ud83d\udcc4 \u05d4\u05e1\u05db\u05dd \u05dc\u05d7\u05ea\u05d9\u05de\u05d4';
+      if (err) return say(err, false);
+      window.C2B_openContract(leadId);
     });
   }
 
