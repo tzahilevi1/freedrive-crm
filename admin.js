@@ -693,7 +693,19 @@
           return '<div class="cp-row" data-k="' + esc(k) + '"><span class="cp-mv" data-cpdrag tabindex="0" role="button" title="גררו לשינוי סדר (או חצים במקלדת)" aria-label="גררו לשינוי סדר">⠿</span><span class="cp-lbl">' + esc(c.label) + (c.fixed ? ' 🔒' : '') + '</span><label class="cp-sw"><input type="checkbox" data-cptg ' + (on ? 'checked' : '') + (c.fixed ? ' disabled' : '') + '><span class="cp-sl"></span></label></div>';
         }).join('') + '</div><button class="btn btn-ghost btn-sm" data-cpreset style="width:100%;margin-top:8px">איפוס לברירת מחדל</button>';
       document.body.appendChild(m);
-      var r = anchor.getBoundingClientRect(); m.style.top = (r.bottom + 6) + 'px'; m.style.right = Math.max(8, window.innerWidth - r.right) + 'px';
+      var r = anchor.getBoundingClientRect();
+      m.style.right = Math.max(8, window.innerWidth - r.right) + 'px';
+      //  התפריט נפתח מתחת לכפתור, ואם אין שם מקום — מעליו.
+      //  בשני המקרים הגובה מוגבל למקום שבאמת נשאר, כדי
+      //  שהרשימה תגלול במקום להיחתך בקצה המסך.
+      var below = window.innerHeight - r.bottom - 14, above = r.top - 14;
+      if (below >= 220 || below >= above) {
+        m.style.top = (r.bottom + 6) + 'px'; m.style.bottom = 'auto';
+        m.style.maxHeight = Math.max(160, below) + 'px';
+      } else {
+        m.style.bottom = (window.innerHeight - r.top + 6) + 'px'; m.style.top = 'auto';
+        m.style.maxHeight = Math.max(160, above) + 'px';
+      }
       m.addEventListener('click', function (e) { e.stopPropagation(); });
       m.querySelectorAll('[data-cptg]').forEach(function (cb) { cb.addEventListener('change', function () { var k = cb.closest('.cp-row').dataset.k, i = state.hidden.indexOf(k); if (cb.checked) { if (i >= 0) state.hidden.splice(i, 1); } else if (i < 0) state.hidden.push(k); save(); onChange(); }); });
       // ---- גרירה לשינוי סדר ----
@@ -2569,15 +2581,19 @@
     return '<div class="wa-tools">' + banner +
       '<div class="wa-chips">' + (chips || '<span class="muted" style="font-size:12px">אין הודעות מהירות</span>') + '</div>' +
       '<div class="wa-compose">' +
+        '<div class="wa-line">' +
         '<textarea class="inp" id="waBody" rows="2" placeholder="כתבו הודעה, או בחרו הודעה מהירה למעלה\u2026">' + esc(waDraft) + '</textarea>' +
+          '<div class="wa-go">' +
+          '<button class="btn btn-sm" id="waSend"' + (open24 ? '' : ' disabled title="\u05d7\u05dc\u05d5\u05df 24 \u05d4\u05e9\u05e2\u05d5\u05ea \u05e1\u05d2\u05d5\u05e8"') + '>\u05e9\u05dc\u05d7 \u27a4</button>' +
+          '<button class="btn btn-ghost btn-sm" id="waSched" title="תזמון לשעה מאוחרת יותר">\u23f0 תזמון</button>' +
+          '</div>' +
+        '</div>' +
         '<div class="wa-btns">' +
           '<button class="btn btn-ghost btn-sm" id="waCoach" title="הצעות מעוזר המכירות לפי השיחה">\ud83e\udd16 עוזר מכירות</button>' +
           '<button class="btn btn-ghost btn-sm" id="waCarBtn" title="שליחת דגם מהמלאי">\ud83d\ude97 דגם</button>' +
           '<button class="btn btn-ghost btn-sm" id="waQuoteBtn" title="הצעת מחיר מלאה">\ud83d\udcb0 הצעת מחיר</button>' +
           '<button class="btn btn-ghost btn-sm" id="waContract" title="\u05de\u05d9\u05dc\u05d5\u05d9 \u05d4\u05e1\u05db\u05dd \u05dc\u05dc\u05e7\u05d5\u05d7">\ud83d\udcc4 \u05d4\u05e1\u05db\u05dd \u05dc\u05d7\u05ea\u05d9\u05de\u05d4</button>' +
-          '<button class="btn btn-ghost btn-sm" id="waSched" title="תזמון לשעה מאוחרת יותר">\u23f0 תזמון</button>' +
           '<button class="btn btn-ghost btn-sm" id="waTplBtn" title="\u05e9\u05dc\u05d9\u05d7\u05ea \u05ea\u05d1\u05e0\u05d9\u05ea \u05de\u05d0\u05d5\u05e9\u05e8\u05ea">\ud83d\udce8 \u05ea\u05d1\u05e0\u05d9\u05ea</button>' +
-          '<button class="btn btn-sm" id="waSend"' + (open24 ? '' : ' disabled title="\u05d7\u05dc\u05d5\u05df 24 \u05d4\u05e9\u05e2\u05d5\u05ea \u05e1\u05d2\u05d5\u05e8"') + '>\u05e9\u05dc\u05d7 \u27a4</button>' +
         '</div>' +
       '</div>' +
       '<div id="waOut" class="wa-out"></div>' +
@@ -2668,37 +2684,36 @@
     });
   }
 
+  //  \u05d4\u05d5\u05d3\u05e2\u05d5\u05ea \u05de\u05ea\u05d5\u05d6\u05de\u05e0\u05d5\u05ea \u05de\u05de\u05ea\u05d9\u05e0\u05d5\u05ea \u05d0\u05e6\u05dc\u05e0\u05d5 \u05d5\u05dc\u05d0 \u05d0\u05e6\u05dc Heyy, \u05db\u05d3\u05d9
+  //  \u05e9\u05d0\u05e4\u05e9\u05e8 \u05d9\u05d4\u05d9\u05d4 \u05dc\u05e8\u05d0\u05d5\u05ea \u05d5\u05dc\u05d1\u05d8\u05dc \u05e2\u05d3 \u05e8\u05d2\u05e2 \u05d4\u05e9\u05dc\u05d9\u05d7\u05d4 \u2014 \u05dc-Heyy \u05d0\u05d9\u05df endpoint
+  //  \u05dc\u05d1\u05d9\u05d8\u05d5\u05dc \u05d4\u05d5\u05d3\u05e2\u05d4 \u05e9\u05db\u05d1\u05e8 \u05ea\u05d5\u05d6\u05de\u05e0\u05d4 \u05d0\u05e6\u05dc\u05dd.
   function loadOutbox(t) {
     var box = $('waOut'); if (!box) return;
-    db.from('wa_outbox').select('id,body,scheduled_at,status,created_at,kind')
-      .eq('thread_id', t.id).eq('status', 'queued').order('created_at', { ascending: false }).limit(20)
+    db.from('wa_outbox').select('id,body,scheduled_at,status,created_at,kind,error')
+      .eq('thread_id', t.id).in('status', ['queued', 'failed'])
+      .order('scheduled_at', { ascending: true }).limit(20)
       .then(function (r) {
         var rows = r.data || [];
         if (!rows.length) { box.innerHTML = ''; return; }
-        box.innerHTML = '<div class="wa-queue"><b>\u23f3 ' + rows.length + ' ממתינות לשליחה</b>' +
-          '<span class="muted"> \u00b7 יישלחו אוטומטית ברגע שחיבור השליחה ל-Heyy יופעל</span>' +
-          rows.map(function (q) {
-            return '<div class="wa-q"><span>' + (q.kind === 'car' ? '\ud83d\ude97 ' : '') +
-              esc(String(q.body || '').replace(/\n/g, ' ').slice(0, 70)) + '</span>' +
-              '<span class="muted">' + (q.scheduled_at ? '\u23f0 ' + esc(fmtDateTime(q.scheduled_at)) : 'מיד') + '</span>' +
-              '<button class="btn btn-sm" data-qsend="' + esc(q.id) + '">שלח עכשיו</button>' +
-              '<button class="btn btn-ghost btn-sm" data-qcancel="' + esc(q.id) + '">ביטול</button></div>';
+        var q = rows.filter(function (x) { return x.status === 'queued'; });
+        box.innerHTML = '<div class="wa-queue"><b>\u23f0 ' + q.length + ' \u05de\u05ea\u05d5\u05d6\u05de\u05e0\u05d5\u05ea</b>' +
+          (rows.length > q.length ? '<span class="muted"> \u00b7 \u05d5-' + (rows.length - q.length) + ' \u05e9\u05e0\u05db\u05e9\u05dc\u05d5</span>' : '') +
+          rows.map(function (x) {
+            var late = x.status === 'queued' && x.scheduled_at && new Date(x.scheduled_at) < new Date();
+            return '<div class="wa-q' + (x.status === 'failed' ? ' bad' : '') + '">' +
+              '<span>' + (x.kind === 'car' ? '\ud83d\ude97 ' : x.kind === 'template' ? '\ud83d\udce8 ' : '') +
+                esc(String(x.body || '\u05ea\u05d1\u05e0\u05d9\u05ea').replace(/\n/g, ' ').slice(0, 70)) + '</span>' +
+              '<span class="muted">' + (x.status === 'failed'
+                  ? '\u26a0 ' + esc(String(x.error || '\u05e0\u05db\u05e9\u05dc\u05d4').slice(0, 40))
+                  : (x.scheduled_at ? (late ? '\u05e0\u05e9\u05dc\u05d7\u05ea\u2026 ' : '') + esc(fmtDateTime(x.scheduled_at)) : '\u05de\u05d9\u05d3')) + '</span>' +
+              '<button class="btn btn-ghost btn-sm" data-qdel="' + esc(x.id) + '">\u05de\u05d7\u05e7</button></div>';
           }).join('') + '</div>';
-        box.querySelectorAll('[data-qsend]').forEach(function (b) {
+        box.querySelectorAll('[data-qdel]').forEach(function (b) {
           b.onclick = function () {
-            var q = rows.filter(function (x) { return x.id === b.dataset.qsend; })[0];
-            var self = this; self.disabled = true; self.textContent = 'שולח…';
-            db.functions.invoke('heyy-send', { body: { thread_id: t.id, body: q.body, outbox_id: q.id } })
-              .then(function (r) {
-                var d = r.data || {};
-                if (r.error || d.error) { self.disabled = false; self.textContent = 'שלח עכשיו'; return alert(d.error || (r.error && r.error.message)); }
-                openThread(t);
-              });
-          };
-        });
-        box.querySelectorAll('[data-qcancel]').forEach(function (b) {
-          b.onclick = function () {
-            db.from('wa_outbox').update({ status: 'cancelled' }).eq('id', this.dataset.qcancel)
+            var self = this; self.disabled = true; self.textContent = '\u05de\u05d5\u05d7\u05e7\u2026';
+            //  \u05de\u05d7\u05d9\u05e7\u05d4 \u05d5\u05dc\u05d0 \u05e1\u05d9\u05de\u05d5\u05df \u05db\u05de\u05d1\u05d5\u05d8\u05dc: \u05d4\u05e9\u05d5\u05e8\u05d4 \u05dc\u05d0 \u05e0\u05e9\u05dc\u05d7\u05d4 \u05de\u05e2\u05d5\u05dc\u05dd \u05d5\u05d0\u05d9\u05df
+            //  \u05dc\u05d4 \u05e2\u05e8\u05da \u05d4\u05d9\u05e1\u05d8\u05d5\u05e8\u05d9. \u05e9\u05d5\u05e8\u05d4 \u05e9\u05db\u05df \u05e0\u05e9\u05dc\u05d7\u05d4 \u05db\u05d1\u05e8 \u05d0\u05d9\u05e0\u05d4 queued.
+            db.from('wa_outbox').delete().eq('id', self.dataset.qdel).in('status', ['queued', 'failed'])
               .then(function () { loadOutbox(t); });
           };
         });
