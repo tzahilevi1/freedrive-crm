@@ -1987,8 +1987,16 @@
   function acctStatusSel(id, cur) { return '<select class="inp acct-st" data-acct="' + id + '" style="width:auto;font-size:12.5px">' + ACCT_STATUSES.map(function (s) { return '<option value="' + s.k + '"' + ((cur || 'pending') === s.k ? ' selected' : '') + '>' + esc(s.label) + '</option>'; }).join('') + '</select>'; }
   function acctWorkspace(deals, pays, prof, lname, docs, urls) {
     var paidByDeal = {}; pays.forEach(function (p) { if (p.kind !== 'invoice') paidByDeal[p.deal_id] = (paidByDeal[p.deal_id] || 0) + (+p.amount || 0); });
-    var revenue = 0, collected = 0, open = 0, commTotal = 0;
-    deals.forEach(function (d) { var tot = +d.total || 0, paid = paidByDeal[d.id] || 0; revenue += tot; collected += paid; open += Math.max(0, tot - paid); commTotal += (+d.commission || 0); });
+    //  עסקה שבוטלה נשארת ברשימה — הנהלת חשבונות צריכה לטפל בהחזר או
+    //  בזיכוי — אבל היא לא הכנסה ולא עמלה, ולכן אינה נספרת בסיכומים.
+    //  קודם היא נספרה, והמסך הציג הכנסה שלא קיימת.
+    var isCancelled = function (d) { return d.status === 'cancelled' || d.stage === 'cancelled'; };
+    var revenue = 0, collected = 0, open = 0, commTotal = 0, cancelSum = 0, cancelN = 0;
+    deals.forEach(function (d) {
+      var tot = +d.total || 0, paid = paidByDeal[d.id] || 0;
+      if (isCancelled(d)) { cancelN++; cancelSum += tot; collected += paid; return; }
+      revenue += tot; collected += paid; open += Math.max(0, tot - paid); commTotal += (+d.commission || 0);
+    });
 
     // TAB 1 — deals + receipts (what bought, invoice name, balance, commission, status, issue)
     if (!acctCols) acctCols = C.colPicker('accounting', ACCT_COLS, function () { window.C2B_renderAccounting(); }, { sortable: true });
@@ -2025,7 +2033,9 @@
     var panels = { deals: dealsPanel, commissions: commPanel, documents: docsPanel };
     function tab(k, l) { return '<button data-atab="' + k + '"' + (acctTab === k ? ' class="active"' : '') + '>' + l + '</button>'; }
     view('<h2 style="margin:0 0 12px">🧮 מרכז הנהלת חשבונות</h2>' +
-      '<div class="cards">' + C.stat('שווי עסקאות', nis(revenue), true) + C.stat('נגבה בפועל', nis(collected)) + C.stat('יתרה פתוחה', nis(open)) + C.stat('סה"כ עמלות סוכנים', nis(commTotal)) + '</div>' +
+      '<div class="cards">' + C.stat('שווי עסקאות', nis(revenue), true) + C.stat('נגבה בפועל', nis(collected)) + C.stat('יתרה פתוחה', nis(open)) + C.stat('סה"כ עמלות סוכנים', nis(commTotal)) +
+        //  המבוטלות לא נעלמות מהעין — הן פשוט לא נספרות כהכנסה
+        (cancelN ? C.stat('בוטלו · לא נספרות', cancelN + ' · ' + nis(cancelSum)) : '') + '</div>' +
       '<nav class="tabs" id="acctTabs" style="margin-bottom:14px;flex-wrap:wrap">' + tab('deals', '🧾 עסקאות וקבלות') + tab('commissions', '💸 עמלות סוכנים') + tab('documents', '📁 מסמכים') + '</nav><div id="acctPanel">' + panels[acctTab] + '</div>');
 
     function bindPanel() {
