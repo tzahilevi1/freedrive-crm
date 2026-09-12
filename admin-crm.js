@@ -1941,7 +1941,9 @@
       });
     });
     // payments ledger
-    if (deal.id) {
+    //  במצב תיק (fileMode) כרטיס התשלומים כלל לא מוצג, ולכן אין למה
+    //  לחוות. בלי התנאי הזה נזרקה שגיאה בכל פתיחת תיק.
+    if (deal.id && $('dlPayForm')) {
       var KIND = { payment: 'תשלום', receipt: 'קבלה', invoice: 'חשבונית' };
       var loadPayments = function () {
         db.from('payments').select('*').eq('deal_id', deal.id).order('created_at', { ascending: false }).then(function (r) {
