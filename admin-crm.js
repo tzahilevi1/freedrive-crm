@@ -3110,7 +3110,7 @@
         C.stat('זמן תגובה', avgRt ? avgRt + ' דק\'' : '—', null, 'rt') + C.stat('משימות פתוחות', openTasks, null, 'tasks') +
       '</div>' +
       '<div class="grid2">' +
-        '<div class="card">' + hdr('לידים לאורך זמן', 'chart') + '<div id="dashChart"></div></div>' +
+        '<div class="card">' + hdr('לידים ועסקאות לאורך זמן', 'chart') + '<div id="dashChart"></div></div>' +
         '<div class="card">' + hdr('פילוח לפי סטטוס', 'status', '(לחצו לפתיחת הלידים)') + '<div class="table-scroll"><table><tbody id="dashStatus"></tbody></table></div></div>' +
       '</div>' +
       '<div class="card">' + hdr('🗂️ משפך תיקי לקוחות', 'stage', '(לחצו על שלב לצפייה בלקוחות)') + '<div class="table-scroll"><table><tbody id="dashStage"></tbody></table></div></div>' +
@@ -3219,7 +3219,12 @@
     }
     if (k === 'chart') {
       var byDay = {}; leads.forEach(function (l) { var dd = (l.created_at || '').slice(0, 10); if (dd) byDay[dd] = (byDay[dd] || 0) + 1; });
-      var days = []; for (var i = 13; i >= 0; i--) { var dz = new Date(Date.now() - i * 864e5).toISOString().slice(0, 10); days.push({ d: dz, v: byDay[dz] || 0 }); }
+      //  עסקה נספרת ביום החתימה ולא ביום הפתיחה — אחרת עסקה שנפתחה
+      //  לפני חודש ונחתמה היום הייתה מופיעה בעמודה הלא נכונה.
+      var dDay = {}; allDeals.filter(isDeal).forEach(function (x) {
+        var dd = (dealAt(x) || '').slice(0, 10); if (dd) dDay[dd] = (dDay[dd] || 0) + 1;
+      });
+      var days = []; for (var i = 13; i >= 0; i--) { var dz = new Date(Date.now() - i * 864e5).toISOString().slice(0, 10); days.push({ d: dz, v: byDay[dz] || 0, dv: dDay[dz] || 0 }); }
       C.$('dashChart').innerHTML = svgBars(days);
     } else if (k === 'status') {
       var by = {}; leads.forEach(function (l) { by[l.status || 'new'] = (by[l.status || 'new'] || 0) + 1; });
@@ -3251,12 +3256,36 @@
       C.$('dashSource').querySelectorAll('[data-source]').forEach(function (tr) { tr.addEventListener('click', function () { var s = tr.dataset.source; leadsPopup('מקור: ' + s, leads.filter(function (l) { return (l.source || 'לא ידוע') === s; }).map(leadRowD), fltLabel(blockR['source'])); }); });
     }
   }
+  //  שתי סדרות באותו גרף: לידים שנכנסו ועסקאות שנסגרו. הן חולקות
+  //  ציר, כי השאלה האמיתית היא היחס ביניהן — לא כל אחת בנפרד. עמודת
+  //  העסקאות צרה ויושבת בתוך עמודת הלידים, כך שקל לראות את שיעור
+  //  ההמרה של כל יום בלי לקרוא שני גרפים.
   function svgBars(days) {
-    var max = Math.max(1, Math.max.apply(null, days.map(function (d) { return d.v; }))), W = 100 / days.length;
-    var bars = days.map(function (d, i) { var h = d.v / max * 92; return '<rect x="' + (i * W + W * 0.15) + '" y="' + (100 - h) + '" width="' + (W * 0.7) + '" height="' + h + '" rx="1.5" fill="var(--brand)"><title>' + esc(d.d) + ': ' + d.v + '</title></rect>'; }).join('');
-    // below each bar: the count itself (bold) + date (LTR, evenly spaced) — outside the stretched SVG so they don't distort
-    var labs = days.map(function (d, i) { return '<div style="flex:1;min-width:0;text-align:center;white-space:nowrap"><div style="font-size:11.5px;font-weight:700;color:var(--brand);line-height:1.2">' + (d.v > 0 ? d.v : '') + '</div><div style="font-size:10px;color:var(--muted)">' + (i % 2 === 0 ? esc(d.d.slice(5)) : '') + '</div></div>'; }).join('');
-    return '<div><svg viewBox="0 0 100 100" preserveAspectRatio="none" style="width:100%;height:160px;display:block">' + bars + '</svg><div style="display:flex;direction:ltr;margin-top:6px">' + labs + '</div></div>';
+    var hasD = days.some(function (d) { return d.dv > 0; });
+    var max = Math.max(1, Math.max.apply(null, days.map(function (d) { return Math.max(d.v || 0, d.dv || 0); })));
+    var W = 100 / days.length;
+    var bars = days.map(function (d, i) {
+      var h = (d.v || 0) / max * 92;
+      var x = i * W + W * 0.15, w = W * 0.7;
+      var out = '<rect x="' + x + '" y="' + (100 - h) + '" width="' + w + '" height="' + h + '" rx="1.5" fill="var(--brand)" opacity="' + (hasD ? '.42' : '1') + '"><title>' + esc(d.d) + ': ' + (d.v || 0) + ' לידים</title></rect>';
+      if (d.dv > 0) {
+        var hd = d.dv / max * 92;
+        out += '<rect x="' + (x + w * 0.25) + '" y="' + (100 - hd) + '" width="' + (w * 0.5) + '" height="' + hd + '" rx="1.5" fill="var(--ok)"><title>' + esc(d.d) + ': ' + d.dv + ' עסקאות</title></rect>';
+      }
+      return out;
+    }).join('');
+    var labs = days.map(function (d, i) {
+      return '<div style="flex:1;min-width:0;text-align:center;white-space:nowrap">' +
+        '<div style="font-size:11.5px;font-weight:700;color:var(--brand);line-height:1.2">' + (d.v > 0 ? d.v : '') + '</div>' +
+        (hasD ? '<div style="font-size:10.5px;font-weight:700;color:var(--ok);line-height:1.1">' + (d.dv > 0 ? d.dv : '') + '</div>' : '') +
+        '<div style="font-size:10px;color:var(--muted)">' + (i % 2 === 0 ? esc(d.d.slice(5)) : '') + '</div></div>';
+    }).join('');
+    var legend = hasD
+      ? '<div style="display:flex;gap:14px;justify-content:flex-end;font-size:11.5px;margin-bottom:4px">' +
+        '<span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:var(--brand);opacity:.42;margin-inline-end:4px"></span>לידים</span>' +
+        '<span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:var(--ok);margin-inline-end:4px"></span>עסקאות שנסגרו</span></div>'
+      : '';
+    return '<div>' + legend + '<svg viewBox="0 0 100 100" preserveAspectRatio="none" style="width:100%;height:160px;display:block">' + bars + '</svg><div style="display:flex;direction:ltr;margin-top:6px">' + labs + '</div></div>';
   }
 
   // expose the status model for admin.js (bell, reports)
