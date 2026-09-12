@@ -1180,7 +1180,9 @@
   function repTop(obj, key, n) { return Object.keys(obj).map(function (k) { return { label: k, v: obj[k][key] || 0, o: obj[k] }; }).filter(function (x) { return x.v > 0; }).sort(function (a, b) { return b.v - a.v; }).slice(0, n || 999); }
   function kpi(label, value, sub, accent) { return '<div class="kpi' + (accent ? ' accent' : '') + '"><div class="k">' + esc(label) + '</div><div class="v">' + value + '</div>' + (sub ? '<div class="sub">' + esc(sub) + '</div>' : '') + '</div>'; }
   function secCard(title, inner) { return '<div class="card"><div class="sec-title">' + title + '</div>' + inner + '</div>'; }
-  function barRows(items, fmt) { var mx = Math.max.apply(null, items.map(function (i) { return i.v; }).concat([1])); return items.length ? items.map(function (i) { var w = mx ? Math.round(i.v / mx * 100) : 0; return '<div class="mbar"><span class="lbl" title="' + esc(i.label) + '">' + esc(i.label) + '</span><span class="track"><span style="width:' + w + '%"></span></span><span class="val">' + fmt(i.v) + '</span></div>'; }).join('') : '<p class="empty">אין נתונים</p>'; }
+  //  pre מוסיף מספר בסוגריים לפני שם השורה (למשל כמות רכבים בדגם),
+  //  כדי שאפשר יהיה לקרוא הכנסה וכמות באותה שורה בלי טבלה נוספת.
+  function barRows(items, fmt, pre) { var mx = Math.max.apply(null, items.map(function (i) { return i.v; }).concat([1])); return items.length ? items.map(function (i) { var w = mx ? Math.round(i.v / mx * 100) : 0; var q = pre ? pre(i) : ''; return '<div class="mbar"><span class="lbl" title="' + esc(i.label) + '">' + (q ? '<span class="qty">(' + esc(q) + ')</span> ' : '') + esc(i.label) + '</span><span class="track"><span style="width:' + w + '%"></span></span><span class="val">' + fmt(i.v) + '</span></div>'; }).join('') : '<p class="empty">אין נתונים</p>'; }
   function rankRows(items, fmt, subFmt) { return items.length ? items.map(function (i, idx) { return '<div class="rk' + (idx < 3 ? ' top' + (idx + 1) : '') + '"><span class="n">' + (idx + 1) + '</span><span class="nm">' + esc(i.label) + (subFmt ? ' <span class="mt">' + subFmt(i) + '</span>' : '') + '</span><span class="amt">' + fmt(i.v) + '</span></div>'; }).join('') : '<p class="empty">אין נתונים</p>'; }
   function repTable(headers, rows) { return '<div class="table-scroll"><table><thead><tr>' + headers.map(function (h) { return '<th>' + h + '</th>'; }).join('') + '</tr></thead><tbody>' + (rows || '<tr><td class="empty" colspan="' + headers.length + '">אין נתונים</td></tr>') + '</tbody></table></div>'; }
 
@@ -1475,7 +1477,7 @@
       var salesCars =
         '<div class="cards">' + kpi('עסקאות שהושלמו', doneDeals.length, null, true) + kpi('הרכב הכי נמכר', topModel ? esc(topModel.label) : '—', topModel ? topModel.o.done + ' עסקאות' : '') + kpi('סכום טרייד-אין ממוצע', M(avgTi), tiDeals.length + ' עסקאות עם טרייד-אין') + '</div>' +
         '<div class="rep-grid">' +
-          secCard('🚙 הכנסות לפי דגם', barRows(repTop(byModel, 'revenue', 10), M)) +
+          secCard('🚙 הכנסות לפי דגם', barRows(repTop(byModel, 'revenue', 10), M, function (i) { return i.o.count; })) +
           secCard('🏭 עסקאות לפי יצרן', barRows(repTop(byMaker, 'count', 12), function (v) { return v; })) +
         '</div>' +
         secCard('📋 פירוט יצרן / דגם', repTable(['יצרן', 'דגם', 'עסקאות שהושלמו', 'ערך עסקה ממוצע', 'הנחה ממוצעת', 'סה״כ הכנסות', 'רווחיות'], makerRows));
@@ -1613,6 +1615,126 @@
           ? [head, 'עסקאות חתומות', 'הכנסות', 'לידים', 'אחוז המרה']
           : [head, 'לידים', 'עסקאות חתומות', 'הכנסות', 'אחוז המרה'], rows);
       }
+      //  ---------- קמפיין \u2192 סדרה \u2192 מודעה בטבלה אחת ----------
+      //  קודם היו שלוש טבלאות נפרדות, והמנהל היה צריך לזכור איזו סדרה
+      //  שייכת לאיזה קמפיין. כאן ההיררכיה מפורשת: לחיצה על קמפיין
+      //  פותחת את הסדרות שלו, ולחיצה על סדרה פותחת את המודעות שלה.
+      function attrTree(byDeals) {
+        var UN = UNATTR;
+        var tree = {};
+        function node(m, k) { m[k] = m[k] || { leads: 0, count: 0, revenue: 0, L: [], D: [], kids: {} }; return m[k]; }
+        function put(l, d) {
+          if (!isPaid(l)) return;
+          var c = String(l.campaign || l.utm_campaign || '').trim() || UN;
+          var a = String(l.adset_name || l.ad_group || '').trim() || UN;
+          var v = String(l.ad_name || '').trim() || UN;
+          var lv = [node(tree, c), null, null];
+          lv[1] = node(lv[0].kids, a);
+          lv[2] = node(lv[1].kids, v);
+          lv.forEach(function (o) {
+            if (d) { o.count++; o.revenue += (+d.car_price || 0); o.D.push({ d: d, l: l }); }
+            else { o.leads++; o.L.push(l); }
+          });
+        }
+        leads.forEach(function (l) { put(l, null); });
+        deals.forEach(function (d) { var l = leadById[d.lead_id]; if (l) put(l, d); });
+
+        var sortFn = byDeals
+          ? function (a, b) { return (b[1].revenue - a[1].revenue) || (b[1].count - a[1].count) || (b[1].leads - a[1].leads); }
+          : function (a, b) { return (b[1].leads - a[1].leads) || (b[1].revenue - a[1].revenue); };
+        var out = '', n = 0;
+        function row(label, o, depth, pid, id, hasKids) {
+          var cr = o.leads ? P1(o.count / o.leads * 100) : '<span class="muted">\u2014</span>';
+          var key = repKeys.push({ label: label, o: o }) - 1;
+          var nL = o.leads ? '<a class="drill-n" data-rk="' + key + '" data-what="leads">' + o.leads + '</a>' : '<span class="muted">0</span>';
+          var nD = o.count ? '<a class="drill-n" data-rk="' + key + '" data-what="deals">' + o.count + '</a>' : '<span class="muted">0</span>';
+          var cells = byDeals
+            ? ['<td>' + nD + '</td>', '<td>' + M(o.revenue) + '</td>', '<td>' + nL + '</td>', '<td>' + cr + '</td>']
+            : ['<td>' + nL + '</td>', '<td>' + nD + '</td>', '<td>' + M(o.revenue) + '</td>', '<td>' + cr + '</td>'];
+          var arrow = hasKids ? '<span class="drill-x">\u25b8</span> ' : '';
+          return '<tr data-id="' + esc(id) + '" data-parent="' + esc(pid) + '"' +
+              (depth ? ' class="hidden"' : '') + '>' +
+            '<td style="padding-inline-start:' + (10 + depth * 22) + 'px' + (hasKids ? ';cursor:pointer' : '') + '"' +
+              (hasKids ? ' data-drill="1"' : '') + '>' + arrow +
+              (depth ? esc(label) : '<b>' + esc(label) + '</b>') + '</td>' + cells.join('') + '</tr>';
+        }
+        Object.keys(tree).map(function (k) { return [k, tree[k]]; }).sort(sortFn).forEach(function (c) {
+          var cid = 'c' + (n++);
+          var adsets = Object.keys(c[1].kids).map(function (k) { return [k, c[1].kids[k]]; }).sort(sortFn);
+          //  סדרה יחידה ששמה "ללא ייחוס" אינה מוסיפה מידע — לא מציגים חץ
+          var real = adsets.filter(function (a) { return a[0] !== UN; });
+          out += row(c[0], c[1], 0, '', cid, real.length > 0);
+          adsets.forEach(function (a) {
+            var aid = cid + '-a' + (n++);
+            var ads = Object.keys(a[1].kids).map(function (k) { return [k, a[1].kids[k]]; }).sort(sortFn);
+            var realAds = ads.filter(function (x) { return x[0] !== UN; });
+            out += row(a[0], a[1], 1, cid, aid, realAds.length > 0);
+            ads.forEach(function (x) { out += row(x[0], x[1], 2, aid, aid + '-v' + (n++), false); });
+          });
+        });
+        if (!out) return '<span class="muted">אין קמפיינים בטווח שנבחר.</span>';
+        var head = byDeals
+          ? ['קמפיין / סדרה / מודעה', 'עסקאות חתומות', 'הכנסות', 'לידים', 'אחוז המרה']
+          : ['קמפיין / סדרה / מודעה', 'לידים', 'עסקאות חתומות', 'הכנסות', 'אחוז המרה'];
+        return '<div class="table-scroll"><table class="drill-tree">' +
+          '<thead><tr>' + head.map(function (h) { return '<th>' + h + '</th>'; }).join('') + '</tr></thead>' +
+          '<tbody>' + out + '</tbody></table></div>';
+      }
+
+      //  ---------- אורגני מול ממומן ----------
+      //  שני הערוצים נמדדים באותן אמות מידה. ההשוואה החשובה אינה כמות
+      //  הלידים אלא מה כל ליד שווה: ערוץ שמביא חצי מהלידים אבל סוגר
+      //  פי שלוש הוא הערוץ הרווחי, וזה נעלם כשמסתכלים רק על הכמות.
+      function vsPanel() {
+        var g = { cpc: { leads: 0, deals: 0, rev: 0 }, seo: { leads: 0, deals: 0, rev: 0 } };
+        function bucket(l) {
+          var m = String((l && (l.utm_medium || l.medium)) || '').toLowerCase();
+          if (m === 'cpc' || m === 'ppc' || m === 'paid') return 'cpc';
+          if (m === 'seo' || m === 'organic') return 'seo';
+          return null;
+        }
+        leads.forEach(function (l) { var k = bucket(l); if (k) g[k].leads++; });
+        deals.forEach(function (dd) {
+          var k = bucket(leadById[dd.lead_id]); if (!k) return;
+          g[k].deals++; g[k].rev += (+dd.car_price || 0);
+        });
+        if (!g.cpc.leads && !g.seo.leads) return '';
+        var totalSpend = (repCtx && repCtx.spend) || 0;
+        function col(key, title, icon, color) {
+          var o = g[key];
+          var conv = o.leads ? o.deals / o.leads * 100 : null;
+          var perLead = o.leads ? o.rev / o.leads : 0;
+          var avg = o.deals ? o.rev / o.deals : 0;
+          //  עלות מוצגת רק לממומן, ורק כשידועה ההוצאה בפועל
+          var cost = (key === 'cpc' && totalSpend)
+            ? [['הוצאת פרסום', nis0(totalSpend)],
+               ['עלות לליד', o.leads ? nis0(totalSpend / o.leads) : '\u2014'],
+               ['עלות לעסקה', o.deals ? nis0(totalSpend / o.deals) : '\u2014']]
+            : [];
+          var rows = [['לידים', o.leads], ['עסקאות חתומות', o.deals], ['הכנסות', M(o.rev)],
+                      ['אחוז המרה', conv === null ? '\u2014' : P1(conv)],
+                      ['הכנסה ממוצעת לליד', perLead ? M(perLead) : '\u2014'],
+                      ['עסקה ממוצעת', avg ? M(avg) : '\u2014']].concat(cost);
+          var win = perLead > 0 && perLead >= (key === 'cpc'
+            ? (g.seo.leads ? g.seo.rev / g.seo.leads : 0)
+            : (g.cpc.leads ? g.cpc.rev / g.cpc.leads : 0));
+          return '<div class="vs-col' + (win ? ' win' : '') + '">' +
+            '<h4>' + icon + ' ' + title +
+            (win ? '<span class="tag-sm" style="background:' + color + '18;color:' + color + '">מוביל</span>' : '') + '</h4>' +
+            rows.map(function (r) {
+              return '<div class="vs-row"><span class="muted">' + r[0] + '</span><b>' + r[1] + '</b></div>';
+            }).join('') + '</div>';
+        }
+        return secCard('\u2696\ufe0f אורגני מול ממומן',
+          '<div class="vs-grid">' +
+            col('cpc', 'ממומן \u00b7 PPC', '\ud83d\udcb8', 'var(--warn)') +
+            col('seo', 'אורגני \u00b7 SEO', '\ud83c\udf31', 'var(--ok)') +
+          '</div>' +
+          '<div class="vs-note">\u2139\ufe0f החלוקה לפי <b>utm_medium</b>: ליד מקמפיין מסומן <b>cpc</b>, וליד שנכנס בלי ייחוס פרסומי מקבל <b>seo</b> אוטומטית. ' +
+          'הסימון <b>מוביל</b> ניתן לפי <b>הכנסה ממוצעת לליד</b> ולא לפי כמות — ערוץ עם פחות לידים ששוויים גבוה יותר עדיף.' +
+          (totalSpend ? '' : ' עלות לליד ולעסקה יוצגו כשנתוני ההוצאה של Meta יהיו בטווח שנבחר.') + '</div>');
+      }
+
       var journeyRows = deals.map(function (d) {
         var l = leadById[d.lead_id] || {};
         var pl = String(l.utm_term || '').toLowerCase();
@@ -1666,9 +1788,8 @@
           '<div class="rep-grid">' + grid + '</div>' +
           secCard('\ud83e\udded ערוצי הגעה', attrTable(byChannel, 'ערוץ', byDeals)) +
           secCard('\ud83e\udd1d שותפים ומקורות שאינם פרסום', attrTable(byPartner, 'מקור', byDeals)) +
-          secCard('\ud83d\udce3 קמפיינים <span class="muted" style="font-size:12px;font-weight:400">\u00b7 פרסום ממומן בלבד</span>', attrTable(byCampName, 'קמפיין', byDeals)) +
-          secCard('\ud83c\udf9b\ufe0f קבוצות מודעות', attrTable(byAdset, 'קבוצת מודעות', byDeals)) +
-          secCard('\ud83d\uddbc\ufe0f מודעות', attrTable(byAdName, 'מודעה', byDeals)) +
+          vsPanel() +
+          secCard('\ud83d\udce3 קמפיינים <span class="muted" style="font-size:12px;font-weight:400">\u00b7 פרסום ממומן בלבד \u00b7 לחצו על שורה לפתיחת הרמה שמתחתיה</span>', attrTree(byDeals)) +
           secCard('\ud83e\uddfe מסלול ההגעה של העסקאות החתומות',
             repTable(['לקוח', 'ערוץ', 'מקור', 'קמפיין', 'קבוצת מודעות', 'מודעה', 'מיקום', 'הכנסה'], journeyRows)) +
           '<div class="sec-note">\u2139\ufe0f ' + note + ' טבלאות הפרסום מכילות <b>רק</b> לידים שהגיעו מקמפיין; שותפים והפניות מרוכזים בטבלה נפרדת, ולידים שהוקלדו בלי מקור נספרים כ\u05f4' + CH_NONE + '\u05f4. רשימת המקורות נערכת ב<b>הגדרות ורשימות \u2190 מקור הגעה</b>, וכל מקור חדש שתוסיפו שם נכנס לדוח מעצמו.</div>';
@@ -1938,6 +2059,8 @@
       if ($('mkNote')) $('mkNote').innerHTML = '📡 הנתונים מ-Meta · חשבון ' + esc(d.account || '') +
         ' · ' + (t.impressions || 0).toLocaleString('en-US') + ' חשיפות · ' +
         (t.clicks || 0).toLocaleString('en-US') + ' הקלקות · <b>לצפייה בלבד</b> — שינוי תקציב או סטטוס נעשה ב-Meta.';
+
+      repCtx.spend = sp;   //  בשביל בלוק "אורגני מול ממומן"
 
       //  ---------- לוח המנהל ----------
       if ($('mgSpend')) {
