@@ -153,6 +153,20 @@
     });
   }
 
+  //  הורדה ישירה של מסמך. ה-download attribute לבדו לא עובד על כתובת
+  //  ממקור אחר (Supabase Storage), ולכן מוסיפים ?download= \u2014 השרת מחזיר
+  //  Content-Disposition: attachment והדפדפן שומר במקום לנווט.
+  function downloadDoc(path, name) {
+    db.storage.from('lead-docs').createSignedUrl(path, 3600).then(function (r) {
+      var url = r && r.data && r.data.signedUrl;
+      if (!url) { alert('לא ניתן להוריד את המסמך'); return; }
+      url += (url.indexOf('?') < 0 ? '?' : '&') + 'download=' + encodeURIComponent(name || 'document');
+      var a = document.createElement('a');
+      a.href = url; a.download = name || ''; a.rel = 'noopener';
+      document.body.appendChild(a); a.click(); a.remove();
+    });
+  }
+
   // ספריית התמונות של icar.co.il חוסמת hotlinking (403 בלי Referer שלה).
   // הכתובות מגיעות מגיליון הרכבים ונדרסות בכל sync-cars, לכן מנתבים דרך proxy
   // במקום לתקן את המסד. כל מקור אחר עובר as-is.
@@ -162,7 +176,7 @@
       ? SUPABASE_URL + '/functions/v1/img-proxy?u=' + encodeURIComponent(u)
       : u;
   }
-  window.C2B = { db: db, $: $, esc: esc, carImg: carImg, fmt: fmtDateTime, nis: nis, view: view, loading: loading, errBox: errBox, stat: stat, openDrawer: openDrawer, closeDrawer: closeDrawer, viewDoc: viewDoc, go: function (n, o) { return go(n, o); } };
+  window.C2B = { db: db, $: $, esc: esc, carImg: carImg, fmt: fmtDateTime, nis: nis, view: view, loading: loading, errBox: errBox, stat: stat, openDrawer: openDrawer, closeDrawer: closeDrawer, viewDoc: viewDoc, downloadDoc: downloadDoc, go: function (n, o) { return go(n, o); } };
 
   // ---------- theme ----------
   (function () {
@@ -710,7 +724,12 @@
         }).join('') + '</div><button class="btn btn-ghost btn-sm" data-cpreset style="width:100%;margin-top:8px">איפוס לברירת מחדל</button>';
       document.body.appendChild(m);
       var r = anchor.getBoundingClientRect();
-      m.style.right = Math.max(8, window.innerWidth - r.right) + 'px';
+      //  התפריט מיושר לקצה הימני של הכפתור, אבל לא מעבר לגבולות החלון:
+      //  כשהכפתור יושב בצד שמאל של הסרגל היישור הזה דחף חלק ניכר מהתפריט
+      //  אל מחוץ למסך, והוא נראה חתוך.
+      var mw = m.offsetWidth || 280;
+      m.style.right = Math.min(Math.max(8, window.innerWidth - r.right),
+                               Math.max(8, window.innerWidth - mw - 8)) + 'px';
       //  התפריט נפתח מתחת לכפתור, ואם אין שם מקום — מעליו.
       //  בשני המקרים הגובה מוגבל למקום שבאמת נשאר, כדי
       //  שהרשימה תגלול במקום להיחתך בקצה המסך.
@@ -918,7 +937,7 @@
         { key: 'p', label: 'מחיר' }, { key: 'm', label: 'החזר חודשי' }, { key: 'commission', label: 'עמלת סוכן' }, { key: 'seats', label: 'מושבים' }
       ], draw);
       if (!carCols) carCols = window.C2B.colPicker('cars', CAR_COL_DEFS, draw, { sortable: true });
-      view('<div class="card"><div class="row-between"><h3>רכבים <span class="muted" id="ccount"></span></h3><div><input class="inp" id="cq" placeholder="חיפוש חופשי…" style="width:180px"> <a class="btn btn-sm" href="' + SHEET_URL + '" target="_blank" rel="noopener">✎ פתח את הגיליון</a> ' + (window.C2B.role === 'admin' ? '<button class="btn btn-sm" id="carsSync">🔄 סנכרן מהגיליון</button> ' : '') + carCols.button() + '</div></div>' +
+      view('<div class="card"><div class="row-between"><h3>רכבים <span class="muted" id="ccount"></span></h3><div><input class="inp" id="cq" placeholder="חיפוש חופשי…" style="width:180px"> ' + carCols.button() + '</div></div>' +
         '<div class="tabs2" id="carTabs" style="margin:8px 0 12px"><button class="active" data-cond="חדש">🚗 רכבים חדשים (' + newN + ')</button><button data-cond="יד 2">🔑 יד 2 (' + usedN + ')</button></div>' +
         '<div id="carsBody"></div></div>');
       function list() {
@@ -947,15 +966,7 @@
       }
       carCols.bind();
       $('cq').addEventListener('input', draw);
-      if ($('carsSync')) $('carsSync').addEventListener('click', function () {
-        var b = this, old = b.textContent; b.disabled = true; b.textContent = 'מסנכרן…';
-        db.functions.invoke('sync-cars', { body: {} }).then(function (r) {
-          b.disabled = false; b.textContent = old;
-          var d = r.data || {};
-          if (r.error || d.error) { window.C2B.toast('שגיאת סנכרון: ' + ((d.error) || (r.error && r.error.message) || ''), true); return; }
-          window.C2B.toast('✔ המלאי סונכרן מהגיליון'); renderCars();
-        }, function () { b.disabled = false; b.textContent = old; window.C2B.toast('שגיאת סנכרון', true); });
-      });
+      //  אין כפתור סנכרון: pg_cron מריץ את sync-cars כל 15 דקות
       draw();
     }).catch(function (e) { errBox(e.message || e); });
   }

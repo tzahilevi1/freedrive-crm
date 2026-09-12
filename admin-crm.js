@@ -1752,10 +1752,11 @@
             if (!$('dlDocs')) return;
             $('dlDocs').innerHTML = cRow + docs.map(function (x) {
               var u = urls[x.storage_path], ic = /\.pdf$/i.test(x.name || '') ? '📄' : (/\.(png|jpe?g|gif|webp)$/i.test(x.name || '') ? '🖼️' : '📎');
-              return '<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--line)"><div style="flex:1;min-width:0">' + ic + ' <a href="#" data-opendoc="' + esc(x.storage_path) + '" data-docname="' + esc(x.name || '') + '" style="cursor:pointer">' + esc(x.name) + '</a> <span class="muted" style="font-size:11px">· ' + fmt(x.created_at) + '</span></div><button class="btn btn-ghost btn-sm" data-opendoc="' + esc(x.storage_path) + '" data-docname="' + esc(x.name || '') + '" title="פתח לצפייה בלי להוריד">👁 פתח</button><button class="btn btn-ghost btn-sm" data-deldoc="' + x.id + '" data-delpath="' + esc(x.storage_path) + '" title="מחק">🗑️</button></div>';
+              return '<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--line)"><div style="flex:1;min-width:0">' + ic + ' <a href="#" data-opendoc="' + esc(x.storage_path) + '" data-docname="' + esc(x.name || '') + '" style="cursor:pointer">' + esc(x.name) + '</a> <span class="muted" style="font-size:11px">· ' + fmt(x.created_at) + '</span></div><button class="btn btn-ghost btn-sm" data-dldoc="' + esc(x.storage_path) + '" data-docname="' + esc(x.name || '') + '" title="הורד למחשב" aria-label="הורד למחשב" style="padding-inline:9px">⬇</button><button class="btn btn-ghost btn-sm" data-opendoc="' + esc(x.storage_path) + '" data-docname="' + esc(x.name || '') + '" title="פתח לצפייה בלי להוריד">👁 פתח</button><button class="btn btn-ghost btn-sm" data-deldoc="' + x.id + '" data-delpath="' + esc(x.storage_path) + '" title="מחק">🗑️</button></div>';
             }).join('');
             wireContractRow();
             $('dlDocs').querySelectorAll('[data-opendoc]').forEach(function (b) { b.addEventListener('click', function (e) { e.preventDefault(); C.viewDoc(b.dataset.opendoc, b.dataset.docname); }); });
+            $('dlDocs').querySelectorAll('[data-dldoc]').forEach(function (b) { b.addEventListener('click', function (e) { e.preventDefault(); C.downloadDoc(b.dataset.dldoc, b.dataset.docname); }); });
             $('dlDocs').querySelectorAll('[data-deldoc]').forEach(function (b) {
               b.addEventListener('click', function () {
                 if (!confirm('למחוק את המסמך?')) return;
