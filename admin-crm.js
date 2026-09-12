@@ -3117,12 +3117,12 @@
       pTabs +
       '<div class="cards" style="margin-top:14px">' +
         C.stat('לידים חדשים היום', todayN, true, 'today') + C.stat('נחתמו היום', dealsTodayN, true, 'signedToday') +
-        C.stat('סה"כ לידים', leads.length, null, 'leads') + C.stat('עסקאות חתומות', deals.length, null, 'deals') +
-        C.stat('עסקאות שנסגרו', closedDeals.length, null, 'closed') +
+        C.stat('סה"כ לידים', leads.length, null, 'leads') + C.stat('עסקאות חתומות', deals.length, null, 'deals', 'הלקוח חתם על ההסכם') +
+        C.stat('עסקאות שנסגרו', closedDeals.length, null, 'closed', 'משלב "נחתם מימון" ומעלה') +
         C.stat('פגישות נקבעו', by.meeting_set || 0, null, 'meetings') +
         C.stat('הצעות פתוחות', openQuotes, null, 'quotes') + C.stat('אחוז סגירה', conv + '%', null, 'conv') +
-        C.stat('זמן תגובה', avgRt ? avgRt + ' דק\'' : '—', null, 'rt') + C.stat('משימות פתוחות', openTasks, null, 'tasks') +
-        C.stat('משימות באיחור', lateTasksL.length, null, 'late') +
+        C.stat('זמן תגובה', avgRt ? avgRt + ' דק\'' : '—', null, 'rt') + C.stat('משימות פתוחות', openTasks, null, 'tasks', 'הכל מה שטרם בוצע — כולל אלה שבאיחור') +
+        C.stat('משימות באיחור', lateTasksL.length, null, 'late', 'מתוך הפתוחות — עבר מועד היעד') +
       '</div>' +
       '<div class="grid2">' +
         '<div class="card">' + hdr('לידים ועסקאות לאורך זמן', 'chart') + '<div id="dashChart"></div></div>' +
