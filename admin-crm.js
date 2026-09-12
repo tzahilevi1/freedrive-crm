@@ -1375,8 +1375,10 @@
     if (lfb) lfb.addEventListener('click', function (e) { var st = e.target.closest('[data-status]'); if (!st) return; changeStatus(lead.id, st.dataset.status, lead, function () { window.C2B_openLeadCard(lead.id); }); });
     var rs = $('lpReason'); if (rs) { if (!lead.close_reason) rs.focus(); rs.addEventListener('change', function () { db.from('leads').update({ close_reason: rs.value }).eq('id', lead.id).then(function () { logActivity(lead.id, 'system', 'סיבת אי-רלוונטיות: ' + rs.value); window.C2B_openLeadCard(lead.id); }); }); }
     // inline field editing — save each business field on change (no edit button)
-    var ldInfoEl = $('ldInfo');
-    if (ldInfoEl) ldInfoEl.addEventListener('change', function (e) {
+    //  אותו מאזין לשתי הלשוניות. "מקור הגעה" יושב בלשונית השיווק, וכל
+    //  עוד המאזין ישב על #ldInfo בלבד שינוי שלו נראה כאילו נקלט במסך
+    //  אבל מעולם לא הגיע למסד — ונעלם ביציאה מהכרטיס.
+    function saveLeadField(e) {
       var el = e.target.closest('[data-field]'); if (!el) return;
       var field = el.dataset.field, val = (el.value || '').trim(), patch = {};
       patch[field] = val || null;
@@ -1396,7 +1398,8 @@
         logActivity(lead.id, 'system', 'עודכן ' + (el.dataset.label || field) + (shown ? ': ' + shown : ''));
         el.style.borderColor = 'var(--ok)'; setTimeout(function () { el.style.borderColor = ''; }, 900);
       });
-    });
+    }
+    ['ldInfo', 'ldMkt'].forEach(function (id) { var el = $(id); if (el) el.addEventListener('change', saveLeadField); });
     setupCarPicker(lead);   // cascading brand→model→trim from inventory
     // צפייה במודעה — האזנה על המיכל ולא על הכפתור:
     // בלוק השיווק מוסתר בהתחלה ומצויר מחדש במעבר בין הלשוניות.

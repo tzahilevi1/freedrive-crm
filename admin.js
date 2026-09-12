@@ -1941,11 +1941,30 @@
       });
       //  מאזין אחד לכל המספרים הלחיצים בדוחות, על המכל שנשאר בין ציורים
       $('repPanel').onclick = function (e) {
-        var a = e.target.closest('a.drill-n[data-rk]'); if (!a) return;
+        var a = e.target.closest('a.drill-n[data-rk]');
+        if (a) {
         var it = (window.C2B_repKeys || [])[+a.dataset.rk]; if (!it) return;
         var what = a.dataset.what;
-        repDetail((what === 'deals' ? 'עסקאות \u00b7 ' : 'לידים \u00b7 ') + it.label, what,
+        return repDetail((what === 'deals' ? 'עסקאות \u00b7 ' : 'לידים \u00b7 ') + it.label, what,
                   what === 'deals' ? it.o.D : it.o.L);
+        }
+        //  פתיחת רמה בטבלת הקמפיינים: קמפיין ← סדרת מודעות ← מודעה.
+        //  כל השורות כבר קיימות ב-DOM ורק מוסתרות ב-class, ולכן הפתיחה
+        //  מיידית ואינה מצריכה ציור מחדש של הטבלה.
+        var cell = e.target.closest('td[data-drill]'); if (!cell) return;
+        var tr = cell.closest('tr'), id = tr.dataset.id, tb = tr.parentNode;
+        var open = tr.classList.toggle('drill-open');
+        var mark = tr.querySelector('.drill-x'); if (mark) mark.textContent = open ? '▾' : '▸';
+        [].forEach.call(tb.querySelectorAll('tr[data-parent="' + id + '"]'), function (k) {
+          k.classList.toggle('hidden', !open);
+          //  בסגירה מקפלים גם את הנכדים, אחרת פתיחה חוזרת הייתה חושפת
+          //  רמה שלישית שהמשתמש כבר סגר.
+          if (!open) {
+            k.classList.remove('drill-open');
+            var m2 = k.querySelector('.drill-x'); if (m2) m2.textContent = '▸';
+            [].forEach.call(tb.querySelectorAll('tr[data-parent="' + k.dataset.id + '"]'), function (g) { g.classList.add('hidden'); });
+          }
+        });
       };
       $('repTabs').addEventListener('click', function (e) { var b = e.target.closest('button[data-rep]'); if (!b) return; repTab = b.dataset.rep; $('repTabs').querySelectorAll('button').forEach(function (x) { x.classList.toggle('active', x.dataset.rep === repTab); }); $('repPanel').innerHTML = panels[repTab];  loadAdMetrics(); });
       // sales sub-tab switching (delegated on the persistent repPanel)
