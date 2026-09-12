@@ -112,6 +112,20 @@
   function badge(k, clickable, leadId) { var s = stDef(k); return '<span class="tag' + (clickable ? ' click" data-st-lead="' + leadId + '" data-cur="' + k : '') + '" style="border-color:' + s.color + ';color:' + s.color + ';background:' + s.color + '18">' + s.icon + ' ' + esc(s.label) + (clickable ? ' ▾' : '') + '</span>'; }
   function initials(name) { return String(name || '?').trim().split(/\s+/).map(function (w) { return w.charAt(0); }).slice(0, 2).join('') || '?'; }
   function waIntl(phone) { var p = String(phone || '').replace(/\D/g, ''); if (p.charAt(0) === '0') p = '972' + p.slice(1); return p; }
+  //  wa.me מפנה ל-web.whatsapp.com, והדפדפן מאפס את שם הלשונית בניווט
+  //  חוצה-מקורות — לכן target בלבד לא מספיק והלחיצה השנייה פתחה עוד
+  //  לשונית. שומרים הפניה לחלון: ניווט של חלון זר מותר (קריאה ממנו לא),
+  //  ולכן אפשר להטיס אותו לכתובת החדשה במקום לפתוח חדש.
+  var waWin = null;
+  window.C2B_openWa = function (url) {
+    if (!url) return false;
+    try {
+      if (waWin && !waWin.closed) { waWin.location.href = url; waWin.focus(); return false; }
+    } catch (e) { /* החלון נסגר או נחסם — נופלים לפתיחה חדשה */ }
+    waWin = window.open(url, 'fd-whatsapp');
+    return false;
+  };
+
   function waLink(phone) { var p = waIntl(phone); return p ? 'https://wa.me/' + p : null; }
   function logActivity(id, type, body, meta) { return db.from('activities').insert({ lead_id: id, type: type, body: body || null, meta: meta || null, created_by: C.userId || null }); }
 
@@ -369,7 +383,7 @@
   var LEAD_COLS = [
     { key: 'name', label: 'שם לקוח', w: 200, cell: function (l) { return '<td style="cursor:pointer" data-open="1"><span class="avatar" style="margin-inline-end:8px">' + esc(initials(l.name)) + '</span><b>' + esc(l.name) + '</b></td>'; } },
     { key: 'phone', label: 'טלפון ראשי', w: 160, cell: function (l) { return '<td title="' + esc(l.phone || '') + '">' + (l.phone ? '<a class="call-ic" data-call="' + esc(l.phone) + '" data-lead="' + l.id + '" title="חייג" style="cursor:pointer;margin-inline-end:6px;text-decoration:none">📞</a><bdi>' + esc(l.phone) + '</bdi>' : '—') + '</td>'; } },
-    { key: 'whatsapp', label: 'וואטסאפ', w: 84, sortable: false, cell: function (l) { var wa = waLink(l.phone); return '<td>' + (wa ? '<a class="wa-ic" href="' + wa + '" target="fd-whatsapp" title="פתח וואטסאפ (משתמש בלשונית קיימת)" onclick="event.stopPropagation()">💬</a>' : '—') + '</td>'; } },
+    { key: 'whatsapp', label: 'וואטסאפ', w: 84, sortable: false, cell: function (l) { var wa = waLink(l.phone); return '<td>' + (wa ? '<a class="wa-ic" href="' + wa + '" target="fd-whatsapp" title="פתח וואטסאפ (משתמש בלשונית קיימת)" onclick="event.stopPropagation();return window.C2B_openWa(this.href)">💬</a>' : '—') + '</td>'; } },
     { key: 'assigned', label: 'מנהל מכירות', w: 170, sort: function (l) { return profiles[l.assigned_to] || ''; }, cell: function (l) { return '<td>' + assignChip(l) + '</td>'; } },
     { key: 'status', label: 'סטטוס לקוח', w: 130, cell: function (l) { return '<td>' + badge(l.status || 'new', true, l.id) + '</td>'; } },
     { key: 'source', label: 'מקור הגעה', w: 130, cell: function (l) { return '<td>' + (l.source ? '<span class="tag">' + esc(l.source) + '</span>' : '—') + '</td>'; } },
@@ -933,7 +947,7 @@
     var actBtns = getActionCfg().filter(function (c) { var a = metaByK[c.k]; return c.on !== false && a && a.roles.indexOf(role) >= 0; }).map(function (c) {
       var a = metaByK[c.k], lbl = esc(c.label || a.label);
       if (a.k === 'call') return lead.phone ? '<a class="btn btn-ghost btn-sm" href="tel:' + esc(lead.phone) + '">' + a.icon + ' ' + lbl + '</a>' : '';
-      if (a.k === 'wa') return wa ? '<a class="btn btn-ghost btn-sm" href="' + wa + '" target="fd-whatsapp" title="נפתח בלשונית הווטסאפ הקיימת">' + a.icon + ' ' + lbl + '</a>' : '';
+      if (a.k === 'wa') return wa ? '<a class="btn btn-ghost btn-sm" href="' + wa + '" target="fd-whatsapp" title="נפתח בלשונית הווטסאפ הקיימת" onclick="return window.C2B_openWa(this.href)">' + a.icon + ' ' + lbl + '</a>' : '';
       if (a.k === 'mail') return lead.email ? '<a class="btn btn-ghost btn-sm" href="mailto:' + esc(lead.email) + '">' + a.icon + ' ' + lbl + '</a>' : '';
       return '<button class="btn btn-ghost btn-sm" data-act2="' + a.k + '">' + a.icon + ' ' + lbl + '</button>';
     }).join('');
@@ -1479,7 +1493,7 @@
             var waText = fill(m.wa_text);
             var waNum = lead.phone ? waIntl(lead.phone) : '';
             var opened = false;
-            if (waNum && waText) { window.open('https://wa.me/' + waNum + '?text=' + encodeURIComponent(waText), 'fd-whatsapp'); opened = true; }
+            if (waNum && waText) { window.C2B_openWa('https://wa.me/' + waNum + '?text=' + encodeURIComponent(waText)); opened = true; }
             // מייל נשלח אוטומטית (אין מגבלת וואטסאפ)
             var emailText = fill(m.email_body || waText);
             var emailOp = (lead.email && emailText) ? sendCustomerMsg('email', lead, { text: emailText, subject: fill(m.email_subject || 'הודעה מ-פרי דרייב') }) : null;
