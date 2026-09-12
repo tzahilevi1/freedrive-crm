@@ -3228,29 +3228,88 @@
   //  \u05d4\u05e8\u05d9\u05e0\u05d3\u05d5\u05e8 \u05de\u05e2\u05d5\u05db\u05d1 \u05d1-250ms \u05db\u05d3\u05d9 \u05e9\u05e8\u05e6\u05e3 \u05d0\u05d9\u05e8\u05d5\u05e2\u05d9\u05dd (\u05d4\u05d5\u05d3\u05e2\u05d4 + \u05e2\u05d3\u05db\u05d5\u05df
   //  \u05d4\u05e9\u05d9\u05d7\u05d4 + \u05e1\u05d8\u05d8\u05d5\u05e1) \u05d9\u05d2\u05e8\u05d5\u05e8 \u05e8\u05e0\u05d3\u05d5\u05e8 \u05d0\u05d7\u05d3 \u05d5\u05dc\u05d0 \u05e9\u05dc\u05d5\u05e9\u05d4.
   var waRtTimer = null;
-  function waRefresh(soft) {
+  //  \u05e2\u05d3\u05db\u05d5\u05df \u05e0\u05e7\u05d5\u05d3\u05ea\u05d9 \u05d1\u05de\u05e7\u05d5\u05dd \u05e8\u05d9\u05e0\u05d3\u05d5\u05e8 \u05de\u05dc\u05d0. renderHeyy \u05d1\u05d5\u05e0\u05d4 \u05de\u05d7\u05d3\u05e9 \u05d0\u05ea \u05db\u05dc
+  //  \u05d4\u05de\u05e1\u05da \u2014 \u05d4\u05e8\u05e9\u05d9\u05de\u05d4, \u05d4\u05e9\u05d9\u05d7\u05d4, \u05e1\u05e8\u05d2\u05dc \u05d4\u05db\u05ea\u05d9\u05d1\u05d4 \u05d5\u05d4\u05d8\u05d9\u05d5\u05d8\u05d4 \u2014 \u05d5\u05dc\u05db\u05df \u05db\u05dc \u05d4\u05d5\u05d3\u05e2\u05d4
+  //  \u05e0\u05db\u05e0\u05e1\u05ea \u05d4\u05e8\u05d2\u05d9\u05e9\u05d4 \u05db\u05e7\u05e4\u05d9\u05e6\u05d4. \u05db\u05d0\u05df \u05e8\u05e7 \u05de\u05d4 \u05e9\u05d1\u05d0\u05de\u05ea \u05d4\u05e9\u05ea\u05e0\u05d4 \u05de\u05ea\u05e2\u05d3\u05db\u05df.
+  function waBusy() {
+    if (document.querySelector('.adm-bg')) return true;
+    var f = document.activeElement;
+    if (f && /INPUT|TEXTAREA|SELECT/.test(f.tagName) && f.id !== 'waBody') return true;
+    if (document.querySelector('.cp-dragging, .cp-reordering')) return true;
+    return false;
+  }
+  function waOnScreen() {
+    var act = $('nav').querySelector('.nav-item.active');
+    return !!(act && act.dataset.nav === 'heyy' && $('waList'));
+  }
+  function waRefresh(soft, threadId) {
     clearTimeout(waRtTimer);
     waRtTimer = setTimeout(function () {
-      //  אין משתנה גלובלי למסך הנוכחי — הפריט הפעיל בתפריט הוא מקור האמת
-      var act = $('nav').querySelector('.nav-item.active');
-      if (!act || act.dataset.nav !== 'heyy' || !$('waList')) return;
-      //  לא דורסים את המסך תוך כדי עבודה: חלון פתוח, גרירה, או שדה
-      //  שהמשתמש נמצא בו. הרינדור יקרה באירוע הבא, אחרי שהוא סיים.
-      if (document.querySelector('.adm-bg')) return;
-      var f = document.activeElement;
-      if (f && /INPUT|TEXTAREA|SELECT/.test(f.tagName) && f.id !== 'waBody') return;
-      if (document.querySelector('.cp-dragging, .cp-reordering')) return;
-      //  \u05d0\u05dd \u05d4\u05e0\u05e6\u05d9\u05d2 \u05d1\u05d0\u05de\u05e6\u05e2 \u05d4\u05e7\u05dc\u05d3\u05d4 \u05dc\u05d0 \u05e0\u05d3\u05e8\u05d5\u05e1 \u05dc\u05d5 \u05d0\u05ea \u05d4\u05d8\u05d9\u05d5\u05d8\u05d4
-      var b = $('waBody'); if (b) waDraft = b.value;
-      renderHeyy();
-    }, soft ? 1200 : 0);
+      if (!waOnScreen() || waBusy()) return;
+      //  \u05d4\u05e8\u05e9\u05d9\u05de\u05d4: \u05e9\u05d5\u05dc\u05e4\u05d9\u05dd \u05e8\u05e7 \u05d0\u05ea \u05e9\u05d5\u05e8\u05d5\u05ea \u05d4\u05e9\u05d9\u05d7\u05d5\u05ea \u05d5\u05de\u05e6\u05d9\u05d9\u05e8\u05d9\u05dd \u05d0\u05d5\u05ea\u05d4 \u05dc\u05d1\u05d3
+      db.from('wa_threads').select('id,number_id,contact_phone,contact_name,lead_id,last_at,last_text,last_dir,unread,provider_chat_id')
+        .order('last_at', { ascending: false }).limit(300).then(function (r) {
+          if (!r.data || !waOnScreen() || waBusy()) return;
+          waThreads = r.data;
+          waListPaint();
+          var on = $('waList') && $('waList').querySelector('.wa-th.on');
+          if (on) on.classList.add('on');
+        });
+      //  \u05d4\u05e9\u05d9\u05d7\u05d4 \u05d4\u05e4\u05ea\u05d5\u05d7\u05d4: \u05de\u05d5\u05e1\u05d9\u05e4\u05d9\u05dd \u05e8\u05e7 \u05d4\u05d5\u05d3\u05e2\u05d5\u05ea \u05e9\u05d8\u05e8\u05dd \u05de\u05d5\u05e6\u05d2\u05d5\u05ea, \u05d1\u05dc\u05d9
+      //  \u05dc\u05d2\u05e2\u05ea \u05d1\u05ea\u05d9\u05d1\u05ea \u05d4\u05db\u05ea\u05d9\u05d1\u05d4 \u05d5\u05d1\u05dc\u05d9 \u05dc\u05d0\u05e4\u05e1 \u05d0\u05ea \u05d4\u05d2\u05dc\u05d9\u05dc\u05d4.
+      if (heyyThread && (!threadId || threadId === heyyThread)) waAppendNew();
+    }, soft ? 900 : 0);
+  }
+  function waAppendNew() {
+    var box = $('waMsgs'); if (!box) return;
+    var have = {};
+    box.querySelectorAll('[data-mid]').forEach(function (x) { have[x.dataset.mid] = 1; });
+    db.from('wa_messages').select('id,direction,body,media_url,media_type,author,sent_at,status,reply_to,provider_msg_id')
+      .eq('thread_id', heyyThread).order('sent_at', { ascending: false }).limit(20)
+      .then(function (r) {
+        var rows = (r.data || []).slice().reverse().filter(function (m) { return !have[m.id]; });
+        if (!rows.length) {
+          //  \u05d0\u05d9\u05df \u05d7\u05d3\u05e9\u05d5\u05ea \u2014 \u05d0\u05d5\u05dc\u05d9 \u05e8\u05e7 \u05d4\u05e1\u05d8\u05d8\u05d5\u05e1 \u05d4\u05e9\u05ea\u05e0\u05d4 (\u05e0\u05de\u05e1\u05e8/\u05e0\u05e7\u05e8\u05d0)
+          (r.data || []).forEach(function (m) {
+            var el = box.querySelector('[data-mid="' + m.id + '"] .tick'); if (!el) return;
+            var st = String(m.status || '').toLowerCase();
+            el.className = 'tick' + (st === 'read' ? ' read' : '');
+            el.textContent = st === 'read' || st === 'delivered' ? '\u2713\u2713' : (st === 'failed' ? '\u26a0' : '\u2713');
+          });
+          return;
+        }
+        var atEnd = box.scrollHeight - box.scrollTop - box.clientHeight < 90;
+        rows.forEach(function (m) {
+          var d = new Date(m.sent_at);
+          var st = String(m.status || '').toLowerCase();
+          var tick = st === 'read' ? '<span class="tick read">\u2713\u2713</span>'
+            : (st === 'delivered' ? '<span class="tick">\u2713\u2713</span>'
+            : (st === 'failed' ? '<span class="tick" style="color:var(--danger)">\u26a0</span>' : '<span class="tick">\u2713</span>'));
+          var media = m.media_url
+            ? (/image/i.test(m.media_type || '') ? '<img src="' + esc(m.media_url) + '" alt="">'
+               : '<a href="' + esc(m.media_url) + '" target="_blank" rel="noopener">\ud83d\udcce \u05e7\u05d5\u05d1\u05e5 \u05de\u05e6\u05d5\u05e8\u05e3</a>')
+            : '';
+          var div = document.createElement('div');
+          div.className = 'wa-m ' + m.direction;
+          div.dataset.mid = m.id;
+          div.dataset.txt = String(m.body || '').toLowerCase();
+          div.innerHTML = media + (m.body ? esc(m.body) : (media ? '' : '\u2014')) +
+            '<span class="t">' + esc(d.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })) +
+            (m.direction === 'out' ? ' ' + tick : '') +
+            (m.author ? ' \u00b7 ' + esc(m.author) : '') + '</span>' +
+            '<button class="rbtn" data-reply="' + esc(m.id) + '" title="\u05d4\u05e9\u05d1 \u05dc\u05d4\u05d5\u05d3\u05e2\u05d4 \u05d4\u05d6\u05d5">\u21a9</button>';
+          box.appendChild(div);
+        });
+        //  \u05d2\u05d5\u05dc\u05dc\u05d9\u05dd \u05dc\u05de\u05d8\u05d4 \u05e8\u05e7 \u05d0\u05dd \u05d4\u05e0\u05e6\u05d9\u05d2 \u05db\u05d1\u05e8 \u05d4\u05d9\u05d4 \u05dc\u05de\u05d8\u05d4
+        if (atEnd) box.scrollTop = box.scrollHeight;
+      });
   }
   function waWatch() {
     if (waChan) return;
     try {
       waChan = db.channel('wa-live')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'wa_messages' }, function () { waRefresh(true); })
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'wa_threads' }, function () { waRefresh(true); })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'wa_messages' }, function (p2) { waRefresh(true, (p2 && p2.new && p2.new.thread_id) || null); })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'wa_threads' }, function () { waRefresh(true, '-'); })
         .subscribe();
     } catch (e) { waChan = null; }   //  \u05d1\u05dc\u05d9 realtime \u05d4\u05de\u05e1\u05da \u05e2\u05d5\u05d3\u05e0\u05d5 \u05e2\u05d5\u05d1\u05d3, \u05e8\u05e7 \u05d1\u05dc\u05d9 \u05e8\u05e2\u05e0\u05d5\u05df \u05e2\u05e6\u05de\u05d9
   }
