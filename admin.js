@@ -702,6 +702,22 @@
   }
   window.C2B.makeFilter = makeFilter;
 
+  //  עמודה פשוטה לשדה שעד היום לא הוצג בטבלה. כולן כבויות כברירת מחדל
+  //  כדי שהמסך הקיים לא ישתנה לאף אחד — מי שצריך מדליק אותן בבורר.
+  //  o: { f: שם השדה במסד אם שונה מהמפתח, w, ltr, fmt }
+  window.C2B.txtCol = function (key, label, o) {
+    o = o || {};
+    var f = o.f || key;
+    return { key: key, label: label, w: o.w || 150, def: false,
+      sort: function (r) { return r[f] == null ? '' : r[f]; },
+      cell: function (r) {
+        var v = r[f];
+        if (o.fmt && v != null && v !== '') v = o.fmt(v);
+        var t = (v == null || v === '') ? '' : String(v);
+        return '<td class="muted' + (o.ltr ? ' ltr' : '') + '" title="' + esc(t) + '">' + esc(t || '—') + '</td>';
+      } };
+  };
+
   // ---- reusable column chooser (show/hide + reorder columns), persisted per view ----
   function closeColPanel() { var m = document.getElementById('colpickmenu'); if (m) m.remove(); }
   // cols: [{key,label,cell:fn(row)->'<td>..</td>',th:'attrs?',fixed:bool,def:false-to-hide-by-default}]
@@ -721,10 +737,14 @@
     function openPanel(anchor) {
       closeColPanel();
       var m = document.createElement('div'); m.id = 'colpickmenu'; m.className = 'colpick-menu';
-      m.innerHTML = '<div class="cp-head">בחירת עמודות · גררו לשינוי סדר</div><div class="cp-list">' +
+      m.innerHTML = '<div class="cp-head">בחירת עמודות · גררו לשינוי סדר</div>' +
+        '<input class="cp-find" type="search" placeholder="חיפוש שדה…" aria-label="חיפוש שדה" autocomplete="off">' +
+        '<div class="cp-list">' +
         state.order.map(function (k) { var c = byKey[k], on = state.hidden.indexOf(k) < 0;
           return '<div class="cp-row" data-k="' + esc(k) + '"><span class="cp-mv" data-cpdrag tabindex="0" role="button" title="גררו לשינוי סדר (או חצים במקלדת)" aria-label="גררו לשינוי סדר">⠿</span><span class="cp-lbl">' + esc(c.label) + (c.fixed ? ' 🔒' : '') + '</span><label class="cp-sw"><input type="checkbox" data-cptg ' + (on ? 'checked' : '') + (c.fixed ? ' disabled' : '') + '><span class="cp-sl"></span></label></div>';
-        }).join('') + '</div><button class="btn btn-ghost btn-sm" data-cpreset style="width:100%;margin-top:8px">איפוס לברירת מחדל</button>';
+        }).join('') + '</div>' +
+        '<div class="cp-empty" hidden>לא נמצא שדה בשם הזה</div>' +
+        '<button class="btn btn-ghost btn-sm" data-cpreset style="width:100%;margin-top:8px">איפוס לברירת מחדל</button>';
       document.body.appendChild(m);
       var r = anchor.getBoundingClientRect();
       //  התפריט מיושר לקצה הימני של הכפתור, אבל לא מעבר לגבולות החלון:
@@ -744,6 +764,30 @@
         m.style.bottom = (window.innerHeight - r.top + 6) + 'px'; m.style.top = 'auto';
         m.style.maxHeight = Math.max(160, above) + 'px';
       }
+      //  חיפוש שדה. ברשימה של עשרות עמודות מהיר יותר להקליד "utm" מאשר
+      //  לגלול. הסינון מסתיר שורות ואינו בונה את הרשימה מחדש, כך שמצב
+      //  המתגים והסדר נשמרים ברגע שמנקים את החיפוש.
+      var findEl = m.querySelector('.cp-find'), emptyEl = m.querySelector('.cp-empty');
+      var findList = m.querySelector('.cp-list');
+      findEl.addEventListener('input', function () {
+        var q = findEl.value.trim().toLowerCase(), n = 0;
+        findList.querySelectorAll('.cp-row').forEach(function (r) {
+          var c = byKey[r.dataset.k] || {};
+          var hit = !q || ((c.label || '') + ' ' + (c.key || '')).toLowerCase().indexOf(q) >= 0;
+          r.classList.toggle('cp-off', !hit); if (hit) n++;
+        });
+        //  בזמן סינון אין גרירה: הסדר שנראה על המסך אינו הסדר האמיתי,
+        //  וגרירה בתוכו הייתה מזיזה עמודה למקום שגוי.
+        findList.classList.toggle('cp-filtered', !!q);
+        emptyEl.hidden = n > 0;
+      });
+      findEl.addEventListener('keydown', function (e) {
+        if (e.key !== 'Escape') return;
+        e.stopPropagation();
+        if (findEl.value) { findEl.value = ''; findEl.dispatchEvent(new Event('input')); }
+        else closeColPanel();
+      });
+      setTimeout(function () { findEl.focus(); }, 0);
       m.addEventListener('click', function (e) { e.stopPropagation(); });
       m.querySelectorAll('[data-cptg]').forEach(function (cb) { cb.addEventListener('change', function () { var k = cb.closest('.cp-row').dataset.k, i = state.hidden.indexOf(k); if (cb.checked) { if (i >= 0) state.hidden.splice(i, 1); } else if (i < 0) state.hidden.push(k); save(); onChange(); }); });
       // ---- גרירה לשינוי סדר ----
@@ -756,6 +800,7 @@
 
       listEl.addEventListener('pointerdown', function (e) {
         var handle = e.target.closest('[data-cpdrag]'); if (!handle) return;
+        if (listEl.classList.contains('cp-filtered')) return;
         var row = handle.closest('.cp-row'); if (!row) return;
         e.preventDefault(); e.stopPropagation();
         var rect = row.getBoundingClientRect();
@@ -894,7 +939,14 @@
     { key: 'p', label: 'מחיר', cell: function (c) { return '<td>' + nis(c.p) + '</td>'; } },
     { key: 'commission', label: 'עמלת סוכן', cell: function (c) { return '<td style="color:var(--ok);font-weight:700">' + (c.commission > 0 ? nis(c.commission) : '—') + '</td>'; } },
     { key: 'down', label: 'מקדמה', cell: function (c) { return '<td class="muted">' + (c.down > 0 ? nis(c.down) : 'אין מקדמה') + '</td>'; } },
-    { key: 'code', label: 'קוד', cell: function (c) { return '<td class="muted">' + esc(c.code || '—') + '</td>'; } }
+    { key: 'code', label: 'קוד', cell: function (c) { return '<td class="muted">' + esc(c.code || '—') + '</td>'; } },
+    //  שדות שכבר מגיעים מהגיליון ולא הוצגו עד היום
+    window.C2B.txtCol('year', 'שנת דגם', { w: 100 }),
+    window.C2B.txtCol('fuel', 'סוג דלק', { w: 110 }),
+    window.C2B.txtCol('cat', 'קטגוריה', { w: 120 }),
+    window.C2B.txtCol('condition', 'מצב', { w: 90 }),
+    window.C2B.txtCol('km', 'קילומטראז׳', { w: 110 }),
+    window.C2B.txtCol('hand', 'יד', { w: 80 }),
   ];
   var carCols = null;
   function carRows(list) {
@@ -1090,9 +1142,12 @@
     { key: 'created', label: 'נוצרה', cell: function (t) { return '<td class="muted">' + (t.created_at ? fmtDateTime(t.created_at) : '—') + '</td>'; } },
     { key: 'due', label: 'מועד', cell: function (t) { var over = !t.done && t.due_at && new Date(t.due_at).getTime() < Date.now(); return '<td' + (over ? ' style="color:var(--danger);font-weight:600"' : ' class="muted"') + '>' + (t.due_at ? fmtDateTime(t.due_at) : '—') + '</td>'; } },
     { key: 'notes', label: 'הערות', cell: function (t) { return '<td><input class="inp" data-tnote="' + t.id + '" value="' + esc(t.notes || '') + '" placeholder="הוסף הערה…" style="width:100%;min-width:150px;font-size:13px"></td>'; } },
-    { key: 'open', label: 'פעולות', cell: function (t) { return '<td>' + (t.lead_id ? '<a href="#" data-lead="' + t.lead_id + '">פתח ליד →</a>' : '') + '</td>'; } }
+    { key: 'open', label: 'פעולות', cell: function (t) { return '<td>' + (t.lead_id ? '<a href="#" data-lead="' + t.lead_id + '">פתח ליד →</a>' : '') + '</td>'; } },
+    { key: 'assigned', label: 'אחראי', def: false, w: 160,
+      sort: function (t) { return taskStaff[t.assigned_to] || ''; },
+      cell: function (t) { return '<td>' + esc(taskStaff[t.assigned_to] || '—') + '</td>'; } },
   ];
-  var taskCols = null;
+  var taskCols = null, taskStaff = {};
   var taskFilter = 'all';
   function renderTasks() {
     loading();
@@ -1105,11 +1160,13 @@
       var leadsQ = ids.length
         ? db.from('leads').select('id,name,phone,car').in('id', ids.slice(0, 900))
         : Promise.resolve({ data: [] });
-      return Promise.all([Promise.resolve(tr), leadsQ]);
+      //  שמות הנציגים נדרשים לעמודת "אחראי" בבורר העמודות
+      return Promise.all([Promise.resolve(tr), leadsQ, db.from('profiles').select('user_id,full_name')]);
     }).then(function (res) {
       if (res[0].error) return errBox(res[0].error.message);
       var tasks = res[0].data || [], lmap = {}, now = Date.now();
       (res[1].data || []).forEach(function (l) { lmap[l.id] = l; });
+      ((res[2] && res[2].data) || []).forEach(function (p) { taskStaff[p.user_id] = p.full_name; });
       var openList = tasks.filter(function (t) { return !t.done; });
       var doneList = tasks.filter(function (t) { return t.done; });
       var lst = taskFilter === 'open' ? openList : taskFilter === 'done' ? doneList : tasks;
@@ -1749,6 +1806,63 @@
           (totalSpend ? '' : ' עלות לליד ולעסקה יוצגו כשנתוני ההוצאה של Meta יהיו בטווח שנבחר.') + '</div>');
       }
 
+      //  ---------- מקורות לפי נציג ----------
+      //  אותם נתונים כמו טבלת המקורות, אבל חתוכים לפי בעל התיק. כך רואים
+      //  שנציג אחד חי מפייסבוק ואחר מהפניות, ואיזה מקור כל אחד באמת יודע
+      //  לסגור — נתון שעד היום לא הופיע בשום מסך. לחיצה על נציג פותחת את
+      //  פירוט המקורות שלו.
+      function staffSourceTree(byDeals) {
+        var tree = {};
+        function node(m, k) { m[k] = m[k] || { leads: 0, count: 0, revenue: 0, L: [], D: [], kids: {} }; return m[k]; }
+        function srcOf(l) {
+          var n = namedSource(l);
+          if (n) return n;
+          return isPaid(l) ? 'פרסום ממומן' : UNATTR;
+        }
+        function put(l, d) {
+          var who = (l.assigned_to && prof[l.assigned_to]) || 'ללא שיוך לנציג';
+          var lv = [node(tree, who)];
+          lv.push(node(lv[0].kids, srcOf(l)));
+          lv.forEach(function (o) {
+            if (d) { o.count++; o.revenue += (+d.car_price || 0); o.D.push({ d: d, l: l }); }
+            else { o.leads++; o.L.push(l); }
+          });
+        }
+        leads.forEach(function (l) { put(l, null); });
+        deals.forEach(function (d) { var l = leadById[d.lead_id]; if (l) put(l, d); });
+
+        var sortFn = byDeals
+          ? function (a, b) { return (b[1].revenue - a[1].revenue) || (b[1].count - a[1].count) || (b[1].leads - a[1].leads); }
+          : function (a, b) { return (b[1].leads - a[1].leads) || (b[1].revenue - a[1].revenue); };
+        var out = '', n = 0;
+        function row(label, o, depth, pid, id, hasKids) {
+          var cr = o.leads ? P1(o.count / o.leads * 100) : '<span class="muted">—</span>';
+          var key = repKeys.push({ label: label, o: o }) - 1;
+          var nL = o.leads ? '<a class="drill-n" data-rk="' + key + '" data-what="leads">' + o.leads + '</a>' : '<span class="muted">0</span>';
+          var nD = o.count ? '<a class="drill-n" data-rk="' + key + '" data-what="deals">' + o.count + '</a>' : '<span class="muted">0</span>';
+          var cells = byDeals
+            ? ['<td>' + nD + '</td>', '<td>' + M(o.revenue) + '</td>', '<td>' + nL + '</td>', '<td>' + cr + '</td>']
+            : ['<td>' + nL + '</td>', '<td>' + nD + '</td>', '<td>' + M(o.revenue) + '</td>', '<td>' + cr + '</td>'];
+          return '<tr data-id="' + esc(id) + '" data-parent="' + esc(pid) + '"' + (depth ? ' class="hidden"' : '') + '>' +
+            '<td style="padding-inline-start:' + (10 + depth * 22) + 'px' + (hasKids ? ';cursor:pointer' : '') + '"' +
+              (hasKids ? ' data-drill="1"' : '') + '>' + (hasKids ? '<span class="drill-x">▸</span> ' : '') +
+              (depth ? esc(label) : '<b>' + esc(label) + '</b>') + '</td>' + cells.join('') + '</tr>';
+        }
+        Object.keys(tree).map(function (k) { return [k, tree[k]]; }).sort(sortFn).forEach(function (a) {
+          var aid = 's' + (n++);
+          var kids = Object.keys(a[1].kids).map(function (k) { return [k, a[1].kids[k]]; }).sort(sortFn);
+          out += row(a[0], a[1], 0, '', aid, kids.length > 0);
+          kids.forEach(function (k) { out += row(k[0], k[1], 1, aid, aid + '-' + (n++), false); });
+        });
+        if (!out) return '<span class="muted">אין לידים בטווח שנבחר.</span>';
+        var head = byDeals
+          ? ['נציג / מקור', 'עסקאות חתומות', 'הכנסות', 'לידים', 'אחוז המרה']
+          : ['נציג / מקור', 'לידים', 'עסקאות חתומות', 'הכנסות', 'אחוז המרה'];
+        return '<div class="table-scroll"><table class="drill-tree">' +
+          '<thead><tr>' + head.map(function (h) { return '<th>' + h + '</th>'; }).join('') + '</tr></thead>' +
+          '<tbody>' + out + '</tbody></table></div>';
+      }
+
       var journeyRows = deals.map(function (d) {
         var l = leadById[d.lead_id] || {};
         var pl = String(l.utm_term || '').toLowerCase();
@@ -1802,6 +1916,7 @@
           '<div class="rep-grid">' + grid + '</div>' +
           secCard('\ud83e\udded ערוצי הגעה', attrTable(byChannel, 'ערוץ', byDeals)) +
           secCard('\ud83e\udd1d שותפים ומקורות שאינם פרסום', attrTable(byPartner, 'מקור', byDeals)) +
+          secCard('👤 מקורות לפי נציג <span class="muted" style="font-size:12px;font-weight:400">· לחצו על נציג לפתיחת המקורות שלו</span>', staffSourceTree(byDeals)) +
           vsPanel() +
           secCard('\ud83d\udce3 קמפיינים <span class="muted" style="font-size:12px;font-weight:400">\u00b7 פרסום ממומן בלבד \u00b7 לחצו על שורה לפתיחת הרמה שמתחתיה</span>', attrTree(byDeals)) +
           secCard('\ud83e\uddfe מסלול ההגעה של העסקאות החתומות',

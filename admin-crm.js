@@ -403,7 +403,24 @@
     { key: 'marketing_company', label: 'חברת שיווק', w: 150, def: false, cell: function (l) { return '<td class="muted">' + esc(l.marketing_company || '—') + '</td>'; } },
     { key: 'message', label: 'תיאור / הודעה', w: 260, def: false, cell: function (l) { return '<td class="muted" style="max-width:220px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + esc(l.message || '—') + '</td>'; } },
     { key: 'lead_no', label: 'מספר לקוח', w: 130, def: false, sort: function (l) { return l.lead_no || l.id || ''; }, cell: function (l) { return '<td class="muted">' + esc(l.lead_no || l.id || '—') + '</td>'; } },
-    { key: 'created', label: 'נוצר בתאריך', w: 140, def: false, sort: function (l) { return l.created_at || ''; }, cell: function (l) { return '<td class="muted">' + fmt(l.created_at) + '</td>'; } }
+    { key: 'created', label: 'נוצר בתאריך', w: 140, def: false, sort: function (l) { return l.created_at || ''; }, cell: function (l) { return '<td class="muted">' + fmt(l.created_at) + '</td>'; } },
+    //  שאר שדות הליד. עד היום הם נראו רק בכרטיס הליד, ולכן אי אפשר
+    //  היה לסנן, למיין או לייצא לפיהם מתוך הרשימה.
+    C.txtCol('utm_medium', 'utm_medium', { ltr: true, w: 130 }),
+    C.txtCol('utm_content', 'utm_content', { ltr: true, w: 170 }),
+    C.txtCol('utm_term', 'utm_term', { ltr: true, w: 170 }),
+    C.txtCol('campaign', 'שם הקמפיין', { w: 210 }),
+    C.txtCol('adset_name', 'סדרת מודעות', { w: 200 }),
+    C.txtCol('ad_name', 'שם מודעה', { w: 200 }),
+    C.txtCol('ad_group', 'מזהה קבוצת מודעות', { ltr: true, w: 170 }),
+    C.txtCol('ad_id', 'מזהה מודעה', { ltr: true, w: 150 }),
+    C.txtCol('form_id', 'מזהה טופס', { ltr: true, w: 150 }),
+    C.txtCol('external_id', 'Lead ID · פייסבוק', { ltr: true, w: 170 }),
+    C.txtCol('medium', 'ערוץ · medium', { ltr: true, w: 120 }),
+    C.txtCol('page_url', 'דף נחיתה', { ltr: true, w: 240 }),
+    C.txtCol('close_reason', 'סיבת סגירה', { w: 190 }),
+    C.txtCol('first_response', 'מענה ראשון', { f: 'first_response_at', w: 150, fmt: fmt }),
+    C.txtCol('status_changed', 'שינוי סטטוס אחרון', { f: 'status_changed_at', w: 165, fmt: fmt }),
   ];
   // שדות שניתן לעדכן קבוצתית ב"שדה נוסף" (מעבר ל-4 המהירים) — כל שדה רוחבי ב-CRM
   var BULK_FIELDS = [
@@ -1989,7 +2006,29 @@
     { key: 'commission', label: 'עמלה', cell: function (d) { return '<td style="color:var(--ok);font-weight:700">' + nis(d.commission) + '</td>'; } },
     { key: 'acct_status', label: 'סטטוס', cell: function (d) { return '<td>' + acctStatusSel(d.id, d.acct_status) + '</td>'; } },
     { key: 'brand', label: 'מותג', def: false, cell: function (d) { return '<td>' + esc(d.brand || '—') + '</td>'; } },
-    { key: 'phone', label: 'טלפון', def: false, cell: function (d) { return '<td>' + esc(d.client_phone || '—') + '</td>'; } }
+    { key: 'phone', label: 'טלפון', def: false, cell: function (d) { return '<td>' + esc(d.client_phone || '—') + '</td>'; } },
+    //  שאר שדות העסקה. לא נכללים שדות פנימיים (טוקן חתימה, HTML של
+    //  ההסכם, סימוני מחיקה) שאין להם משמעות כעמודה בטבלה.
+    C.txtCol('status', 'סטטוס עסקה', { w: 130 }),
+    C.txtCol('form_type', 'סוג טופס', { w: 130 }),
+    C.txtCol('car_year', 'שנת דגם', { w: 100 }),
+    C.txtCol('car_trim', 'רמת גימור', { w: 140 }),
+    C.txtCol('car_color', 'צבע', { w: 110 }),
+    C.txtCol('car_price', 'מחיר הרכב', { w: 130, fmt: nis }),
+    C.txtCol('down_total', 'מקדמה', { w: 120, fmt: nis }),
+    C.txtCol('monthly', 'החזר חודשי', { w: 120, fmt: nis }),
+    C.txtCol('delivery_days', 'ימי אספקה', { w: 110 }),
+    C.txtCol('discount_amt', 'הנחה', { w: 110, fmt: nis }),
+    C.txtCol('charge_amount', 'סכום לחיוב', { w: 130, fmt: nis }),
+    C.txtCol('client_email', 'אימייל הלקוח', { ltr: true, w: 210 }),
+    C.txtCol('client_address', 'כתובת הלקוח', { w: 220 }),
+    C.txtCol('client_id', 'ת.ז / ח.פ', { ltr: true, w: 130 }),
+    C.txtCol('notes', 'הערות', { w: 240 }),
+    C.txtCol('acct_notes', 'הערות הנהלת חשבונות', { w: 240 }),
+    C.txtCol('signed_at', 'נחתם בתאריך', { w: 150, fmt: fmt }),
+    C.txtCol('cancel_reason', 'סיבת ביטול', { w: 200 }),
+    C.txtCol('stage', 'שלב תיק', { w: 130 }),
+    C.txtCol('created', 'נוצרה בתאריך', { f: 'created_at', w: 150, fmt: fmt }),
   ];
   var acctCols = null;
   window.C2B_renderAccounting = function () {
@@ -2889,7 +2928,29 @@
     { key: 'salesperson', label: 'איש מכירות', def: false, cell: function (d) { return '<td>' + esc(d.salesperson || '—') + '</td>'; } },
     { key: 'brand', label: 'מותג', def: false, cell: function (d) { return '<td>' + esc(d.brand || '—') + '</td>'; } },
     { key: 'phone', label: 'טלפון', def: false, cell: function (d) { return '<td>' + esc(d.client_phone || '—') + '</td>'; } },
-    { key: 'created', label: 'נוצר', def: false, cell: function (d) { return '<td class="muted">' + fmt(d.created_at) + '</td>'; } }
+    { key: 'created', label: 'נוצר', def: false, cell: function (d) { return '<td class="muted">' + fmt(d.created_at) + '</td>'; } },
+    //  שאר שדות העסקה. לא נכללים שדות פנימיים (טוקן חתימה, HTML של
+    //  ההסכם, סימוני מחיקה) שאין להם משמעות כעמודה בטבלה.
+    C.txtCol('status', 'סטטוס עסקה', { w: 130 }),
+    C.txtCol('form_type', 'סוג טופס', { w: 130 }),
+    C.txtCol('car_year', 'שנת דגם', { w: 100 }),
+    C.txtCol('car_trim', 'רמת גימור', { w: 140 }),
+    C.txtCol('car_color', 'צבע', { w: 110 }),
+    C.txtCol('car_price', 'מחיר הרכב', { w: 130, fmt: nis }),
+    C.txtCol('down_total', 'מקדמה', { w: 120, fmt: nis }),
+    C.txtCol('monthly', 'החזר חודשי', { w: 120, fmt: nis }),
+    C.txtCol('delivery_days', 'ימי אספקה', { w: 110 }),
+    C.txtCol('discount_amt', 'הנחה', { w: 110, fmt: nis }),
+    C.txtCol('charge_amount', 'סכום לחיוב', { w: 130, fmt: nis }),
+    C.txtCol('client_email', 'אימייל הלקוח', { ltr: true, w: 210 }),
+    C.txtCol('client_address', 'כתובת הלקוח', { w: 220 }),
+    C.txtCol('client_id', 'ת.ז / ח.פ', { ltr: true, w: 130 }),
+    C.txtCol('notes', 'הערות', { w: 240 }),
+    C.txtCol('acct_notes', 'הערות הנהלת חשבונות', { w: 240 }),
+    C.txtCol('signed_at', 'נחתם בתאריך', { w: 150, fmt: fmt }),
+    C.txtCol('cancel_reason', 'סיבת ביטול', { w: 200 }),
+    C.txtCol('acct_status', 'סטטוס חשבונאי', { w: 150 }),
+    C.txtCol('invoice_name', 'קבלה על שם', { w: 180 }),
   ];
   var fileCols = null;
   //  פתיחת טופס ההסכם לליד ממסך הווטסאפ. אין עסקה?
