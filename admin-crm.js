@@ -3077,6 +3077,11 @@
   //  נספרת לפי מועד החתימה ולא לפי מועד הפתיחה: עסקה שנפתחה בחודש שעבר
   //  ונחתמה היום היא עסקה של היום.
   function dealAt(d) { return d.signed_at || d.created_at; }
+  //  "עסקה שנסגרה" ≠ "עסקה חתומה". חתימת הלקוח היא רק תחילת התיק;
+  //  מרגע שנחתם המימון העסקה כבר לא צפויה ליפול, ולכן זה המדד
+  //  שמנהל המכירות באמת סופר. השלבים לפי סדר המשפך.
+  var CLOSED_STAGES = { signed: 1, collection: 1, ordered: 1, delivered: 1 };
+  function isClosed(d) { return isDeal(d) && !!CLOSED_STAGES[d.stage]; }
 
   function drawDashboard() {
     var allLeads = dashAll.leads, allDeals = dashAll.deals, tasks = dashAll.tasks;
@@ -3095,7 +3100,12 @@
     var conv = leads.length ? Math.round(deals.length / leads.length * 100) : 0;
     var rts = leads.filter(function (l) { return l.first_response_at; }).map(function (l) { return (new Date(l.first_response_at) - new Date(l.created_at)) / 60000; });
     var avgRt = rts.length ? Math.round(rts.reduce(function (a, b) { return a + b; }, 0) / rts.length) : 0;
-    var openTasks = tasks.filter(function (t) { return !t.done; }).length;
+    var openTasksL = tasks.filter(function (t) { return !t.done; });
+    var openTasks = openTasksL.length;
+    //  משימה באיחור היא הדבר היחיד שדורש פעולה עכשיו, ולכן היא כרטיס
+    //  נפרד ולא מספר שנבלע בתוך "משימות פתוחות".
+    var lateTasksL = openTasksL.filter(function (t) { return t.due_at && new Date(t.due_at).getTime() < Date.now(); });
+    var closedDeals = signed.filter(function (d) { return !!CLOSED_STAGES[d.stage] && inRange(dealAt(d), dashRange); });
 
     var dashCustom = dashRange && !dashRange.preset && (dashRange.from || dashRange.to);
     var pTabs = '<div class="row-between" style="margin-bottom:2px"><div class="tabs" id="dashPeriod">' + PERIODS.map(function (p) { return '<button data-p="' + p[0] + '"' + (dashRange && dashRange.preset === p[0] ? ' class="active"' : '') + '>' + p[1] + '</button>'; }).join('') + '<button data-dpcustom="1"' + (dashCustom ? ' class="active"' : '') + '>📅 טווח מותאם</button></div><span class="muted" style="font-size:12px">' + (dashCustom ? fltLabel(dashRange) : 'מסנן ראשי (KPI)') + '</span></div>';
@@ -3105,9 +3115,11 @@
       '<div class="cards" style="margin-top:14px">' +
         C.stat('לידים חדשים היום', todayN, true, 'today') + C.stat('נחתמו היום', dealsTodayN, true, 'signedToday') +
         C.stat('סה"כ לידים', leads.length, null, 'leads') + C.stat('עסקאות חתומות', deals.length, null, 'deals') +
+        C.stat('עסקאות שנסגרו', closedDeals.length, null, 'closed') +
         C.stat('פגישות נקבעו', by.meeting_set || 0, null, 'meetings') +
         C.stat('הצעות פתוחות', openQuotes, null, 'quotes') + C.stat('אחוז סגירה', conv + '%', null, 'conv') +
         C.stat('זמן תגובה', avgRt ? avgRt + ' דק\'' : '—', null, 'rt') + C.stat('משימות פתוחות', openTasks, null, 'tasks') +
+        C.stat('משימות באיחור', lateTasksL.length, null, 'late') +
       '</div>' +
       '<div class="grid2">' +
         '<div class="card">' + hdr('לידים ועסקאות לאורך זמן', 'chart') + '<div id="dashChart"></div></div>' +
@@ -3161,6 +3173,18 @@
         return ['זמן תגובה ראשון', rows,
           'ממוצע ' + avgRt + ' דק\' על ' + rows.length + ' לידים שנענו · האיטיים ראשונים · ' + rangeTxt];
       },
+      closed: function () { return ['עסקאות שנסגרו',
+        closedDeals.map(function (d) { return kDeal(d, 'signed', 'נחתם'); }),
+        'משלב "נחתם מימון" ומעלה · ' + rangeTxt]; },
+      late: function () { return ['משימות באיחור',
+        lateTasksL.map(function (t) {
+          var l = kLeadById[t.lead_id] || {};
+          return { id: t.lead_id || null, name: t.title || 'משימה',
+            _meta: [l.name ? 'לקוח: ' + l.name : null,
+                    '⚠ היה אמור להתבצע ' + fmt(t.due_at)],
+            _date: t.created_at, _sort: new Date(t.due_at).getTime() };
+        }),
+        'עבר מועד היעד וטרם סומנו כבוצעו · הוותיקות ראשונות']; },
       tasks: function () { return ['משימות פתוחות',
         tasks.filter(function (t) { return !t.done; }).map(function (t) {
           var l = kLeadById[t.lead_id] || {};
@@ -3277,15 +3301,29 @@
     var labs = days.map(function (d, i) {
       return '<div style="flex:1;min-width:0;text-align:center;white-space:nowrap">' +
         '<div style="font-size:11.5px;font-weight:700;color:var(--brand);line-height:1.2">' + (d.v > 0 ? d.v : '') + '</div>' +
-        (hasD ? '<div style="font-size:10.5px;font-weight:700;color:var(--ok);line-height:1.1">' + (d.dv > 0 ? d.dv : '') + '</div>' : '') +
         '<div style="font-size:10px;color:var(--muted)">' + (i % 2 === 0 ? esc(d.d.slice(5)) : '') + '</div></div>';
+    }).join('');
+    //  מספר העסקאות יושב מעל העמודה הירוקה ולא בשורת התוויות: שם הוא
+    //  היה מנותק מהעמודה שלו וקשה היה לדעת לאיזה יום הוא שייך.
+    //  שכבה מוחלטת ולא טקסט ב-SVG, כי ה-SVG נמתח ומעוות גופנים.
+    var over = days.map(function (d, i) {
+      if (!d.dv) return '';
+      var hd = d.dv / max * 92;
+      return '<div style="position:absolute;left:' + (i * W) + '%;width:' + W + '%;bottom:' +
+        (hd / 100 * 160 + 2) + 'px;text-align:center;font-size:10.5px;font-weight:800;color:var(--ok);pointer-events:none">' +
+        d.dv + '</div>';
     }).join('');
     var legend = hasD
       ? '<div style="display:flex;gap:14px;justify-content:flex-end;font-size:11.5px;margin-bottom:4px">' +
         '<span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:var(--brand);opacity:.42;margin-inline-end:4px"></span>לידים</span>' +
         '<span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:var(--ok);margin-inline-end:4px"></span>עסקאות שנסגרו</span></div>'
       : '';
-    return '<div>' + legend + '<svg viewBox="0 0 100 100" preserveAspectRatio="none" style="width:100%;height:160px;display:block">' + bars + '</svg><div style="display:flex;direction:ltr;margin-top:6px">' + labs + '</div></div>';
+    return '<div>' + legend +
+      '<div style="position:relative;direction:ltr">' +
+        '<svg viewBox="0 0 100 100" preserveAspectRatio="none" style="width:100%;height:160px;display:block">' + bars + '</svg>' +
+        over +
+      '</div>' +
+      '<div style="display:flex;direction:ltr;margin-top:6px">' + labs + '</div></div>';
   }
 
   // expose the status model for admin.js (bell, reports)
