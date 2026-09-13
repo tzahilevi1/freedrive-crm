@@ -1699,7 +1699,10 @@
       //  סוג התנועה מלא לכל הלידים ולא רק לפרסום: ליד שאינו ממומן מקבל
       //  'seo' אוטומטית בטריגר (organic-medium.sql), ולכן הגרף מראה את
       //  התמהיל האמיתי — cpc מול seo — ולא רק את הצד הממומן.
-      var byMedium = attrBy(function (l) { return l.utm_medium || l.medium; });
+      //  רק utm_medium. העמודה medium היא שריד ישן שנכתב כ-"cpc" קבוע
+      //  גם לליד אורגני, ואינו נכתב כלל ללידים אורגניים מהאתר — נפילה
+      //  אליו הייתה מסווגת לידים אורגניים כממומנים.
+      var byMedium = attrBy(function (l) { return l.utm_medium; });
       var byPlacement = attrBy(function (l) { var t = String(l.utm_term || '').toLowerCase(); return PLACEMENTS[t] || l.utm_term; }, isPaid);
       var byMktCo = attrBy(function (l) { return l.marketing_company; });
       var byCampName = attrBy(function (l) { return l.campaign || l.utm_campaign; }, isPaid);
@@ -1806,7 +1809,7 @@
       function vsPanel() {
         var g = { cpc: { leads: 0, deals: 0, rev: 0 }, seo: { leads: 0, deals: 0, rev: 0 } };
         function bucket(l) {
-          var m = String((l && (l.utm_medium || l.medium)) || '').toLowerCase();
+          var m = String((l && l.utm_medium) || '').toLowerCase();
           if (m === 'cpc' || m === 'ppc' || m === 'paid') return 'cpc';
           if (m === 'seo' || m === 'organic') return 'seo';
           return null;

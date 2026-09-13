@@ -434,7 +434,6 @@
     C.txtCol('ad_id', 'מזהה מודעה', { ltr: true, w: 150 }),
     C.txtCol('form_id', 'מזהה טופס', { ltr: true, w: 150 }),
     C.txtCol('external_id', 'Lead ID · פייסבוק', { ltr: true, w: 170 }),
-    C.txtCol('medium', 'ערוץ · medium', { ltr: true, w: 120 }),
     C.txtCol('page_url', 'דף נחיתה', { ltr: true, w: 240 }),
     C.txtCol('close_reason', 'סיבת סגירה', { w: 190 }),
     C.txtCol('first_response', 'מענה ראשון', { f: 'first_response_at', w: 150, fmt: fmt }),
@@ -447,7 +446,7 @@
     { key: 'utm_source', label: 'utm_source' }, { key: 'utm_campaign', label: 'utm_campaign' },
     { key: 'utm_medium', label: 'utm_medium' }, { key: 'utm_content', label: 'utm_content' },
     { key: 'utm_term', label: 'utm_term' }, { key: 'ad_group', label: 'ad_group' },
-    { key: 'campaign', label: 'שם קמפיין' }, { key: 'medium', label: 'medium' },
+    { key: 'campaign', label: 'שם קמפיין' },
     { key: 'message', label: 'תיאור / הודעה' }, { key: 'name', label: 'שם לקוח' }, { key: 'phone', label: 'טלפון' }
   ];
   var BULK_FIELD_LABEL = {}; BULK_FIELDS.forEach(function (f) { BULK_FIELD_LABEL[f.key] = f.label; });
@@ -491,7 +490,7 @@
         { key: 'utm_source', label: 'utm_source', options: listOpts('utm_source') },
         { key: 'utm_medium', label: 'utm_medium' }, { key: 'utm_campaign', label: 'utm_campaign' },
         { key: 'utm_content', label: 'utm_content' }, { key: 'utm_term', label: 'utm_term' },
-        { key: 'medium', label: 'medium' }, { key: 'ad_group', label: 'ad_group' },
+        { key: 'ad_group', label: 'ad_group' },
         // מזהים טכניים — לאיתור ליד בודד מול פייסבוק
         { key: 'ad_id', label: 'מזהה מודעה' }, { key: 'form_id', label: 'מזהה טופס' },
         { key: 'external_id', label: 'מזהה ליד (פייסבוק)' },
