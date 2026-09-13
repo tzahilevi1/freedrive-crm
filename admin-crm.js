@@ -455,7 +455,7 @@
     curFilter = statusFilter || null; selectedLeads = {};
     loading();
     Promise.all([
-      db.from('leads').select('id,name,phone,email,car,city,source,status,brand,marketing_company,assigned_to,created_at,updated_at,status_changed_at,first_response_at,close_reason,id_num,utm_source,utm_campaign,utm_medium,utm_content,utm_term,ad_group,adset_name,ad_name,campaign,medium,ad_id,form_id,external_id,message,page_url').is('deleted_at', null).order('created_at', { ascending: false }).limit(3000),
+      db.from('leads').select('id,name,phone,email,car,city,source,status,brand,marketing_company,assigned_to,created_at,updated_at,status_changed_at,first_response_at,close_reason,id_num,utm_source,utm_campaign,utm_medium,utm_content,utm_term,ad_group,adset_name,ad_name,campaign,ad_id,form_id,external_id,message,page_url').is('deleted_at', null).order('created_at', { ascending: false }).limit(3000),
       db.from('profiles').select('user_id,full_name'),
       //  מי מקבל את הלידים החדשים לחלוקה. נשמר בתצורה ולא מקודד קשיח,
       //  כדי שהעברת התפקיד לאדם אחר לא תדרוש שינוי בקוד.
