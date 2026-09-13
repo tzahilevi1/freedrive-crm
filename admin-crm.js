@@ -132,7 +132,22 @@
   };
 
   function waLink(phone) { var p = waIntl(phone); return p ? 'https://wa.me/' + p : null; }
-  function logActivity(id, type, body, meta) { return db.from('activities').insert({ lead_id: id, type: type, body: body || null, meta: meta || null, created_by: C.userId || null }); }
+  //  סוגי הפעילות שנחשבים טיפול של נציג בליד, לצורך מדד זמן התגובה.
+  //  'system' נשאר בחוץ כי הוא בעיקר ניתוב הליד בין נציגים ומחיקה לסל —
+  //  העברה מנציג לנציג אינה מענה ללקוח, והיא הייתה מסמנת 49 לידים
+  //  שאיש לא נגע בהם כאילו נענו. הודעת וואטסאפ נכנסת נרשמת ישירות
+  //  מהוובהוק ולא דרך כאן, ולכן ממילא אינה יכולה לסמן מענה.
+  var TOUCH_TYPES = { status_change: 1, contract: 1, quote: 1, meeting: 1, task: 1, note: 1, car: 1, document: 1 };
+  function logActivity(id, type, body, meta) {
+    //  כל פעולה של נציג בציר הזמן היא הטיפול הראשון בליד, אם טרם נרשם
+    //  אחד. בלי זה נציג שהוסיף הערה או קבע פגישה בלי לגעת בסטטוס נשאר
+    //  רשום כמי שלא ענה.
+    if (id && TOUCH_TYPES[type]) {
+      db.from('leads').update({ first_response_at: new Date().toISOString() })
+        .eq('id', id).is('first_response_at', null).then(function () {}, function () {});
+    }
+    return db.from('activities').insert({ lead_id: id, type: type, body: body || null, meta: meta || null, created_by: C.userId || null });
+  }
 
   // ---- reusable status menu (status changeable from anywhere) ----
   function closeStMenu() { var m = document.getElementById('stmenu'); if (m) m.remove(); }
