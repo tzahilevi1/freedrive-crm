@@ -232,7 +232,10 @@
     var from = lead && lead.status;
     if (from === to) { if (after) after(); return; }   // no-op: don't log/patch a status that didn't change
     var patch = { status: to, status_changed_at: new Date().toISOString() };
-    if (to === 'in_progress' && (!lead || !lead.first_response_at)) patch.first_response_at = new Date().toISOString();
+    //  כל יציאה מ"חדש" היא הטיפול הראשון בליד, ולא רק המעבר ל"בטיפול".
+    //  קודם נספרו 9 לידים מתוך 239, כי נציג שהעביר ליד ישר ל"הצעת מחיר"
+    //  או ל"לא רלוונטי" לא נרשם כמי שטיפל.
+    if (to && to !== 'new' && (!lead || !lead.first_response_at)) patch.first_response_at = new Date().toISOString();
     db.from('leads').update(patch).eq('id', leadId).then(function (u) {
       if (u.error) return alert('שגיאה: ' + u.error.message);
       logActivity(leadId, 'status_change', from ? ('סטטוס: ' + stDef(from).label + ' → ' + stDef(to).label) : ('סטטוס שונה ל: ' + stDef(to).label)).then(function () {
@@ -3165,7 +3168,7 @@
     //  אחוז הסגירה נמדד מול הלידים בטווח, בדיוק כמו במסך הדוחות.
     //  קודם הוא חושב מסטטוס הליד (won/lost) והציג מספר אחר מהדוחות.
     var conv = leads.length ? Math.round(deals.length / leads.length * 100) : 0;
-    var rts = leads.filter(function (l) { return l.first_response_at; }).map(function (l) { return (new Date(l.first_response_at) - new Date(l.created_at)) / 60000; });
+    var rts = leads.filter(function (l) { return l.first_response_at; }).map(function (l) { return C.respMins(l.created_at, l.first_response_at); });
     var avgRt = rts.length ? Math.round(rts.reduce(function (a, b) { return a + b; }, 0) / rts.length) : 0;
     var openTasksL = tasks.filter(function (t) { return !t.done; });
     var openTasks = openTasksL.length;
@@ -3185,7 +3188,7 @@
         C.stat('עסקאות שנסגרו', closedDeals.length, null, 'closed', 'משלב "נחתם מימון" ומעלה') +
         C.stat('פגישות נקבעו', by.meeting_set || 0, null, 'meetings') +
         C.stat('הצעות פתוחות', openQuotes, null, 'quotes') + C.stat('אחוז סגירה', conv + '%', null, 'conv') +
-        C.stat('זמן תגובה', avgRt ? avgRt + ' דק\'' : '—', null, 'rt') + C.stat('משימות פתוחות', openTasks, null, 'tasks', 'הכל מה שטרם בוצע — כולל אלה שבאיחור') +
+        C.stat('זמן תגובה', avgRt ? C.respTxt(avgRt) : '—', null, 'rt', 'עד הטיפול הראשון · בלי שעות סגירה') + C.stat('משימות פתוחות', openTasks, null, 'tasks', 'הכל מה שטרם בוצע — כולל אלה שבאיחור') +
         C.stat('משימות באיחור', lateTasksL.length, null, 'late', 'מתוך הפתוחות — עבר מועד היעד') +
       '</div>' +
       '<div class="grid2">' +
@@ -3234,11 +3237,17 @@
         deals.length + ' עסקאות חתומות מתוך ' + leads.length + ' לידים · ' + rangeTxt]; },
       rt: function () {
         var rows = leads.filter(function (l) { return l.first_response_at; }).map(function (l) {
-          var mins = Math.round((new Date(l.first_response_at) - new Date(l.created_at)) / 60000);
-          var r = kLead(l); r._extra = 'נענה תוך ' + mins + ' דק\''; r._sort = -mins; return r;
+          //  שני המספרים: המדד עצמו בשעות פעילות, ולצידו שעון הקיר —
+          //  מבחינת הלקוח הוא באמת חיכה מיום שישי, וזה צריך להיראות.
+          var mins = C.respMins(l.created_at, l.first_response_at);
+          var wall = C.respMins(l.created_at, l.first_response_at, true);
+          var r = kLead(l);
+          r._extra = 'נענה תוך ' + C.respTxt(mins) +
+            (wall > mins + 1 ? ' (שעון קיר ' + C.respTxt(wall) + ' — כלל שעות סגירה)' : '');
+          r._sort = -mins; return r;
         });
         return ['זמן תגובה ראשון', rows,
-          'ממוצע ' + avgRt + ' דק\' על ' + rows.length + ' לידים שנענו · האיטיים ראשונים · ' + rangeTxt];
+          'ממוצע ' + C.respTxt(avgRt) + ' על ' + rows.length + ' לידים שנענו · נמדד בשעות פעילות בלבד · האיטיים ראשונים · ' + rangeTxt];
       },
       closed: function () { return ['עסקאות שנסגרו',
         closedDeals.map(function (d) { return kDeal(d, 'signed', 'נחתם'); }),

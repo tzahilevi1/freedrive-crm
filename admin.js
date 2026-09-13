@@ -293,11 +293,56 @@
     }, function () {});
   }
 
+  // ---------- שעות פעילות המשרד וזמן תגובה ----------
+  //  זמן תגובה נמדד בשעות שבהן אפשר בכלל לענות. ליד שנכנס בשישי אחר
+  //  הצהריים ונענה בראשון ב-09:15 חיכה רבע שעת עבודה ולא יומיים; ספירת
+  //  שעון קיר מדדה את לוח השנה במקום את הנציג, ועיוותה 24% מהלידים.
+  window.C2B.office = { fromDow: 5, fromTime: '13:00', toDow: 0, toTime: '09:00' };
+  //  היום והשעה נקבעים לפי אזור הזמן של המשרד ולא של הדפדפן, כדי שהחישוב
+  //  לא יזוז למשתמש או לבדיקה שרצים במחשב עם שעון אחר.
+  function ilShift(d) {
+    return new Date(d.toLocaleString('en-US', { timeZone: 'Asia/Jerusalem' })) -
+           new Date(d.toLocaleString('en-US', { timeZone: 'UTC' }));
+  }
+  function hhmm(s) { var p = String(s || '0:0').split(':'); return (+p[0] || 0) * 60 + (+p[1] || 0); }
+  //  סך הזמן שבו המשרד היה סגור בתוך הטווח [a,b], במילישניות
+  function closedMs(a, b) {
+    var o = window.C2B.office || {};
+    var fd = +o.fromDow, td = +o.toDow, fm = hhmm(o.fromTime), tm = hhmm(o.toTime);
+    if (isNaN(fd) || isNaN(td)) return 0;
+    var span = ((td - fd + 7) % 7) * 864e5 + (tm - fm) * 60000;
+    if (span <= 0) return 0;
+    var A = a.getTime(), B = b.getTime(), sh = ilShift(a), WEEK = 7 * 864e5;
+    var il = new Date(A + sh);
+    //  מתחילים מהחלון הסגור האחרון שנפתח לפני תחילת הטווח, ומדלגים שבוע-שבוע
+    var back = (il.getUTCDay() - fd + 7) % 7;
+    var s = Date.UTC(il.getUTCFullYear(), il.getUTCMonth(), il.getUTCDate() - back) + fm * 60000 - sh;
+    var out = 0;
+    for (; s < B; s += WEEK) out += Math.max(0, Math.min(B, s + span) - Math.max(A, s));
+    return out;
+  }
+  //  דקות תגובה בשעות פעילות. raw=true מחזיר שעון קיר מלא.
+  window.C2B.respMins = function (from, to, raw) {
+    var a = new Date(from), b = new Date(to), ms = b - a;
+    if (!(ms > 0)) return 0;
+    return Math.max(0, Math.round((raw ? ms : ms - closedMs(a, b)) / 60000));
+  };
+  window.C2B.respTxt = function (m) {
+    if (m == null) return '—';
+    if (m < 60) return Math.round(m) + ' דק\'';
+    var h = Math.floor(m / 60), r = Math.round(m % 60);
+    if (h >= 24) return Math.floor(h / 24) + ' ימים ' + (h % 24) + ' ש\'';
+    return h + ' ש\'' + (r ? ' ' + r + ' דק\'' : '');
+  };
+
   // ---------- Telephony (SIP / Click-to-Call) ----------
   window.C2B.tel = { mode: 'tel', sip_domain: '', webhook_url: '', country: '972' };
   function loadConfig() {
     db.from('app_config').select('value').eq('key', 'telephony').maybeSingle().then(function (r) {
       if (r && r.data && r.data.value) window.C2B.tel = Object.assign({ mode: 'tel', sip_domain: '', webhook_url: '', country: '972' }, r.data.value);
+    }, function () {});
+    db.from('app_config').select('value').eq('key', 'office_hours').maybeSingle().then(function (r) {
+      if (r && r.data && r.data.value) window.C2B.office = Object.assign({}, window.C2B.office, r.data.value);
     }, function () {});
   }
   window.C2B.toast = function (msg, bad) {
@@ -439,6 +484,7 @@
       ['settings:brands', '\ud83c\udff7\ufe0f מותגים'],
       ['settings:quick', '\ud83d\udcac הודעות מהירות'],
       ['settings:phone', '\u260e\ufe0f טלפוניה'],
+      ['settings:hours', '\ud83d\udd52 שעות פעילות'],
       ['settings:actions', '\u26a1 פעולות'],
       ['branches', '\ud83c\udfe2 סניפים'],
       ['ctemplates', '\ud83d\udcdc תבניות הסכמים']
@@ -1392,7 +1438,7 @@
       var wonL = by.won || 0, lostL = by.lost || 0;
       var pv = events.filter(function (e) { return e.type === 'pageview'; }).length;
       var sess = {}; events.forEach(function (e) { if (e.session_id) sess[e.session_id] = 1; });
-      var rts = leads.filter(function (l) { return l.first_response_at; }).map(function (l) { return (new Date(l.first_response_at) - new Date(l.created_at)) / 60000; });
+      var rts = leads.filter(function (l) { return l.first_response_at; }).map(function (l) { return window.C2B.respMins(l.created_at, l.first_response_at); });
       var avgRt = rts.length ? Math.round(rts.reduce(function (a, b) { return a + b; }, 0) / rts.length) : 0;
 
       // ---- deal-side aggregates ----
@@ -4147,7 +4193,7 @@
       var by = {}; leads.forEach(function (l) { by[l.status || 'new'] = (by[l.status || 'new'] || 0) + 1; });
       var won = by.won || 0, lost = by.lost || 0, conv = (won + lost) ? Math.round(won / (won + lost) * 100) : 0;
       var rts = leads.filter(function (l) { return l.first_response_at; })
-                     .map(function (l) { return (new Date(l.first_response_at) - new Date(l.created_at)) / 60000; });
+                     .map(function (l) { return window.C2B.respMins(l.created_at, l.first_response_at); });
       var avgRt = rts.length ? Math.round(rts.reduce(function (a, b) { return a + b; }, 0) / rts.length) : 0;
       var noResp = leads.filter(function (l) { return !l.first_response_at && l.status === 'new'; });
       var openLeads = leads.filter(function (l) { return ['won', 'lost'].indexOf(l.status) < 0; });
@@ -4336,6 +4382,7 @@
       else if (sec === 'brands') mid = '<div id="brandMapCard"></div>';
       else if (sec === 'quick') mid = '<div id="quickMsgCard"></div>';
       else if (sec === 'phone') mid = '<div id="telephonyCard"></div><div id="heyCard"></div>';
+      else if (sec === 'hours') mid = '<div id="officeCard"></div>';
       else if (sec === 'actions') mid = actionEditorCard();
       view('<h2 style="margin:0 0 4px">' + hd[0] + '</h2>' +
         '<p class="muted" style="font-size:13px;margin-bottom:14px">' + hd[1] + '</p>' + mid);
@@ -4344,6 +4391,7 @@
       if (sec === 'brands') renderBrandMap();
       if (sec === 'quick') renderQuickMsgs();
       if (sec === 'phone') { renderTelephony(); renderHeyCfg(); }
+      if (sec === 'hours') renderOffice();
       // מחיקת צ'יפ במקום — בלי לרענן את כל הדף
       function bindDel(bEl) {
         bEl.addEventListener('click', function () {
@@ -4489,6 +4537,51 @@
           if (u.error) { msg.style.color = 'var(--danger)'; msg.textContent = 'שגיאה: ' + u.error.message; return; }
           window.C2B.tel = val; msg.style.color = 'var(--ok)'; msg.textContent = '✔ נשמר';
         });
+      });
+    });
+  }
+
+  // ---------- SETTINGS: החלון שבו המשרד סגור ----------
+  function renderOffice() {
+    var host = $('officeCard'); if (!host) return;
+    var DAYS = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'];
+    db.from('app_config').select('value').eq('key', 'office_hours').maybeSingle().then(function (r) {
+      var o = Object.assign({ fromDow: 5, fromTime: '13:00', toDow: 0, toTime: '09:00' }, (r && r.data && r.data.value) || {});
+      function daySel(id, cur) {
+        return '<select class="inp" id="' + id + '" style="width:120px">' + DAYS.map(function (d, i) {
+          return '<option value="' + i + '"' + (+cur === i ? ' selected' : '') + '>' + d + '</option>';
+        }).join('') + '</select>';
+      }
+      host.innerHTML = '<div class="card"><h3 style="margin:0 0 6px">\ud83d\udd52 החלון שבו המשרד סגור</h3>' +
+        '<p class="muted" style="font-size:13px;margin:0 0 14px;line-height:1.7">הזמן שבתוך החלון הזה אינו נספר במדד <b>זמן תגובה</b>. ' +
+        'ליד שנכנס בשישי אחר הצהריים ונענה בראשון בבוקר ייספר לפי דקות העבודה בפועל ולא לפי יומיים של לוח שנה. ' +
+        'שעון הקיר המלא ממשיך להופיע בפירוט, כדי שתראו כמה הלקוח באמת חיכה.</p>' +
+        '<div style="display:flex;gap:10px;align-items:end;flex-wrap:wrap">' +
+          '<div class="field" style="margin:0"><label>סגור מיום</label>' + daySel('ohFromD', o.fromDow) + '</div>' +
+          '<div class="field" style="margin:0"><label>בשעה</label><input class="inp" type="time" id="ohFromT" value="' + esc(o.fromTime) + '" style="width:120px"></div>' +
+          '<div class="field" style="margin:0"><label>עד יום</label>' + daySel('ohToD', o.toDow) + '</div>' +
+          '<div class="field" style="margin:0"><label>בשעה</label><input class="inp" type="time" id="ohToT" value="' + esc(o.toTime) + '" style="width:120px"></div>' +
+          '<button class="btn btn-sm" id="ohSave">\ud83d\udcbe שמור</button><span id="ohMsg" style="font-size:12px"></span>' +
+        '</div>' +
+        '<p class="muted" style="font-size:12px;margin-top:12px" id="ohPreview"></p></div>';
+      function preview() {
+        var span = ((+$('ohToD').value - +$('ohFromD').value + 7) % 7) * 24 * 60 +
+                   (hhmm($('ohToT').value) - hhmm($('ohFromT').value));
+        $('ohPreview').innerHTML = span > 0
+          ? '\u2139\ufe0f החלון נמשך <b>' + Math.floor(span / 60) + ' שעות</b> בכל שבוע.'
+          : '<span style="color:var(--danger)">\u26a0 שעת הסיום מוקדמת מההתחלה \u2014 החלון ריק ושום דבר לא ינוכה.</span>';
+      }
+      ['ohFromD', 'ohFromT', 'ohToD', 'ohToT'].forEach(function (id) { $(id).addEventListener('change', preview); });
+      preview();
+      $('ohSave').addEventListener('click', function () {
+        var val = { fromDow: +$('ohFromD').value, fromTime: $('ohFromT').value,
+                    toDow: +$('ohToD').value, toTime: $('ohToT').value };
+        var msg = $('ohMsg'); msg.style.color = 'var(--muted)'; msg.textContent = 'שומר…';
+        db.from('app_config').upsert({ key: 'office_hours', value: val, updated_at: new Date().toISOString() }, { onConflict: 'key' })
+          .then(function (u) {
+            if (u.error) { msg.style.color = 'var(--danger)'; msg.textContent = 'שגיאה: ' + u.error.message; return; }
+            window.C2B.office = val; msg.style.color = 'var(--ok)'; msg.textContent = '\u2714 נשמר';
+          });
       });
     });
   }
