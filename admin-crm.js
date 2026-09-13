@@ -3168,7 +3168,11 @@
     //  אחוז הסגירה נמדד מול הלידים בטווח, בדיוק כמו במסך הדוחות.
     //  קודם הוא חושב מסטטוס הליד (won/lost) והציג מספר אחר מהדוחות.
     var conv = leads.length ? Math.round(deals.length / leads.length * 100) : 0;
-    var rts = leads.filter(function (l) { return l.first_response_at; }).map(function (l) { return C.respMins(l.created_at, l.first_response_at); });
+    //  המדד מכסה 100% מהלידים. ליד שטרם נענה נספר לפי הזמן שהוא כבר
+    //  ממתין — אחרת ליד שאיש לא נגע בו פשוט נעלם מהמדד, והממוצע היה
+    //  משתפר דווקא כשמזניחים לידים.
+    var rtWaiting = leads.filter(function (l) { return !l.first_response_at; });
+    var rts = leads.map(function (l) { return C.respMins(l.created_at, l.first_response_at || new Date()); });
     var avgRt = rts.length ? Math.round(rts.reduce(function (a, b) { return a + b; }, 0) / rts.length) : 0;
     var openTasksL = tasks.filter(function (t) { return !t.done; });
     var openTasks = openTasksL.length;
@@ -3188,7 +3192,8 @@
         C.stat('עסקאות שנסגרו', closedDeals.length, null, 'closed', 'משלב "נחתם מימון" ומעלה') +
         C.stat('פגישות נקבעו', by.meeting_set || 0, null, 'meetings') +
         C.stat('הצעות פתוחות', openQuotes, null, 'quotes') + C.stat('אחוז סגירה', conv + '%', null, 'conv') +
-        C.stat('זמן תגובה', avgRt ? C.respTxt(avgRt) : '—', null, 'rt', 'עד הטיפול הראשון · בלי שעות סגירה') + C.stat('משימות פתוחות', openTasks, null, 'tasks', 'הכל מה שטרם בוצע — כולל אלה שבאיחור') +
+        C.stat('זמן תגובה', avgRt ? C.respTxt(avgRt) : '—', null, 'rt',
+          'כל הלידים · ' + rtWaiting.length + ' טרם נענו · בלי שעות סגירה') + C.stat('משימות פתוחות', openTasks, null, 'tasks', 'הכל מה שטרם בוצע — כולל אלה שבאיחור') +
         C.stat('משימות באיחור', lateTasksL.length, null, 'late', 'מתוך הפתוחות — עבר מועד היעד') +
       '</div>' +
       '<div class="grid2">' +
@@ -3236,18 +3241,22 @@
         deals.map(function (d) { return kDeal(d, 'signed', 'נחתם'); }),
         deals.length + ' עסקאות חתומות מתוך ' + leads.length + ' לידים · ' + rangeTxt]; },
       rt: function () {
-        var rows = leads.filter(function (l) { return l.first_response_at; }).map(function (l) {
+        var rows = leads.map(function (l) {
           //  שני המספרים: המדד עצמו בשעות פעילות, ולצידו שעון הקיר —
           //  מבחינת הלקוח הוא באמת חיכה מיום שישי, וזה צריך להיראות.
-          var mins = C.respMins(l.created_at, l.first_response_at);
-          var wall = C.respMins(l.created_at, l.first_response_at, true);
+          var end = l.first_response_at || new Date();
+          var mins = C.respMins(l.created_at, end);
+          var wall = C.respMins(l.created_at, end, true);
           var r = kLead(l);
-          r._extra = 'נענה תוך ' + C.respTxt(mins) +
-            (wall > mins + 1 ? ' (שעון קיר ' + C.respTxt(wall) + ' — כלל שעות סגירה)' : '');
-          r._sort = -mins; return r;
+          r._extra = (l.first_response_at ? 'נענה תוך ' : 'ממתין כבר ') + C.respTxt(mins) +
+            (wall > mins + 1 ? ' (שעון קיר ' + C.respTxt(wall) + ' — כלל שעות סגירה)' : '') +
+            (l.first_response_at ? '' : ' ⚠ טרם נענה');
+          //  הממתינים קודם, ואחריהם האיטיים — שניהם דורשים פעולה
+          r._sort = -mins - (l.first_response_at ? 0 : 1e9); return r;
         });
         return ['זמן תגובה ראשון', rows,
-          'ממוצע ' + C.respTxt(avgRt) + ' על ' + rows.length + ' לידים שנענו · נמדד בשעות פעילות בלבד · האיטיים ראשונים · ' + rangeTxt];
+          'ממוצע ' + C.respTxt(avgRt) + ' על כל ' + rows.length + ' הלידים · ' + rtWaiting.length +
+          ' טרם נענו ונספרים לפי זמן ההמתנה · נמדד בשעות פעילות · ' + rangeTxt];
       },
       closed: function () { return ['עסקאות שנסגרו',
         closedDeals.map(function (d) { return kDeal(d, 'signed', 'נחתם'); }),

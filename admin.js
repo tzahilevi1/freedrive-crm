@@ -1438,7 +1438,8 @@
       var wonL = by.won || 0, lostL = by.lost || 0;
       var pv = events.filter(function (e) { return e.type === 'pageview'; }).length;
       var sess = {}; events.forEach(function (e) { if (e.session_id) sess[e.session_id] = 1; });
-      var rts = leads.filter(function (l) { return l.first_response_at; }).map(function (l) { return window.C2B.respMins(l.created_at, l.first_response_at); });
+      //  100% מהלידים: מי שטרם נענה נספר לפי זמן ההמתנה עד עכשיו
+      var rts = leads.map(function (l) { return window.C2B.respMins(l.created_at, l.first_response_at || new Date()); });
       var avgRt = rts.length ? Math.round(rts.reduce(function (a, b) { return a + b; }, 0) / rts.length) : 0;
 
       // ---- deal-side aggregates ----
@@ -4192,8 +4193,7 @@
       // ---- אבני בניין משותפות ----
       var by = {}; leads.forEach(function (l) { by[l.status || 'new'] = (by[l.status || 'new'] || 0) + 1; });
       var won = by.won || 0, lost = by.lost || 0, conv = (won + lost) ? Math.round(won / (won + lost) * 100) : 0;
-      var rts = leads.filter(function (l) { return l.first_response_at; })
-                     .map(function (l) { return window.C2B.respMins(l.created_at, l.first_response_at); });
+      var rts = leads.map(function (l) { return window.C2B.respMins(l.created_at, l.first_response_at || new Date()); });
       var avgRt = rts.length ? Math.round(rts.reduce(function (a, b) { return a + b; }, 0) / rts.length) : 0;
       var noResp = leads.filter(function (l) { return !l.first_response_at && l.status === 'new'; });
       var openLeads = leads.filter(function (l) { return ['won', 'lost'].indexOf(l.status) < 0; });
@@ -4211,7 +4211,7 @@
           '- הלידים שלי: ' + leads.length + ' (פתוחים: ' + openLeads.length + '). נסגרו ' + won + ', לא רלוונטי ' + lost +
             (conv ? ', אחוז סגירה ' + conv + '%' : '') + '.\n' +
           '- פילוח סטטוס: ' + ST.map(function (s) { return s.label + '=' + (by[s.k] || 0); }).filter(function (x) { return !/=0$/.test(x); }).join(', ') + '.\n' +
-          '- טרם נענו: ' + noResp.length + ' לידים חדשים.' + (avgRt ? ' זמן תגובה ממוצע שלי: ' + avgRt + ' דק\'.' : '') + '\n' +
+          '- טרם נענו: ' + noResp.length + ' לידים חדשים.' + (avgRt ? ' זמן תגובה ממוצע שלי: ' + window.C2B.respTxt(avgRt) + ' (כל הלידים, בלי שעות סגירה).' : '') + '\n' +
           '- משימות פתוחות: ' + tasks.filter(function (t) { return !t.done; }).length + ', מתוכן ' + overdue.length + ' באיחור.\n' +
           '- לידים שלא זזו הכי הרבה זמן (עד 12):\n' +
             (mine.slice(0, 12).map(function (l) {
@@ -4272,7 +4272,7 @@
         ctx = head +
           '- לידים: ' + leads.length + ' · פילוח: ' + ST.map(function (s) { return s.label + '=' + (by[s.k] || 0); }).filter(function (x) { return !/=0$/.test(x); }).join(', ') + '.\n' +
           '- אחוז סגירה: ' + conv + '% (נסגרו ' + won + ', אבודים ' + lost + ').\n' +
-          '- זמן תגובה ראשון ממוצע: ' + (avgRt ? avgRt + ' דק\'' : 'לא ידוע') + ' · לידים חדשים שטרם נענו: ' + noResp.length + '.\n' +
+          '- זמן תגובה ראשון ממוצע: ' + (avgRt ? window.C2B.respTxt(avgRt) : 'לא ידוע') + ' (על כל הלידים, בלי שעות סגירת המשרד) · לידים חדשים שטרם נענו: ' + noResp.length + '.\n' +
           '- לידים פתוחים שלא זזו 7+ ימים: ' + cold.length + ' · משימות באיחור: ' + overdue.length + '.\n' +
           '- לפי מקור: ' + Object.keys(src).sort(function (a, b) { return src[b].t - src[a].t; }).slice(0, 12)
               .map(function (k) { return k + ' (' + src[k].t + ' לידים, ' + src[k].w + ' סגירות' +
