@@ -1408,15 +1408,6 @@
     $('view').querySelectorAll('[data-golead]').forEach(function (aEl) {
       aEl.addEventListener('click', function (e) { e.preventDefault(); window.C2B_openLeadCard(aEl.dataset.golead); });
     });
-    document.querySelectorAll('[data-applyst]').forEach(function (b) {
-      b.addEventListener('click', function () {
-        b.disabled = true; b.textContent = 'מחיל…';
-        db.from('leads').update({ status: b.dataset.st }).eq('id', b.dataset.applyst).then(function (r) {
-          b.textContent = r.error ? 'שגיאה' : '✓ הוחל';
-          if (!r.error && window.C2B.refreshBadges) window.C2B.refreshBadges();
-        });
-      });
-    });
     $('view').querySelectorAll('[data-callinfo]').forEach(function (b) {
       b.addEventListener('click', function () {
         var c = all.filter(function (x) { return x.id === b.dataset.callinfo; })[0];
@@ -1518,6 +1509,17 @@
       '<div class="cl-tr" style="margin-top:8px">' + esc(JSON.stringify(c.raw, null, 2)) + '</div></details>';
 
     setTimeout(function () {
+      //  הכפתורים נוצרים כאן ולא במסך, ולכן החיווט חייב לקרות אחרי
+      //  שהחלונית כבר בעמוד
+      document.querySelectorAll('#drawer [data-applyst]').forEach(function (b) {
+        b.addEventListener('click', function () {
+          b.disabled = true; b.textContent = 'מחיל…';
+          db.from('leads').update({ status: b.dataset.st }).eq('id', b.dataset.applyst).then(function (r) {
+            b.textContent = r.error ? 'שגיאה' : '✓ הוחל';
+            if (!r.error && window.C2B.refreshBadges) window.C2B.refreshBadges();
+          });
+        });
+      });
       var el = document.querySelector('#drawer [data-recplay]');
       if (!el) return;
       db.storage.from('call-recordings').createSignedUrl(el.dataset.recplay, 3600).then(function (r) {
