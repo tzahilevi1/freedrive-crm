@@ -1032,8 +1032,23 @@
           esc(c.recording_err || 'הקובץ עדיין לא הורד אלינו') + '">🎧 ב-Voicenter</a></td>';
         return '<td><span class="muted">—</span></td>';
       } },
+    { key: 'summary', label: 'סיכום השיחה', w: 300,
+      sort: function (c) { return (c.crm_analysis && c.crm_analysis.summary) || c.ai_summary || ''; },
+      cell: function (c) {
+        var s = (c.crm_analysis && c.crm_analysis.summary) || c.ai_summary;
+        return '<td>' + (s
+          ? '<span class="cl-sum" title="' + esc(s) + '">' + esc(s) + '</span>'
+          : (c.transcript ? '<span class="muted" style="font-size:11px">ממתין לניתוח</span>' : '<span class="muted">—</span>')) + '</td>';
+      } },
+    { key: 'suggest', label: 'סטטוס מומלץ', w: 140,
+      sort: function (c) { return (c.crm_analysis && c.crm_analysis.status_suggestion) || ''; },
+      cell: function (c) {
+        var a = c.crm_analysis;
+        if (!a || !a.status_suggestion) return '<td><span class="muted">—</span></td>';
+        return '<td>' + badgeFor(a.status_suggestion, a.status_reason) + '</td>';
+      } },
     { key: 'ai', label: 'תמלול', w: 90, def: false, sortable: false,
-      cell: function (c) { return '<td>' + (c.transcript || c.ai_data ? '<span class="cl-yes">✓</span>' : '<span class="muted">—</span>') + '</td>'; } },
+      cell: function (c) { return '<td>' + (c.transcript ? '<span class="cl-yes">✓</span>' : '<span class="muted">—</span>') + '</td>'; } },
     { key: 'status', label: 'סטטוס', w: 110, def: false,
       sort: function (c) { return c.status || ''; },
       cell: function (c) { return '<td class="muted ltr">' + esc(c.status || '—') + '</td>'; } },
@@ -1071,6 +1086,19 @@
       node.textContent = 'ההקלטה לא נמצאה';
     }
     if (el.parentNode) el.parentNode.replaceChild(node, el);
+  }
+
+  //  ההמלצה היא המלצה בלבד ואינה משנה את הליד. תמלול אוטומטי שמשנה
+  //  סטטוס לבד יעשה יותר נזק מתועלת ברגע שיטעה, ואיש לא יסמוך עליו אחר כך.
+  var SUGGEST = {
+    in_progress: ['בטיפול', 'var(--brand)'], meeting: ['נקבעה פגישה', '#0ea5e9'],
+    quote: ['הצעת מחיר', '#a855f7'], no_answer: ['אין מענה', 'var(--warn)'],
+    lost: ['לא רלוונטי', 'var(--danger)'], won: ['נסגרה', 'var(--ok)']
+  };
+  function badgeFor(k, why) {
+    var s = SUGGEST[k] || [k, 'var(--muted)'];
+    return '<span class="tag" style="background:' + s[1] + '18;color:' + s[1] + ';font-weight:700"' +
+      (why ? ' title="' + esc(why) + '"' : '') + '>' + esc(s[0]) + '</span>';
   }
 
   function mmss(s) {
@@ -1380,6 +1408,15 @@
     $('view').querySelectorAll('[data-golead]').forEach(function (aEl) {
       aEl.addEventListener('click', function (e) { e.preventDefault(); window.C2B_openLeadCard(aEl.dataset.golead); });
     });
+    document.querySelectorAll('[data-applyst]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        b.disabled = true; b.textContent = 'מחיל…';
+        db.from('leads').update({ status: b.dataset.st }).eq('id', b.dataset.applyst).then(function (r) {
+          b.textContent = r.error ? 'שגיאה' : '✓ הוחל';
+          if (!r.error && window.C2B.refreshBadges) window.C2B.refreshBadges();
+        });
+      });
+    });
     $('view').querySelectorAll('[data-callinfo]').forEach(function (b) {
       b.addEventListener('click', function () {
         var c = all.filter(function (x) { return x.id === b.dataset.callinfo; })[0];
@@ -1433,12 +1470,49 @@
         'הקובץ עדיין לא הורד אלינו, ולכן אי אפשר לנגן אותו כאן. ' +
         (c.recording_err ? 'הסיבה: ' + esc(c.recording_err) : 'הכתובת של Voicenter מוגנת בהתחברות.') + '</p>';
     }
-    if (c.transcript) {
-      html += '<h4 style="margin:16px 0 6px;font-size:13px">📝 תמלול</h4><div class="cl-tr">' + esc(c.transcript) + '</div>';
+    var a = c.crm_analysis;
+    if (a) {
+      var lst = function (t, arr) {
+        return (Array.isArray(arr) && arr.length)
+          ? '<div style="margin-top:8px"><b style="font-size:12.5px">' + t + '</b><ul style="margin:4px 0 0;padding-inline-start:18px;font-size:12.5px;line-height:1.7">' +
+            arr.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul></div>'
+          : '';
+      };
+      html += '<h4 style="margin:18px 0 6px;font-size:13px">🤖 ניתוח השיחה</h4>' +
+        '<div class="cl-ai">' +
+          (a.summary ? '<div style="font-size:13.5px;line-height:1.75">' + esc(a.summary) + '</div>' : '') +
+          (a.status_suggestion ? '<div style="margin-top:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">' +
+            '<span class="muted" style="font-size:12px">סטטוס מומלץ:</span>' + badgeFor(a.status_suggestion, '') +
+            (a.status_reason ? '<span class="muted" style="font-size:12px">' + esc(a.status_reason) + '</span>' : '') +
+            (c.lead_id ? ' <button class="btn btn-sm" data-applyst="' + esc(c.lead_id) + '" data-st="' + esc(a.status_suggestion) + '">החל על הליד</button>' : '') +
+            '</div>' : '') +
+          (a.customer_wants ? '<div style="margin-top:8px;font-size:12.5px"><b>הלקוח ביקש:</b> ' + esc(a.customer_wants) + '</div>' : '') +
+          lst('התנגדויות וחששות', a.objections) +
+          lst('מה הנציג התחייב', a.agent_promised) +
+          (a.next_step ? '<div style="margin-top:8px;font-size:12.5px"><b>הצעד הבא:</b> ' + esc(a.next_step) +
+            (a.next_step_when ? ' <span class="muted">(' + esc(a.next_step_when) + ')</span>' : '') + '</div>' : '') +
+          '<div class="muted" style="font-size:11.5px;margin-top:10px">' +
+            (a.car_mentioned ? '🚗 ' + esc(a.car_mentioned) + ' · ' : '') +
+            (a.sentiment ? 'רגש: ' + esc(a.sentiment) : '') + '</div>' +
+        '</div>';
+    } else if (c.crm_err) {
+      html += '<p class="muted" style="font-size:12px;margin-top:14px;color:var(--danger)">ניתוח נכשל: ' + esc(c.crm_err) + '</p>';
     }
-    if (c.ai_data) {
-      html += '<h4 style="margin:16px 0 6px;font-size:13px">🤖 ניתוח הספק</h4><div class="cl-tr">' +
-        esc(JSON.stringify(c.ai_data, null, 2)) + '</div>';
+    if (c.transcript) {
+      //  מוצג כשיחה ולא כגוש טקסט — כך רואים מי אמר מה, כמו בהקלטה עצמה
+      var turns = String(c.transcript).split('\n').filter(function (l) { return l.trim(); });
+      html += '<h4 style="margin:18px 0 6px;font-size:13px">📝 תמלול</h4><div class="cl-tr">' +
+        turns.map(function (l) {
+          var i = l.indexOf(':');
+          var who = i > 0 && i < 14 ? l.slice(0, i) : '';
+          var txt = who ? l.slice(i + 1).trim() : l;
+          return '<div class="cl-turn' + (/נציג|agent/i.test(who) ? ' me' : '') + '">' +
+            (who ? '<b>' + esc(who) + '</b> ' : '') + esc(txt) + '</div>';
+        }).join('') + '</div>';
+    }
+    if (c.ai_summary && (!a || a.summary !== c.ai_summary)) {
+      html += '<h4 style="margin:16px 0 6px;font-size:13px">📋 סיכום הספק</h4>' +
+        '<div class="cl-tr">' + esc(c.ai_summary) + '</div>';
     }
     html += '<details style="margin-top:16px"><summary class="muted" style="font-size:12px;cursor:pointer">כל מה שהספק שלח (raw)</summary>' +
       '<div class="cl-tr" style="margin-top:8px">' + esc(JSON.stringify(c.raw, null, 2)) + '</div></details>';
