@@ -1071,7 +1071,29 @@
     { key: 'open', label: '', w: 90, sortable: false,
       cell: function (c) { return '<td><button class="btn btn-ghost btn-sm" data-callinfo="' + esc(c.id) + '">פרטים</button></td>'; } }
   ];
-  var callCols = null, callFilter = { dept: '', dir: '', ans: '', q: '' }, callDays = 7;
+  var callCols = null, callDays = 7;
+  //  כל מספר במסך מוביל לרשימה המסוננת שמאחוריו. הסינון מוחזק כאן ולא
+  //  בכתובת, כדי שחזרה ללשונית תשמור את ההקשר שממנו הגעת.
+  var callFilter = { dept: '', dir: '', ans: '', q: '', agent: '', hour: '', phone: '', rec: '', today: '' };
+  var CF_LABELS = { dept: 'מחלקה', dir: 'כיוון', ans: 'מענה', q: 'חיפוש', agent: 'נציג',
+                    hour: 'שעה', phone: 'מספר', rec: 'הקלטה', today: 'תקופה' };
+  function cfText(k, v) {
+    if (k === 'dir') return v === 'in' ? 'נכנסות' : 'יוצאות';
+    if (k === 'ans') return v === 'y' ? 'נענו' : 'לא נענו';
+    if (k === 'hour') return v + ':00';
+    if (k === 'rec') return v === 'y' ? 'עם הקלטה' : 'בלי הקלטה';
+    if (k === 'today') return 'היום בלבד';
+    return v;
+  }
+  function cfClear() { Object.keys(callFilter).forEach(function (k) { callFilter[k] = ''; }); }
+  //  מעבר לרשימה עם סינון. patch מחליף את הסינון הקיים ולא מצטבר עליו —
+  //  לחיצה על מספר אחרת הייתה מחזירה תוצאה ריקה בגלל סינון קודם ששכחת.
+  function goList(patch) {
+    cfClear();
+    Object.keys(patch || {}).forEach(function (k) { callFilter[k] = patch[k]; });
+    go('calls:list');
+  }
+  function clickable(attrs, inner) { return '<a href="#" class="cl-go" ' + attrs + '>' + inner + '</a>'; }
 
   //  בניית הנגן ב-DOM ולא בהצבת HTML: הכתובת החתומה היא נתון חיצוני,
   //  ו-src שנקבע כתכונה אמיתית אינו יכול להימלט להקשר של תגית.
@@ -1122,8 +1144,9 @@
     return '<div style="display:flex;align-items:flex-end;gap:3px;height:120px;direction:ltr">' +
       items.map(function (i) {
         var h = Math.round(i[1] / max * 100);
-        return '<div style="flex:1;min-width:0;display:flex;flex-direction:column;justify-content:flex-end;height:100%" title="' +
-          esc(i[0] + ': ' + (fmt ? fmt(i[1]) : i[1])) + '">' +
+        return '<div class="cl-bar" ' + (i[1] ? 'data-go=\'{"hour":"' + (+i[0]) + '"}\' style="cursor:pointer;" ' : 'style="') +
+          'flex:1;min-width:0;display:flex;flex-direction:column;justify-content:flex-end;height:100%" title="' +
+          esc(i[0] + ':00 · ' + (fmt ? fmt(i[1]) : i[1]) + (i[1] ? ' — לחצו לרשימה' : '')) + '">' +
           '<div style="font-size:9.5px;color:var(--muted);text-align:center">' + (i[1] || '') + '</div>' +
           '<div style="background:var(--brand);border-radius:3px 3px 0 0;height:' + Math.max(i[1] ? 3 : 0, h) + '%"></div></div>';
       }).join('') + '</div>' +
@@ -1192,12 +1215,15 @@
     });
     var deptRows = Object.keys(byDept).sort(function (a, b) { return byDept[b].n - byDept[a].n; }).map(function (d) {
       var o = byDept[d];
-      return '<tr><td><b>' + esc(d) + '</b></td><td>' + o.n + '</td><td>' + o.ans + '</td>' +
+      var A = function (extra, txt) { return clickable('data-go=\'{"dept":"' + esc(d) + '"' + extra + '}\'', txt); };
+      return '<tr><td><b>' + A('', esc(d)) + '</b></td>' +
+        '<td>' + A('', o.n) + '</td>' +
+        '<td>' + (o.ans ? A(',"ans":"y"', o.ans) : '0') + '</td>' +
         '<td>' + pct(o.ans, o.n) + '%</td><td>' + hms(o.talk) + '</td></tr>';
     }).join('');
 
     var recent = all.slice(0, 10).map(function (c) {
-      return '<tr><td class="muted">' + esc(fmtDateTime(c.started_at)) + '</td>' +
+      return '<tr data-callinfo="' + esc(c.id) + '" style="cursor:pointer" title="לחצו לפרטי השיחה"><td class="muted">' + esc(fmtDateTime(c.started_at)) + '</td>' +
         '<td><span class="cl-dir ' + (c.direction === 'out' ? 'cl-out">↗' : 'cl-in">↙') + '</span></td>' +
         '<td class="ltr">' + esc(callPhone(c) || '—') + '</td>' +
         '<td>' + esc(c.agent_name || '—') + '</td>' +
@@ -1207,12 +1233,12 @@
 
     view('<div class="card">' + head +
       '<div class="cards" style="margin-bottom:16px">' +
-        stat('שיחות היום', todayN) +
-        stat('סה"כ בטווח', all.length) +
-        stat('שיעור מענה', pct(ans.length, all.length) + '%') +
-        stat('משך שיחה ממוצע', ans.length ? mmss(talk / ans.length) : '—') +
-        stat('זמן שיחה מצטבר', hms(talk)) +
-        stat('לא נענו', all.length - ans.length) +
+        stat('שיחות היום', todayN, null, 'today') +
+        stat('סה"כ בטווח', all.length, null, 'all') +
+        stat('שיעור מענה', pct(ans.length, all.length) + '%', null, 'ansOnly') +
+        stat('משך שיחה ממוצע', ans.length ? mmss(talk / ans.length) : '—', null, 'ansOnly') +
+        stat('זמן שיחה מצטבר', hms(talk), null, 'ansOnly') +
+        stat('לא נענו', all.length - ans.length, null, 'noAns') +
       '</div>' +
       '<div class="grid2" style="gap:14px">' +
         '<div class="card" style="box-shadow:none;border:1px solid var(--line)"><h3 style="margin:0 0 10px;font-size:14px">🕐 שיחות לפי שעה</h3>' +
@@ -1244,9 +1270,12 @@
       var o = by[k];
       var dept = Object.keys(o.depts).sort(function (a, b) { return o.depts[b] - o.depts[a]; })[0] || '—';
       var rate = pct(o.ans, o.n);
-      return '<tr><td><b>' + esc(k) + '</b></td>' +
-        '<td>' + o.n + '</td><td>' + o.out + '</td><td>' + o.inn + '</td>' +
-        '<td>' + o.ans + '</td>' +
+      var A = function (extra, txt) { return clickable('data-go=\'{"agent":"' + esc(k) + '"' + extra + '}\'', txt); };
+      return '<tr><td><b>' + A('', esc(k)) + '</b></td>' +
+        '<td>' + A('', o.n) + '</td>' +
+        '<td>' + (o.out ? A(',"dir":"out"', o.out) : '0') + '</td>' +
+        '<td>' + (o.inn ? A(',"dir":"in"', o.inn) : '0') + '</td>' +
+        '<td>' + (o.ans ? A(',"ans":"y"', o.ans) : '0') + '</td>' +
         '<td><span style="color:' + (rate >= 70 ? 'var(--ok)' : rate >= 40 ? 'var(--warn)' : 'var(--danger)') + ';font-weight:700">' + rate + '%</span></td>' +
         '<td>' + (o.ans ? esc(mmss(o.talk / o.ans)) : '—') + '</td>' +
         '<td>' + esc(hms(o.talk)) + '</td>' +
@@ -1288,10 +1317,12 @@
 
     var rows = open.map(function (m) {
       var hrs = Math.round((Date.now() - new Date(m.last)) / 36e5);
-      return '<tr><td class="ltr"><a class="call-ic" data-call="' + esc(m.phone) + '">' + esc(m.phone) + '</a></td>' +
+      return '<tr><td class="ltr"><a class="call-ic" data-call="' + esc(m.phone) + '">' + esc(m.phone) + '</a>' +
+        ' ' + clickable('data-go=\'{"phone":"' + esc(m.phone) + '"}\' title="כל השיחות מול המספר"', '↗') + '</td>' +
         '<td>' + (m.lead ? '<a href="#" data-golead="' + esc(m.lead.id) + '"><b>' + esc(m.lead.name) + '</b></a>'
                         : '<span class="muted">לא מזוהה כליד</span>') + '</td>' +
-        '<td><b style="color:' + (m.n > 1 ? 'var(--danger)' : 'inherit') + '">' + m.n + '</b></td>' +
+        '<td>' + clickable('data-go=\'{"phone":"' + esc(m.phone) + '","ans":"n"}\'',
+          '<b style="color:' + (m.n > 1 ? 'var(--danger)' : 'inherit') + '">' + m.n + '</b>') + '</td>' +
         '<td class="muted">' + esc(fmtDateTime(m.last)) + '</td>' +
         '<td><span style="color:' + (hrs >= 24 ? 'var(--danger)' : hrs >= 4 ? 'var(--warn)' : 'var(--muted)') + ';font-weight:700">' +
           (hrs < 1 ? 'פחות משעה' : hrs < 24 ? hrs + ' שעות' : Math.floor(hrs / 24) + ' ימים') + '</span></td>' +
@@ -1327,10 +1358,10 @@
     };
     view('<div class="card">' + head +
       '<div class="cards" style="margin-bottom:16px">' +
-        stat('שיחות עם הקלטה', withRec) +
-        stat('הקלטות אצלנו', local) +
-        stat('תמלולים', withTr) +
-        stat('ניתוחי AI', all.filter(function (c) { return !!c.ai_data; }).length) +
+        stat('שיחות עם הקלטה', withRec, null, 'rec') +
+        stat('הקלטות אצלנו', local, null, 'all') +
+        stat('תמלולים', withTr, null, 'all') +
+        stat('ניתוחי AI', all.filter(function (c) { return !!c.ai_data; }).length, null, 'all') +
       '</div>' +
       '<h3 style="margin:0 0 4px;font-size:14px">מה חסר כדי להפעיל ניתוח שיחות</h3>' +
       '<p class="muted" style="font-size:12.5px;margin:0 0 8px;line-height:1.7">' +
@@ -1360,6 +1391,15 @@
       if (callFilter.dir && c.direction !== callFilter.dir) return false;
       if (callFilter.ans === 'y' && c.answered !== true) return false;
       if (callFilter.ans === 'n' && c.answered !== false) return false;
+      if (callFilter.agent && (c.agent_name || 'ללא נציג') !== callFilter.agent) return false;
+      if (callFilter.phone && last9(callPhone(c)) !== last9(callFilter.phone)) return false;
+      if (callFilter.rec === 'y' && !c.recording_url) return false;
+      if (callFilter.rec === 'n' && c.recording_url) return false;
+      if (callFilter.hour !== '' && c.started_at && new Date(c.started_at).getHours() !== +callFilter.hour) return false;
+      if (callFilter.today) {
+        var t0 = new Date(); t0.setHours(0, 0, 0, 0);
+        if (new Date(c.started_at) < t0) return false;
+      }
       if (callFilter.q) {
         var q = callFilter.q.toLowerCase();
         var hay = [c.from_number, c.to_number, c.did, c.agent_name, c.department,
@@ -1377,6 +1417,18 @@
     view('<div class="card">' + head +
       '<div class="row-between" style="margin-bottom:8px"><span class="muted" style="font-size:12.5px">' +
         list.length + ' מתוך ' + all.length + '</span>' + callCols.button() + '</div>' +
+      //  מה שסינן את הרשימה מוצג במפורש. בלי זה לחיצה על מספר בסקירה
+      //  הייתה מובילה לרשימה קצרה בלי שום רמז למה.
+      (Object.keys(callFilter).some(function (k) { return callFilter[k] !== ''; })
+        ? '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:10px">' +
+          '<span class="muted" style="font-size:12px">מסונן לפי:</span>' +
+          Object.keys(callFilter).filter(function (k) { return callFilter[k] !== ''; }).map(function (k) {
+            return '<span class="tag" style="background:var(--brand-soft);color:var(--brand);font-weight:700">' +
+              esc(CF_LABELS[k]) + ': ' + esc(cfText(k, callFilter[k])) +
+              ' <a href="#" data-cfdel="' + k + '" style="color:inherit;text-decoration:none">✕</a></span>';
+          }).join('') +
+          '<a href="#" id="cfClearAll" style="font-size:12px">נקה הכל</a></div>'
+        : '') +
       '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">' +
         '<input class="inp" id="clQ" placeholder="🔎 מספר, נציג, מחלקה, שם לקוח או תוכן תמלול…" value="' + esc(callFilter.q) + '" style="flex:1;min-width:240px">' +
         '<select class="inp" id="clDept" style="width:190px"><option value="">כל המחלקות</option>' + dOpts + '</select>' +
@@ -1405,6 +1457,36 @@
 
   //  חיווט משותף לכל תתי-התצוגות
   function wireCalls(all) {
+    //  מאזין אחד על המכל: כל אלמנט עם data-go מוביל לרשימה המסוננת,
+    //  בלי לחווט כל שורה בנפרד ובלי לדלוף מאזינים בכל ציור מחדש.
+    var host = $('view');
+    host.addEventListener('click', function (e2) {
+      var g = e2.target.closest('[data-go]');
+      if (g) {
+        e2.preventDefault();
+        var patch = {};
+        try { patch = JSON.parse(g.dataset.go); } catch (x) {}
+        return goList(patch);
+      }
+      var kpi = e2.target.closest('.kpi[data-kpi]');
+      if (kpi) {
+        var k = kpi.dataset.kpi;
+        if (k === 'today') return goList({ today: '1' });
+        if (k === 'ansOnly') return goList({ ans: 'y' });
+        if (k === 'noAns') return goList({ ans: 'n' });
+        if (k === 'rec') return goList({ rec: 'y' });
+        return goList({});
+      }
+      var row = e2.target.closest('tr[data-callinfo]');
+      if (row && !e2.target.closest('a,button')) {
+        var c = all.filter(function (x) { return x.id === row.dataset.callinfo; })[0];
+        if (c) callDetail(c);
+      }
+    });
+    if ($('cfClearAll')) $('cfClearAll').addEventListener('click', function (e2) { e2.preventDefault(); cfClear(); renderCalls('list'); });
+    host.querySelectorAll('[data-cfdel]').forEach(function (x) {
+      x.addEventListener('click', function (e2) { e2.preventDefault(); e2.stopPropagation(); callFilter[x.dataset.cfdel] = ''; renderCalls('list'); });
+    });
     $('view').querySelectorAll('[data-golead]').forEach(function (aEl) {
       aEl.addEventListener('click', function (e) { e.preventDefault(); window.C2B_openLeadCard(aEl.dataset.golead); });
     });
