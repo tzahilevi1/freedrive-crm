@@ -386,7 +386,7 @@
   // plus whatever the admin granted (profiles.views). These are the defaults.
   var DEFAULT_VIEWS = {
     // מנהל מערכת רואה הכל — בלי זה C2B.views של אדמין מחושב כ-['dashboard'] בלבד
-    admin: ['dashboard','leads','files','accounting','cars','appointments','tasks','analytics',
+    admin: ['dashboard','leads','files','accounting','calls','cars','appointments','tasks','analytics',
             'reports','agents','ai','quotes','documents','whatsapp','heyy','emails','sms','automations','users','branches','trash','audit','ctemplates','settings'],
     // סוכן מכירות: כל התפעול שלו — בלי כספים, בלי דוחות/אנליטיקס, בלי ערוצי הודעות
     sales: ['dashboard', 'leads', 'files', 'cars', 'appointments', 'tasks', 'ai', 'quotes', 'documents', 'heyy'],
@@ -395,13 +395,13 @@
     // מנהלת חשבונות: דשבורד, הנהלת חשבונות, רכבים, יומן, משימות, דוחות, עוזר AI, הצעות מחיר, מסמכים והסכמים
     accounting: ['dashboard', 'accounting', 'cars', 'appointments', 'tasks', 'reports', 'ai', 'quotes', 'documents', 'heyy'],
     // מנהל סניף: רואה הכל, למעט מסכי הניהול של המערכת (משתמשים, הגדרות, אוטומציות)
-    branch: ['dashboard', 'leads', 'files', 'accounting', 'cars', 'appointments', 'tasks', 'analytics',
+    branch: ['dashboard', 'leads', 'files', 'accounting', 'calls', 'cars', 'appointments', 'tasks', 'analytics',
              'reports', 'agents', 'ai', 'quotes', 'documents', 'whatsapp', 'heyy', 'emails', 'sms', 'users', 'audit']
   };
   // screens the admin can grant when creating a user (label + key)
   var GRANTABLE_VIEWS = [
     ['dashboard', 'דשבורד'], ['leads', 'לידים'], ['files', 'תיקי לקוחות'], ['accounting', 'הנהלת חשבונות'],
-    ['cars', 'רכבים'], ['appointments', 'יומן פגישות'], ['tasks', 'משימות'], ['analytics', 'אנליטיקס'], ['reports', 'דוחות'],
+    ['calls', 'שיחות'], ['cars', 'רכבים'], ['appointments', 'יומן פגישות'], ['tasks', 'משימות'], ['analytics', 'אנליטיקס'], ['reports', 'דוחות'],
     ['ai', 'עוזר AI'], ['quotes', 'הצעות מחיר'], ['documents', 'מסמכים והסכמים'], ['whatsapp', 'WhatsApp'], ['heyy', 'Hey · WhatsApp'], ['emails', 'מיילים'], ['sms', 'SMS'],
     ['audit', 'יומן פעולות']
   ];
@@ -522,6 +522,7 @@
     if (nav === 'files') return window.C2B_renderFiles && window.C2B_renderFiles();
     if (nav === 'accounting') return window.C2B_renderAccounting && window.C2B_renderAccounting();
     if (nav === 'activity') return window.C2B_renderActivity && window.C2B_renderActivity();
+    if (nav === 'calls') return renderCalls();
     if (nav === 'cars') return renderCars();
     if (nav === 'appointments') return renderAppointments();
     if (nav === 'tasks') return renderTasks();
@@ -969,6 +970,219 @@
       bind: function () { var b = document.querySelector('[data-colpick="' + viewKey + '"]'); if (b) b.addEventListener('click', function (e) { e.stopPropagation(); openPanel(b); }); initResize(); }
     };
   };
+
+  // ---------- CALLS (שיחות טלפון מ-Voicenter) ----------
+  //  ה-CDR מגיע ברמת הארגון כולו, והארגון מכיל כמה מותגים. לכן המסך
+  //  נפתח על הכל ומאפשר לסנן לפי מחלקה — עדיף להציג הכל ולתת לסנן,
+  //  מאשר להחליט מראש מה "שייך לנו" ולהסתיר נתון שיתברר כרלוונטי.
+  var CALL_COLS = [
+    { key: 'when', label: 'מועד', w: 150, fixed: true,
+      sort: function (c) { return c.started_at || c.created_at || ''; },
+      cell: function (c) { return '<td class="muted">' + esc(c.started_at ? fmtDateTime(c.started_at) : '—') + '</td>'; } },
+    { key: 'dir', label: 'כיוון', w: 90,
+      sort: function (c) { return c.direction || ''; },
+      cell: function (c) {
+        var d = c.direction === 'out' ? ['cl-out', '↗ יוצאת'] : c.direction === 'in' ? ['cl-in', '↙ נכנסת'] : ['', '—'];
+        return '<td><span class="cl-dir ' + d[0] + '">' + d[1] + '</span></td>';
+      } },
+    { key: 'customer', label: 'מספר הלקוח', w: 150,
+      sort: function (c) { return callPhone(c) || ''; },
+      cell: function (c) {
+        var p = callPhone(c);
+        return '<td class="ltr">' + (p ? '<a class="call-ic" data-call="' + esc(p) + '">' + esc(p) + '</a>' : '—') + '</td>';
+      } },
+    { key: 'lead', label: 'ליד מקושר', w: 170,
+      sort: function (c) { return c._lead ? c._lead.name || '' : ''; },
+      cell: function (c) {
+        return '<td>' + (c._lead
+          ? '<a href="#" data-golead="' + esc(c.lead_id) + '"><b>' + esc(c._lead.name || 'ליד') + '</b></a>'
+          : '<span class="muted">—</span>') + '</td>';
+      } },
+    { key: 'agent', label: 'נציג', w: 130,
+      sort: function (c) { return c.agent_name || ''; },
+      cell: function (c) { return '<td>' + esc(c.agent_name || '—') + (c.agent_ext ? ' <span class="muted" style="font-size:11px">' + esc(c.agent_ext) + '</span>' : '') + '</td>'; } },
+    { key: 'dept', label: 'מחלקה / מותג', w: 150,
+      sort: function (c) { return c.department || ''; },
+      cell: function (c) { return '<td>' + (c.department ? '<span class="tag">' + esc(c.department) + '</span>' : '—') + '</td>'; } },
+    { key: 'answered', label: 'נענתה', w: 100,
+      sort: function (c) { return c.answered ? 1 : 0; },
+      cell: function (c) {
+        return '<td>' + (c.answered === true ? '<span class="cl-yes">✓ נענתה</span>'
+          : c.answered === false ? '<span class="cl-no">✗ לא נענתה</span>' : '<span class="muted">—</span>') + '</td>';
+      } },
+    { key: 'talk', label: 'זמן שיחה', w: 110,
+      sort: function (c) { return c.talk_sec || 0; },
+      cell: function (c) { return '<td>' + (c.talk_sec ? esc(mmss(c.talk_sec)) : '<span class="muted">—</span>') + '</td>'; } },
+    { key: 'rec', label: 'הקלטה', w: 230, sortable: false,
+      cell: function (c) {
+        return '<td>' + (c.recording_url
+          ? '<audio class="cl-play" controls preload="none" src="' + esc(c.recording_url) + '"></audio>'
+          : '<span class="muted">—</span>') + '</td>';
+      } },
+    { key: 'ai', label: 'תמלול', w: 90, def: false, sortable: false,
+      cell: function (c) { return '<td>' + (c.transcript || c.ai_data ? '<span class="cl-yes">✓</span>' : '<span class="muted">—</span>') + '</td>'; } },
+    { key: 'status', label: 'סטטוס', w: 110, def: false,
+      sort: function (c) { return c.status || ''; },
+      cell: function (c) { return '<td class="muted ltr">' + esc(c.status || '—') + '</td>'; } },
+    { key: 'did', label: 'מספר הארגון', w: 140, def: false,
+      sort: function (c) { return c.did || ''; },
+      cell: function (c) { return '<td class="muted ltr">' + esc(c.did || '—') + '</td>'; } },
+    { key: 'ring', label: 'זמן צלצול', w: 110, def: false,
+      sort: function (c) { return c.ring_sec || 0; },
+      cell: function (c) { return '<td class="muted">' + (c.ring_sec != null ? c.ring_sec + ' ש\'' : '—') + '</td>'; } },
+    { key: 'total', label: 'משך כולל', w: 110, def: false,
+      sort: function (c) { return c.duration_sec || 0; },
+      cell: function (c) { return '<td class="muted">' + (c.duration_sec ? esc(mmss(c.duration_sec)) : '—') + '</td>'; } },
+    { key: 'company', label: 'חברה', w: 170, def: false,
+      sort: function (c) { return c.top_department || ''; },
+      cell: function (c) { return '<td class="muted">' + esc(c.top_department || '—') + '</td>'; } },
+    { key: 'from', label: 'מאת', w: 140, def: false,
+      cell: function (c) { return '<td class="muted ltr">' + esc(c.from_number || '—') + '</td>'; } },
+    { key: 'to', label: 'אל', w: 140, def: false,
+      cell: function (c) { return '<td class="muted ltr">' + esc(c.to_number || '—') + '</td>'; } },
+    { key: 'open', label: '', w: 90, sortable: false,
+      cell: function (c) { return '<td><button class="btn btn-ghost btn-sm" data-callinfo="' + esc(c.id) + '">פרטים</button></td>'; } }
+  ];
+  var callCols = null, callFilter = { dept: '', dir: '', ans: '', q: '' };
+
+  function mmss(s) {
+    s = Math.max(0, Math.round(+s || 0));
+    var m = Math.floor(s / 60), r = s % 60;
+    return m + ':' + (r < 10 ? '0' : '') + r;
+  }
+  //  בשיחה נכנסת הלקוח הוא המתקשר; ביוצאת הוא היעד
+  function callPhone(c) { return c.direction === 'out' ? c.to_number : c.from_number; }
+
+  function renderCalls() {
+    loading();
+    Promise.all([
+      db.from('calls').select('*').order('started_at', { ascending: false, nullsFirst: false }).limit(3000),
+      db.from('leads').select('id,name,phone,status').is('deleted_at', null).limit(5000)
+    ]).then(function (res) {
+      if (res[0].error) return errBox(res[0].error.message);
+      var all = res[0].data || [], leads = res[1].data || [], lmap = {};
+      leads.forEach(function (l) { lmap[l.id] = l; });
+      all.forEach(function (c) { c._lead = c.lead_id ? lmap[c.lead_id] : null; });
+
+      var depts = {};
+      all.forEach(function (c) { if (c.department) depts[c.department] = (depts[c.department] || 0) + 1; });
+
+      var list = all.filter(function (c) {
+        if (callFilter.dept && c.department !== callFilter.dept) return false;
+        if (callFilter.dir && c.direction !== callFilter.dir) return false;
+        if (callFilter.ans === 'y' && c.answered !== true) return false;
+        if (callFilter.ans === 'n' && c.answered !== false) return false;
+        if (callFilter.q) {
+          var q = callFilter.q.toLowerCase();
+          var hay = [c.from_number, c.to_number, c.did, c.agent_name, c.department,
+                     c._lead && c._lead.name, c.transcript].filter(Boolean).join(' ').toLowerCase();
+          if (hay.indexOf(q) < 0) return false;
+        }
+        return true;
+      });
+
+      var answered = list.filter(function (c) { return c.answered === true; });
+      var talk = answered.reduce(function (a, c) { return a + (+c.talk_sec || 0); }, 0);
+      var kpi = '<div class="cards" style="margin-bottom:14px">' +
+        stat('סה"כ שיחות', list.length) +
+        stat('נענו', answered.length + (list.length ? ' · ' + Math.round(answered.length / list.length * 100) + '%' : '')) +
+        stat('זמן שיחה מצטבר', mmss(talk)) +
+        stat('עם הקלטה', list.filter(function (c) { return !!c.recording_url; }).length) +
+        stat('משויכות לליד', list.filter(function (c) { return !!c.lead_id; }).length) +
+        '</div>';
+
+      if (!callCols) callCols = window.C2B.colPicker('calls', CALL_COLS, renderCalls, { sortable: true });
+      var rows = callCols.sortRows(list).map(function (c) {
+        return '<tr>' + callCols.cells(c) + '</tr>';
+      }).join('');
+
+      var dOpts = Object.keys(depts).sort(function (a, b) { return depts[b] - depts[a]; })
+        .map(function (d) { return '<option value="' + esc(d) + '"' + (callFilter.dept === d ? ' selected' : '') + '>' + esc(d) + ' (' + depts[d] + ')</option>'; }).join('');
+
+      view('<div class="card"><div class="row-between" style="flex-wrap:wrap;gap:10px">' +
+          '<h3 style="margin:0">📞 שיחות טלפון <span class="muted" style="font-size:12px;font-weight:400">· ' + all.length + ' שיחות · מתעדכן אוטומטית מ-Voicenter</span></h3>' +
+          '<div style="display:flex;gap:6px;flex-wrap:wrap">' + callCols.button() + '</div></div>' +
+        '<div style="display:flex;gap:8px;flex-wrap:wrap;margin:12px 0">' +
+          '<input class="inp" id="clQ" placeholder="🔎 מספר, נציג, מחלקה, שם לקוח או תוכן תמלול…" value="' + esc(callFilter.q) + '" style="flex:1;min-width:240px">' +
+          '<select class="inp" id="clDept" style="width:190px"><option value="">כל המחלקות</option>' + dOpts + '</select>' +
+          '<select class="inp" id="clDir" style="width:130px"><option value="">כל הכיוונים</option>' +
+            '<option value="in"' + (callFilter.dir === 'in' ? ' selected' : '') + '>נכנסות</option>' +
+            '<option value="out"' + (callFilter.dir === 'out' ? ' selected' : '') + '>יוצאות</option></select>' +
+          '<select class="inp" id="clAns" style="width:140px"><option value="">נענו ולא נענו</option>' +
+            '<option value="y"' + (callFilter.ans === 'y' ? ' selected' : '') + '>נענו בלבד</option>' +
+            '<option value="n"' + (callFilter.ans === 'n' ? ' selected' : '') + '>לא נענו בלבד</option></select>' +
+        '</div>' + kpi +
+        '<div class="table-scroll"><table><thead><tr>' + callCols.thead() + '</tr></thead><tbody>' +
+          (rows || '<tr><td colspan="' + callCols.colCount() + '" class="empty">אין שיחות בסינון הזה</td></tr>') +
+        '</tbody></table></div></div>');
+
+      callCols.bind();
+      //  סינון מקומי בלבד: אין בקשה נוספת למסד ואין ציור מחדש של המסך
+      function reFilter() { renderCalls(); }
+      var qEl = $('clQ'), t = null;
+      qEl.addEventListener('input', function () {
+        clearTimeout(t);
+        t = setTimeout(function () { callFilter.q = qEl.value.trim(); reFilter(); }, 350);
+      });
+      ['clDept:dept', 'clDir:dir', 'clAns:ans'].forEach(function (pair) {
+        var p = pair.split(':');
+        $(p[0]).addEventListener('change', function () { callFilter[p[1]] = this.value; reFilter(); });
+      });
+      $('view').querySelectorAll('[data-golead]').forEach(function (aEl) {
+        aEl.addEventListener('click', function (e) { e.preventDefault(); window.C2B_openLeadCard(aEl.dataset.golead); });
+      });
+      $('view').querySelectorAll('[data-callinfo]').forEach(function (b) {
+        b.addEventListener('click', function () {
+          var c = all.filter(function (x) { return x.id === b.dataset.callinfo; })[0];
+          if (c) callDetail(c);
+        });
+      });
+    }).catch(function (e) { errBox(e.message || e); });
+  }
+
+  //  פרטי שיחה — כולל המטען המקורי. הוא מוצג בכוונה: מבנה ה-CDR של
+  //  הספק אינו מתועד, וכשמתברר ששדה כלשהו לא מופה נכון אפשר לראות כאן
+  //  את הערך האמיתי בלי לגשת למסד.
+  function callDetail(c) {
+    var rows = [
+      ['מועד', c.started_at ? fmtDateTime(c.started_at) : '—'],
+      ['כיוון', c.direction === 'out' ? 'יוצאת' : c.direction === 'in' ? 'נכנסת' : '—'],
+      ['מאת', c.from_number || '—'], ['אל', c.to_number || '—'],
+      ['מספר הארגון', c.did || '—'],
+      ['נענתה', c.answered === true ? 'כן' : c.answered === false ? 'לא' : '—'],
+      ['סטטוס אצל הספק', c.status || '—'],
+      ['זמן צלצול', c.ring_sec != null ? c.ring_sec + ' שניות' : '—'],
+      ['זמן שיחה', c.talk_sec ? mmss(c.talk_sec) : '—'],
+      ['משך כולל', c.duration_sec ? mmss(c.duration_sec) : '—'],
+      ['נציג', (c.agent_name || '—') + (c.agent_code ? ' · קוד ' + c.agent_code : '') + (c.agent_ext ? ' · שלוחה ' + c.agent_ext : '')],
+      ['מחלקה / מותג', c.department || '—'],
+      ['חברה', c.top_department || '—'],
+      ['ליד מקושר', c._lead ? c._lead.name : 'לא שויך'],
+      ['מזהה אצל הספק', c.external_id || '—']
+    ];
+    var html = '<div class="cl-kv">' + rows.map(function (r) {
+      return '<div class="k">' + esc(r[0]) + '</div><div class="v">' + esc(r[1]) + '</div>';
+    }).join('') + '</div>';
+
+    if (c.recording_url) {
+      html += '<h4 style="margin:16px 0 6px;font-size:13px">🎧 הקלטה</h4>' +
+        '<audio controls preload="none" style="width:100%" src="' + esc(c.recording_url) + '"></audio>' +
+        '<div style="margin-top:6px"><a class="btn btn-ghost btn-sm" href="' + esc(c.recording_url) + '" target="_blank" rel="noopener">↗ פתח בכרטיסייה</a></div>';
+    }
+    if (c.transcript) {
+      html += '<h4 style="margin:16px 0 6px;font-size:13px">📝 תמלול</h4><div class="cl-tr">' + esc(c.transcript) + '</div>';
+    }
+    if (c.ai_data) {
+      html += '<h4 style="margin:16px 0 6px;font-size:13px">🤖 ניתוח הספק</h4><div class="cl-tr">' +
+        esc(JSON.stringify(c.ai_data, null, 2)) + '</div>';
+    }
+    html += '<details style="margin-top:16px"><summary class="muted" style="font-size:12px;cursor:pointer">כל מה שהספק שלח (raw)</summary>' +
+      '<div class="cl-tr" style="margin-top:8px">' + esc(JSON.stringify(c.raw, null, 2)) + '</div></details>';
+
+    openDrawer('<div class="row-between" style="margin-bottom:12px"><h3 style="margin:0">📞 שיחה · ' +
+      esc(c.started_at ? fmtDateTime(c.started_at) : '') + '</h3>' +
+      '<button class="btn btn-ghost btn-sm" onclick="C2B.closeDrawer()">✕</button></div>' + html);
+  }
 
   // ---------- CARS (read-only from the Google Sheet → cars.json) ----------
   var SHEET_URL = 'https://docs.google.com/spreadsheets/d/1LiK--j3BCPnHO4rZQj7N2RetdnExEmwimWTwn7kmWe8/edit';

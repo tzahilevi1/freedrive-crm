@@ -117,6 +117,17 @@
   .stmenu .si:hover{background:var(--surface-2)}
   /* column chooser */
   .colpick-menu{position:fixed;background:var(--surface);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);z-index:2147483000;width:280px;padding:10px;max-height:72vh;overflow:auto}
+  .cl-dir{font-weight:800;font-size:11px;padding:2px 8px;border-radius:999px;white-space:nowrap}
+  .cl-in{background:rgba(14,165,233,.13);color:#0284c7}
+  .cl-out{background:rgba(22,163,74,.13);color:#16a34a}
+  .cl-no{color:var(--danger);font-weight:700}
+  .cl-yes{color:var(--ok);font-weight:700}
+  .cl-play{width:210px;height:32px;vertical-align:middle}
+  .cl-tr{background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;
+         white-space:pre-wrap;line-height:1.7;font-size:13px;max-height:300px;overflow:auto}
+  .cl-kv{display:grid;grid-template-columns:170px 1fr;gap:4px 12px;font-size:12.5px}
+  .cl-kv .k{color:var(--muted)}
+  .cl-kv .v{word-break:break-word;font-variant-numeric:tabular-nums}
   .ai-wrap{display:grid;grid-template-columns:236px 1fr;gap:14px;align-items:start}
   @media(max-width:820px){.ai-wrap{grid-template-columns:1fr}}
   .ai-side{border:1px solid var(--line);border-radius:12px;padding:10px;background:var(--surface);max-height:520px;overflow:auto}
@@ -530,6 +541,7 @@
       <div class="nav-item" data-nav="files"><span class="ic">📁</span> תיקי לקוחות</div>
       <div class="nav-item" data-nav="accounting"><span class="ic">🧾</span> הנהלת חשבונות</div>
       <div class="nav-item" data-nav="heyy"><span class="ic">🟢</span> Hey · WhatsApp <span class="badge" id="bHeyy">0</span></div>
+      <div class="nav-item" data-nav="calls"><span class="ic">📞</span> שיחות</div>
       <div class="nav-item" data-nav="cars"><span class="ic">🚗</span> רכבים</div>
       <div class="nav-item" data-nav="appointments"><span class="ic">📅</span> יומן פגישות</div>
       <div class="nav-item" data-nav="tasks"><span class="ic">✅</span> משימות <span class="badge" id="bTasks">0</span></div>
@@ -570,8 +582,8 @@
 <div id="drawer"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js" integrity="sha384-0w2KAL2YHP6wKOkUDzkCDGgVvfmHnj02DHeQ6XcHOgTfFsGyonKOpShMH1x6nk9o" crossorigin="anonymous"></script>
-<script src="admin.js?v=202609140948"></script>
-<script src="admin-crm.js?v=202609140948"></script>
-<script src="admin-modules.js?v=202609140948"></script>
+<script src="admin.js?v=202609141443"></script>
+<script src="admin-crm.js?v=202609141443"></script>
+<script src="admin-modules.js?v=202609141443"></script>
 </body>
 </html>
