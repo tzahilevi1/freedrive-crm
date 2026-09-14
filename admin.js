@@ -4171,6 +4171,34 @@
     return AI_PERSONAS[r] || AI_PERSONAS.admin;
   }
 
+  //  ---------- היסטוריית השיחות עם העוזר ----------
+  //  עד היום כל תשובה דרסה את הקודמת ויציאה מהמסך מחקה הכל. עכשיו כל
+  //  הודעה נשמרת ב-ai_messages ומקובצת ל-thread, כך שאפשר לחזור לשיחה
+  //  מאתמול ולהמשיך אותה. RLS מגביל כל אחד לשיחות שלו בלבד.
+  var aiThread = null;
+  function aiUuid() {
+    try { return crypto.randomUUID(); } catch (e) {}
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+      var r = Math.random() * 16 | 0; return (c === 'x' ? r : (r & 3 | 8)).toString(16);
+    });
+  }
+  function aiBubble(m) {
+    return '<div class="ai-msg' + (m.role === 'user' ? ' me' : '') + '">' +
+      '<div class="ai-b">' + esc(m.body || '') + '</div>' +
+      '<div class="ai-t">' + esc(fmtDateTime(m.created_at)) + '</div></div>';
+  }
+  function aiTitle(msgs) {
+    for (var i = 0; i < msgs.length; i++) if (msgs[i].role === 'user') return String(msgs[i].body || '').slice(0, 44);
+    return 'שיחה';
+  }
+  function aiItem(id, msgs) {
+    return '<button class="ai-item' + (id === aiThread ? ' active' : '') + '" data-th="' + esc(id) + '">' +
+      '<span class="ai-del" data-delth="' + esc(id) + '" title="מחק שיחה">✕</span>' +
+      esc(aiTitle(msgs)) +
+      '<span class="d">' + esc(fmtDateTime(msgs[msgs.length - 1].created_at)) + ' · ' + msgs.length + ' הודעות</span></button>';
+  }
+  var AI_EMPTY = '<div class="ai-empty">עוד לא שאלת כאן כלום.<br>כל שאלה ותשובה יישמרו, ותוכל לחזור אליהן מהרשימה שבצד.</div>';
+
   function renderAI() {
     loading();
     var per = aiPersona(), role = (window.C2B && window.C2B.role) || 'admin';
@@ -4182,11 +4210,14 @@
       db.from('payments').select('amount,kind,created_at,deal_id'),
       db.from('tasks').select('done,due_at,title,lead_id'),
       db.from('appointments').select('status,appt_at'),
-      db.from('profiles').select('user_id,full_name')
+      db.from('profiles').select('user_id,full_name'),
+      //  ההיסטוריה שלי בלבד — RLS מסנן, ולכן אין צורך בתנאי כאן
+      db.from('ai_messages').select('*').order('created_at', { ascending: true }).limit(600)
     ]).then(function (res) {
       if (res[0].error) return errBox(res[0].error.message);
       var leads = res[0].data || [], deals = res[1].data || [], pays = res[2].data || [],
           tasks = res[3].data || [], appts = res[4].data || [], profs = res[5].data || [];
+      var hist = (res[6] && res[6].data) || [];
       var pmap = {}; profs.forEach(function (p) { pmap[p.user_id] = p.full_name; });
       var ST = window.C2B_STATUSES || [];
       var stLabel = function (k) { for (var i = 0; i < ST.length; i++) if (ST[i].k === k) return ST[i].label; return k || '—'; };
@@ -4289,24 +4320,91 @@
           '- פגישות: ' + appts.length + ' · משימות פתוחות: ' + tasks.filter(function (t) { return !t.done; }).length + '.';
       }
 
-      view('<div class="card"><h3>' + per.title + '</h3>' +
-        '<p class="muted" style="font-size:13px;margin:0 0 12px">' + esc(per.lead) + '</p>' +
-        '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">' +
-          per.qs.map(function (q) { return '<button class="btn btn-ghost btn-sm" data-sug="' + esc(q) + '">' + esc(q) + '</button>'; }).join('') + '</div>' +
-        '<textarea class="inp" id="aiQ" rows="3" style="width:100%" placeholder="כתוב כאן שאלה…"></textarea>' +
-        '<div style="margin-top:10px"><button class="btn" id="aiAsk">שאל את ה-AI</button> <span class="muted" id="aiState" style="font-size:13px;margin-inline-start:10px"></span></div>' +
-        '<div id="aiAns" style="margin-top:16px"></div>' +
+      //  מקבצים את ההודעות לשיחות. הסדר נשמר לפי זמן, כך ששיחה
+      //  שנגעת בה לאחרונה יושבת בראש הרשימה.
+      var thr = {}, ord = [];
+      hist.forEach(function (m) {
+        if (!thr[m.thread_id]) { thr[m.thread_id] = []; ord.push(m.thread_id); }
+        thr[m.thread_id].push(m);
+      });
+      ord.reverse();
+      //  נפתחת השיחה האחרונה — ממשיכים מאיפה שהפסקת, בלי לחפש
+      if (!aiThread || !thr[aiThread]) aiThread = ord.length ? ord[0] : aiUuid();
+      var cur = thr[aiThread] || [];
+
+      view('<div class="card"><div class="row-between"><h3 style="margin:0">' + per.title + '</h3>' +
+          '<button class="btn btn-ghost btn-sm" id="aiNew">➕ שיחה חדשה</button></div>' +
+        '<p class="muted" style="font-size:13px;margin:4px 0 12px">' + esc(per.lead) + '</p>' +
+        '<div class="ai-wrap">' +
+          '<aside class="ai-side"><h4>השיחות שלי</h4><div id="aiList">' +
+            (ord.length ? ord.map(function (id) { return aiItem(id, thr[id]); }).join('')
+                        : '<div class="muted" style="font-size:12px;padding:6px 4px">אין עדיין שיחות</div>') +
+          '</div></aside>' +
+          '<div>' +
+            '<div class="ai-chat" id="aiChat">' + (cur.length ? cur.map(aiBubble).join('') : AI_EMPTY) + '</div>' +
+            '<div style="display:flex;gap:8px;flex-wrap:wrap;margin:12px 0 8px">' +
+              per.qs.map(function (q) { return '<button class="btn btn-ghost btn-sm" data-sug="' + esc(q) + '">' + esc(q) + '</button>'; }).join('') + '</div>' +
+            '<textarea class="inp" id="aiQ" rows="3" style="width:100%" placeholder="כתוב כאן שאלה…"></textarea>' +
+            '<div style="margin-top:10px"><button class="btn" id="aiAsk">שאל את ה-AI</button>' +
+            '<span class="muted" id="aiState" style="font-size:13px;margin-inline-start:10px"></span></div>' +
+          '</div>' +
+        '</div>' +
         '<details style="margin-top:16px"><summary class="muted" style="font-size:12px;cursor:pointer">הנתונים שנשלחים למודל</summary>' +
         '<pre style="white-space:pre-wrap;font-size:11.5px;background:var(--surface-2);padding:12px;border-radius:8px;margin-top:8px">' + esc(ctx) + '</pre></details></div>');
+
+      var chatEl = $('aiChat'); chatEl.scrollTop = chatEl.scrollHeight;
       $('view').querySelectorAll('[data-sug]').forEach(function (b) {
         b.addEventListener('click', function () { $('aiQ').value = b.dataset.sug; $('aiAsk').click(); }); });
-      $('aiAsk').addEventListener('click', function () { askAI(ctx, per.system); });
+      $('aiAsk').addEventListener('click', function () { askAI(ctx, per.system, per.title); });
+      //  Ctrl+Enter שולח — הידיים כבר על המקלדת
+      $('aiQ').addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); $('aiAsk').click(); } });
+      $('aiNew').addEventListener('click', function () {
+        aiThread = aiUuid();
+        chatEl.innerHTML = AI_EMPTY;
+        $('aiList').querySelectorAll('.ai-item').forEach(function (x) { x.classList.remove('active'); });
+        $('aiQ').focus();
+      });
+      //  מאזין אחד על הרשימה: פתיחת שיחה ומחיקתה
+      $('aiList').addEventListener('click', function (e) {
+        var del = e.target.closest('[data-delth]');
+        if (del) {
+          e.stopPropagation();
+          if (!confirm('למחוק את השיחה הזאת? הפעולה אינה הפיכה.')) return;
+          var id = del.dataset.delth;
+          db.from('ai_messages').delete().eq('thread_id', id).then(function (r) {
+            if (r.error) { alert('שגיאה במחיקה: ' + r.error.message); return; }
+            var btn = $('aiList').querySelector('[data-th="' + id + '"]');
+            if (btn) btn.remove();
+            if (id === aiThread) { aiThread = aiUuid(); chatEl.innerHTML = AI_EMPTY; }
+          });
+          return;
+        }
+        var it = e.target.closest('[data-th]'); if (!it) return;
+        aiThread = it.dataset.th;
+        $('aiList').querySelectorAll('.ai-item').forEach(function (x) { x.classList.toggle('active', x === it); });
+        chatEl.innerHTML = (thr[aiThread] || []).map(aiBubble).join('') || AI_EMPTY;
+        chatEl.scrollTop = chatEl.scrollHeight;
+      });
     }).catch(function (e) { errBox(e.message || e); });
   }
-  function askAI(ctx, sysPrompt) {
-    var q = ($('aiQ').value || '').trim(); if (!q) return;
-    var state = $('aiState'), ans = $('aiAns'), btn = $('aiAsk');
-    state.style.color = 'var(--muted)'; state.textContent = 'חושב… (עד ~30 שניות)'; ans.innerHTML = ''; btn.disabled = true;
+  function askAI(ctx, sysPrompt, persona) {
+    var qEl = $('aiQ'), q = (qEl.value || '').trim(); if (!q) return;
+    var state = $('aiState'), chat = $('aiChat'), btn = $('aiAsk');
+    //  השאלה מופיעה מיד ונשמרת ברקע. אין סיבה להמתין למסד כדי לראות
+    //  את מה שכתבת, וגם אם השמירה תיכשל השיחה עצמה תמשיך לעבוד.
+    if (chat.querySelector('.ai-empty')) chat.innerHTML = '';
+    chat.insertAdjacentHTML('beforeend', aiBubble({ role: 'user', body: q, created_at: new Date().toISOString() }));
+    chat.scrollTop = chat.scrollHeight;
+    qEl.value = '';
+    var firstInThread = !document.querySelector('#aiList [data-th="' + aiThread + '"]');
+    state.style.color = 'var(--muted)'; state.textContent = 'חושב… (עד ~30 שניות)'; btn.disabled = true;
+    var save = function (role, body) {
+      return db.from('ai_messages')
+        .insert({ thread_id: aiThread, role: role, body: body, persona: persona || null })
+        .then(function (r) { if (r.error) console.warn('[ai history]', r.error.message); }, function () {});
+    };
+    save('user', q);
     db.functions.invoke('ai-assistant', {
       body: { prompt: ctx + '\n\nהשאלה: ' + q, system: sysPrompt ? (AI_BASE + ' ' + sysPrompt) : undefined }
     }).then(function (r) {
@@ -4315,11 +4413,29 @@
       if (r.error || d.error) {
         state.style.color = 'var(--danger)';
         var msg = (d && d.error) || (r.error && r.error.message) || 'שגיאה';
-        state.textContent = /unauthorized/i.test(msg) ? 'נדרשת התחברות מחדש.' : /ANTHROPIC_API_KEY/.test(msg) ? 'חסר מפתח Claude — יש להגדיר את הפונקציה (ראה הנחיות).' : 'שגיאה: ' + msg;
+        state.textContent = /unauthorized/i.test(msg) ? 'נדרשת התחברות מחדש.'
+          : /ANTHROPIC_API_KEY/.test(msg) ? 'חסר מפתח Claude — יש להגדיר את הפונקציה (ראו README).'
+          : 'שגיאה: ' + msg;
         return;
       }
-      ans.innerHTML = '<div class="card" style="box-shadow:none;border:1px solid var(--line);background:var(--surface-2)"><div style="white-space:pre-wrap;line-height:1.7">' + esc(d.text || 'לא התקבלה תשובה.') + '</div></div>';
-    }).catch(function (e) { btn.disabled = false; state.style.color = 'var(--danger)'; state.textContent = 'שגיאת רשת: ' + (e && e.message || e); });
+      var txt = d.text || 'לא התקבלה תשובה.';
+      chat.insertAdjacentHTML('beforeend', aiBubble({ role: 'assistant', body: txt, created_at: new Date().toISOString() }));
+      chat.scrollTop = chat.scrollHeight;
+      save('assistant', txt);
+      //  שיחה חדשה נכנסת לרשימה רק אחרי שיש בה תוכן, כדי שלא ייווצרו
+      //  שורות ריקות מכל לחיצה על "שיחה חדשה".
+      if (firstInThread && $('aiList')) {
+        var html = '<button class="ai-item active" data-th="' + esc(aiThread) + '">' +
+          '<span class="ai-del" data-delth="' + esc(aiThread) + '" title="מחק שיחה">✕</span>' +
+          esc(q.slice(0, 44)) + '<span class="d">' + esc(fmtDateTime(new Date().toISOString())) + ' · 2 הודעות</span></button>';
+        $('aiList').querySelectorAll('.ai-item').forEach(function (x) { x.classList.remove('active'); });
+        var empty = $('aiList').querySelector('.muted'); if (empty) empty.remove();
+        $('aiList').insertAdjacentHTML('afterbegin', html);
+      }
+    }).catch(function (e) {
+      btn.disabled = false; state.style.color = 'var(--danger)';
+      state.textContent = 'שגיאת רשת: ' + (e && e.message || e);
+    });
   }
 
   // after creating a user, poll the real async results so failures aren't silent

@@ -117,6 +117,23 @@
   .stmenu .si:hover{background:var(--surface-2)}
   /* column chooser */
   .colpick-menu{position:fixed;background:var(--surface);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);z-index:2147483000;width:280px;padding:10px;max-height:72vh;overflow:auto}
+  .ai-wrap{display:grid;grid-template-columns:236px 1fr;gap:14px;align-items:start}
+  @media(max-width:820px){.ai-wrap{grid-template-columns:1fr}}
+  .ai-side{border:1px solid var(--line);border-radius:12px;padding:10px;background:var(--surface);max-height:520px;overflow:auto}
+  .ai-side h4{margin:2px 4px 8px;font-size:11.5px;color:var(--muted);font-weight:700}
+  .ai-item{display:block;width:100%;text-align:start;border:0;background:transparent;padding:8px 9px;border-radius:9px;cursor:pointer;font:inherit;font-size:12.5px;color:inherit;line-height:1.45}
+  .ai-item:hover{background:var(--surface-2)}
+  .ai-item.active{background:var(--brand-soft);font-weight:700}
+  .ai-item .d{display:block;font-size:10.5px;color:var(--muted);margin-top:2px;font-weight:400}
+  .ai-del{float:inline-end;border:0;background:transparent;cursor:pointer;font-size:12px;color:inherit;opacity:.4;padding:0 3px}
+  .ai-del:hover{opacity:1;color:var(--danger)}
+  .ai-chat{border:1px solid var(--line);border-radius:12px;background:var(--surface-2);padding:12px;max-height:470px;overflow:auto;display:flex;flex-direction:column;gap:10px}
+  .ai-msg{max-width:80%;align-self:flex-start}
+  .ai-msg.me{align-self:flex-end}
+  .ai-b{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:9px 12px;white-space:pre-wrap;line-height:1.7;font-size:13.5px}
+  .ai-msg.me .ai-b{background:var(--brand-soft);border-color:var(--brand)}
+  .ai-t{font-size:10.5px;color:var(--muted);margin-top:3px}
+  .ai-empty{color:var(--muted);font-size:13px;text-align:center;padding:30px 10px;line-height:1.7}
   .colpick-menu .cp-find{width:100%;box-sizing:border-box;margin:0 0 8px;padding:7px 10px;border:1px solid var(--line);border-radius:9px;font:inherit;font-size:12.5px;background:var(--surface-2);color:inherit}
   .colpick-menu .cp-find:focus{outline:none;border-color:var(--brand)}
   .colpick-menu .cp-row.cp-off{display:none}
@@ -553,8 +570,8 @@
 <div id="drawer"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js" integrity="sha384-0w2KAL2YHP6wKOkUDzkCDGgVvfmHnj02DHeQ6XcHOgTfFsGyonKOpShMH1x6nk9o" crossorigin="anonymous"></script>
-<script src="admin.js?v=202609140812"></script>
-<script src="admin-crm.js?v=202609140812"></script>
-<script src="admin-modules.js?v=202609140812"></script>
+<script src="admin.js?v=202609140832"></script>
+<script src="admin-crm.js?v=202609140832"></script>
+<script src="admin-modules.js?v=202609140832"></script>
 </body>
 </html>
