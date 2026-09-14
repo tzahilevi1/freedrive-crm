@@ -4388,42 +4388,91 @@
       });
     }).catch(function (e) { errBox(e.message || e); });
   }
-  function askAI(ctx, sysPrompt, persona) {
+  function askAI(ctx, sysPrompt, persona, retried) {
     var qEl = $('aiQ'), q = (qEl.value || '').trim(); if (!q) return;
     var state = $('aiState'), chat = $('aiChat'), btn = $('aiAsk');
-    //  השאלה מופיעה מיד ונשמרת ברקע. אין סיבה להמתין למסד כדי לראות
-    //  את מה שכתבת, וגם אם השמירה תיכשל השיחה עצמה תמשיך לעבוד.
     if (chat.querySelector('.ai-empty')) chat.innerHTML = '';
-    chat.insertAdjacentHTML('beforeend', aiBubble({ role: 'user', body: q, created_at: new Date().toISOString() }));
-    chat.scrollTop = chat.scrollHeight;
+    if (!retried) {
+      chat.insertAdjacentHTML('beforeend', aiBubble({ role: 'user', body: q, created_at: new Date().toISOString() }));
+      chat.scrollTop = chat.scrollHeight;
+    }
     qEl.value = '';
     var firstInThread = !document.querySelector('#aiList [data-th="' + aiThread + '"]');
-    state.style.color = 'var(--muted)'; state.textContent = 'חושב… (עד ~30 שניות)'; btn.disabled = true;
+    state.style.color = 'var(--muted)'; state.textContent = 'חושב…'; btn.disabled = true;
     var save = function (role, body) {
       return db.from('ai_messages')
         .insert({ thread_id: aiThread, role: role, body: body, persona: persona || null })
         .then(function (r) { if (r.error) console.warn('[ai history]', r.error.message); }, function () {});
     };
-    save('user', q);
-    db.functions.invoke('ai-assistant', {
-      body: { prompt: ctx + '\n\nהשאלה: ' + q, system: sysPrompt ? (AI_BASE + ' ' + sysPrompt) : undefined }
-    }).then(function (r) {
+    if (!retried) save('user', q);
+
+    var fail = function (msg) {
+      btn.disabled = false; state.style.color = 'var(--danger)';
+      state.textContent = /unauthorized/i.test(msg)
+          ? '\u26a0 ההתחברות פגה. רעננו את הדף (F5) ושלחו שוב.'
+        : /IDLE_TIMEOUT|timeout/i.test(msg) ? 'התשובה ארכה יותר מדי. נסו לפצל את השאלה לשניים.'
+        : /ANTHROPIC_API_KEY|מפתח AI/.test(msg) ? 'חסר מפתח AI בהגדרות הפונקציה.'
+        : 'שגיאה: ' + msg;
+    };
+
+    //  הבועה נוצרת ריקה ומתמלאת תוך כדי. חוץ מהחוויה, זה מה שמונע את
+    //  ה-504: Supabase קוטע בקשה שלא החזירה בייט במשך 150 שניות, ותשובה
+    //  ארוכה (נוהל עבודה, מסמך הנחיות) נמשכת יותר מזה.
+    var wrap = document.createElement('div');
+    wrap.className = 'ai-msg';
+    wrap.innerHTML = '<div class="ai-b"></div><div class="ai-t"></div>';
+    var bodyEl = wrap.querySelector('.ai-b'), timeEl = wrap.querySelector('.ai-t');
+    var acc = '';
+
+    db.auth.getSession().then(function (sr) {
+      var tok = sr && sr.data && sr.data.session && sr.data.session.access_token;
+      if (!tok) return fail('unauthorized');
+      return fetch(SUPABASE_URL + '/functions/v1/ai-assistant', {
+        method: 'POST',
+        headers: { apikey: SUPABASE_ANON_KEY, Authorization: 'Bearer ' + tok, 'content-type': 'application/json' },
+        body: JSON.stringify({ prompt: ctx + '\n\nהשאלה: ' + q,
+                               system: sysPrompt ? (AI_BASE + ' ' + sysPrompt) : undefined, stream: true })
+      }).then(function (resp) {
+        if (!resp.ok) {
+          return resp.text().then(function (t) {
+            var msg = t; try { msg = (JSON.parse(t) || {}).error || (JSON.parse(t) || {}).message || t; } catch (e) {}
+            //  סשן שפג הוא המקרה הנפוץ — מחדשים טוקן ושולחים שוב פעם אחת
+            if (/unauthorized/i.test(msg) && !retried) {
+              return db.auth.refreshSession().then(function (rs) {
+                if (rs && rs.error) return fail(msg);
+                qEl.value = q; askAI(ctx, sysPrompt, persona, true);
+              }, function () { fail(msg); });
+            }
+            fail(msg);
+          });
+        }
+        if (!resp.body || !resp.body.getReader) {
+          //  דפדפן בלי תמיכה בהזרמה — קוראים הכל בבת אחת
+          return resp.text().then(function (t) { acc = t; done(); });
+        }
+        state.textContent = 'כותב…';
+        chat.appendChild(wrap); chat.scrollTop = chat.scrollHeight;
+        var reader = resp.body.getReader(), dec = new TextDecoder();
+        var pump = function () {
+          return reader.read().then(function (res) {
+            if (res.done) return done();
+            acc += dec.decode(res.value, { stream: true });
+            bodyEl.textContent = acc;
+            chat.scrollTop = chat.scrollHeight;
+            return pump();
+          });
+        };
+        return pump();
+      });
+    }).catch(function (e) { fail((e && e.message) || String(e)); });
+
+    function done() {
       btn.disabled = false; state.textContent = '';
-      var d = r.data || {};
-      if (r.error || d.error) {
-        state.style.color = 'var(--danger)';
-        var msg = (d && d.error) || (r.error && r.error.message) || 'שגיאה';
-        state.textContent = /unauthorized/i.test(msg) ? 'נדרשת התחברות מחדש.'
-          : /ANTHROPIC_API_KEY/.test(msg) ? 'חסר מפתח Claude — יש להגדיר את הפונקציה (ראו README).'
-          : 'שגיאה: ' + msg;
-        return;
-      }
-      var txt = d.text || 'לא התקבלה תשובה.';
-      chat.insertAdjacentHTML('beforeend', aiBubble({ role: 'assistant', body: txt, created_at: new Date().toISOString() }));
+      if (!acc) { wrap.remove(); return fail('לא התקבלה תשובה'); }
+      if (!wrap.parentNode) { bodyEl.textContent = acc; chat.appendChild(wrap); }
+      timeEl.textContent = fmtDateTime(new Date().toISOString());
       chat.scrollTop = chat.scrollHeight;
-      save('assistant', txt);
-      //  שיחה חדשה נכנסת לרשימה רק אחרי שיש בה תוכן, כדי שלא ייווצרו
-      //  שורות ריקות מכל לחיצה על "שיחה חדשה".
+      save('assistant', acc);
       if (firstInThread && $('aiList')) {
         var html = '<button class="ai-item active" data-th="' + esc(aiThread) + '">' +
           '<span class="ai-del" data-delth="' + esc(aiThread) + '" title="מחק שיחה">✕</span>' +
@@ -4432,10 +4481,7 @@
         var empty = $('aiList').querySelector('.muted'); if (empty) empty.remove();
         $('aiList').insertAdjacentHTML('afterbegin', html);
       }
-    }).catch(function (e) {
-      btn.disabled = false; state.style.color = 'var(--danger)';
-      state.textContent = 'שגיאת רשת: ' + (e && e.message || e);
-    });
+    }
   }
 
   // after creating a user, poll the real async results so failures aren't silent
