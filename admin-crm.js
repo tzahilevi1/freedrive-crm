@@ -3130,12 +3130,18 @@
     document.getElementById('drawer').querySelectorAll('[data-lead]').forEach(function (el) { el.addEventListener('click', function () { C.closeDrawer(); window.C2B_openLeadCard(el.dataset.lead); }); });
   }
   // כמה היסטוריה כבר נטענה (ms). null = הכל. מונע הורדה חוזרת של אותם נתונים.
-  var dashLoaded = null;
+  var dashLoaded = null, dashAt = 0;
+  //  הנתונים נשמרים בזיכרון כדי שמעבר בין מסכים לא יבקש הכל מחדש, אבל
+  //  אחרי הזמן הזה הם כבר לא משקפים את המציאות: ליד חדש שנכנס, או ליד
+  //  שנציג טיפל בו, לא היו משנים את "זמן תגובה" עד רענון דף מלא.
+  //  הרענון קורה רק בכניסה למסך ולא בזמן שיושבים עליו, כדי שהמסך לא יקפוץ.
+  var DASH_TTL = 120000;   //  שתי דקות
   window.C2B_renderDashboard = function (opts) {
     var wantAll = (opts && opts.all) || dashRange.preset === 'all' || !!dashRange.from;
     var days = wantAll ? null : 400;                       // 400 יום מכסה את "שנה אחורה" בנוחות
     // כבר יש בזיכרון כיסוי מספיק? מציירים מחדש בלי בקשה נוספת.
-    if (dashAll && (dashLoaded === null || (days !== null && dashLoaded >= days))) return drawDashboard();
+    var fresh = Date.now() - dashAt < DASH_TTL;
+    if (fresh && dashAll && (dashLoaded === null || (days !== null && dashLoaded >= days))) return drawDashboard();
     loading();
     var since = days ? new Date(Date.now() - days * 864e5).toISOString() : null;
     var leadsQ = db.from('leads').select('id,name,phone,car,brand,status,source,created_at,first_response_at,assigned_to,marketing_company,city,utm_source,utm_campaign').is('deleted_at', null);
@@ -3148,7 +3154,7 @@
       if (res[0].error) return errBox(res[0].error.message);
       var prof = {}; ((res[4] && res[4].data) || []).forEach(function (p) { prof[p.user_id] = p.full_name; });
       dashAll = { leads: res[0].data || [], tasks: res[1].data || [], deals: (res[3] && res[3].data) || [], prof: prof };
-      dashLoaded = days;
+      dashLoaded = days; dashAt = Date.now();
       drawDashboard();
     }).catch(function (e) { errBox(e.message || e); });
   };
