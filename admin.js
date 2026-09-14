@@ -4448,16 +4448,18 @@
         }
         if (!resp.body || !resp.body.getReader) {
           //  דפדפן בלי תמיכה בהזרמה — קוראים הכל בבת אחת
-          return resp.text().then(function (t) { acc = t; done(); });
+          return resp.text().then(function (t) { acc = String(t).replace(/​/g, ''); done(); });
         }
-        state.textContent = 'כותב…';
+        state.textContent = 'חושב… (התשובה תתחיל להיכתב ברגע שתהיה מוכנה)';
         chat.appendChild(wrap); chat.scrollTop = chat.scrollHeight;
         var reader = resp.body.getReader(), dec = new TextDecoder();
         var pump = function () {
           return reader.read().then(function (res) {
             if (res.done) return done();
-            acc += dec.decode(res.value, { stream: true });
+            //  תווי רוחב-אפס הם פעימת הלב של השרת ואינם חלק מהתשובה
+            acc += dec.decode(res.value, { stream: true }).replace(/​/g, '');
             bodyEl.textContent = acc;
+            if (acc && state.textContent !== 'כותב…') state.textContent = 'כותב…';
             chat.scrollTop = chat.scrollHeight;
             return pump();
           });
