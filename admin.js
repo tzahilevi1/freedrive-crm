@@ -1013,11 +1013,14 @@
     { key: 'talk', label: 'זמן שיחה', w: 110,
       sort: function (c) { return c.talk_sec || 0; },
       cell: function (c) { return '<td>' + (c.talk_sec ? esc(mmss(c.talk_sec)) : '<span class="muted">—</span>') + '</td>'; } },
-    { key: 'rec', label: 'הקלטה', w: 230, sortable: false,
+    { key: 'rec', label: 'הקלטה', w: 240, sortable: false,
+      //  נגן מוטמע רק כשהקובץ כבר בדלי שלנו. כתובת ההקלטה של Voicenter
+      //  מוגנת בהתחברות ומחזירה דף כניסה במקום שמע — שם הנגן הציג 0:00.
       cell: function (c) {
-        return '<td>' + (c.recording_url
-          ? '<audio class="cl-play" controls preload="none" src="' + esc(c.recording_url) + '"></audio>'
-          : '<span class="muted">—</span>') + '</td>';
+        if (c.recording_path) return '<td><span data-recplay="' + esc(c.recording_path) + '" class="muted" style="font-size:11px">טוען…</span></td>';
+        if (c.recording_url) return '<td><a class="btn btn-ghost btn-sm" href="' + esc(c.recording_url) + '" target="_blank" rel="noopener" title="' +
+          esc(c.recording_err || 'הקובץ עדיין לא הורד אלינו') + '">🎧 ב-Voicenter</a></td>';
+        return '<td><span class="muted">—</span></td>';
       } },
     { key: 'ai', label: 'תמלול', w: 90, def: false, sortable: false,
       cell: function (c) { return '<td>' + (c.transcript || c.ai_data ? '<span class="cl-yes">✓</span>' : '<span class="muted">—</span>') + '</td>'; } },
@@ -1099,6 +1102,18 @@
       var dOpts = Object.keys(depts).sort(function (a, b) { return depts[b] - depts[a]; })
         .map(function (d) { return '<option value="' + esc(d) + '"' + (callFilter.dept === d ? ' selected' : '') + '>' + esc(d) + ' (' + depts[d] + ')</option>'; }).join('');
 
+      //  אם אף שיחה לא נושאת תמלול, זו אינה "עדיין לא הגיע" אלא מצב
+      //  קבוע שצריך לטפל בו — עדיף לומר זאת מאשר להשאיר עמודה ריקה.
+      var noAi = all.length > 4 && !all.some(function (c) { return c.transcript || c.ai_data; });
+      var aiNote = noAi
+        ? '<div class="card" style="box-shadow:none;border:1px solid var(--warn);background:rgba(245,158,11,.07);margin-bottom:14px">' +
+          '<b style="color:var(--warn)">⚠ אין תמלול באף שיחה</b>' +
+          '<p class="muted" style="font-size:12.5px;margin:6px 0 0;line-height:1.7">' +
+          'Voicenter שולחת את השדה <code style="direction:ltr;display:inline-block">aiData</code> ריק בכל ' + all.length + ' השיחות שנקלטו. ' +
+          'המשמעות היא שתוסף התמלול אינו פעיל בחשבון, או שאינו נכלל ב-CDR. ' +
+          'כדי שנתמלל בעצמנו נדרשת גישת API להורדת ההקלטות — הקישור הנוכחי מוגן בהתחברות.</p></div>'
+        : '';
+
       view('<div class="card"><div class="row-between" style="flex-wrap:wrap;gap:10px">' +
           '<h3 style="margin:0">📞 שיחות טלפון <span class="muted" style="font-size:12px;font-weight:400">· ' + all.length + ' שיחות · מתעדכן אוטומטית מ-Voicenter</span></h3>' +
           '<div style="display:flex;gap:6px;flex-wrap:wrap">' + callCols.button() + '</div></div>' +
@@ -1111,12 +1126,30 @@
           '<select class="inp" id="clAns" style="width:140px"><option value="">נענו ולא נענו</option>' +
             '<option value="y"' + (callFilter.ans === 'y' ? ' selected' : '') + '>נענו בלבד</option>' +
             '<option value="n"' + (callFilter.ans === 'n' ? ' selected' : '') + '>לא נענו בלבד</option></select>' +
-        '</div>' + kpi +
+        '</div>' + aiNote + kpi +
         '<div class="table-scroll"><table><thead><tr>' + callCols.thead() + '</tr></thead><tbody>' +
           (rows || '<tr><td colspan="' + callCols.colCount() + '" class="empty">אין שיחות בסינון הזה</td></tr>') +
         '</tbody></table></div></div>');
 
       callCols.bind();
+      //  כתובות חתומות לכל ההקלטות שכבר אצלנו. בבקשה אחת ולא אחת
+      //  לכל שורה, אחרת טבלה עם 50 שיחות הייתה יורה 50 בקשות.
+      var recEls = $('view').querySelectorAll('[data-recplay]');
+      if (recEls.length) {
+        var paths = [];
+        recEls.forEach(function (el) { if (paths.indexOf(el.dataset.recplay) < 0) paths.push(el.dataset.recplay); });
+        db.storage.from('call-recordings').createSignedUrls(paths, 3600).then(function (sr) {
+          var map = {};
+          ((sr && sr.data) || []).forEach(function (s) { if (s && s.signedUrl) map[s.path] = s.signedUrl; });
+          recEls.forEach(function (el) {
+            var u = map[el.dataset.recplay];
+            el.outerHTML = u
+              ? '<audio class="cl-play" controls preload="none" src="' + esc(u) + '"></audio>'
+              : '<span class="muted" style="font-size:11px">ההקלטה לא נמצאה</span>';
+          });
+        }, function () {});
+      }
+
       //  סינון מקומי בלבד: אין בקשה נוספת למסד ואין ציור מחדש של המסך
       function reFilter() { renderCalls(); }
       var qEl = $('clQ'), t = null;
@@ -1164,10 +1197,15 @@
       return '<div class="k">' + esc(r[0]) + '</div><div class="v">' + esc(r[1]) + '</div>';
     }).join('') + '</div>';
 
-    if (c.recording_url) {
+    if (c.recording_path) {
       html += '<h4 style="margin:16px 0 6px;font-size:13px">🎧 הקלטה</h4>' +
-        '<audio controls preload="none" style="width:100%" src="' + esc(c.recording_url) + '"></audio>' +
-        '<div style="margin-top:6px"><a class="btn btn-ghost btn-sm" href="' + esc(c.recording_url) + '" target="_blank" rel="noopener">↗ פתח בכרטיסייה</a></div>';
+        '<span data-recplay="' + esc(c.recording_path) + '" class="muted" style="font-size:12px">טוען…</span>';
+    } else if (c.recording_url) {
+      html += '<h4 style="margin:16px 0 6px;font-size:13px">🎧 הקלטה</h4>' +
+        '<a class="btn btn-sm" href="' + esc(c.recording_url) + '" target="_blank" rel="noopener">🎧 האזן ב-Voicenter</a>' +
+        '<p class="muted" style="font-size:11.5px;margin:8px 0 0;line-height:1.6">' +
+        'הקובץ עדיין לא הורד אלינו, ולכן אי אפשר לנגן אותו כאן. ' +
+        (c.recording_err ? 'הסיבה: ' + esc(c.recording_err) : 'הכתובת של Voicenter מוגנת בהתחברות.') + '</p>';
     }
     if (c.transcript) {
       html += '<h4 style="margin:16px 0 6px;font-size:13px">📝 תמלול</h4><div class="cl-tr">' + esc(c.transcript) + '</div>';
@@ -1179,6 +1217,15 @@
     html += '<details style="margin-top:16px"><summary class="muted" style="font-size:12px;cursor:pointer">כל מה שהספק שלח (raw)</summary>' +
       '<div class="cl-tr" style="margin-top:8px">' + esc(JSON.stringify(c.raw, null, 2)) + '</div></details>';
 
+    setTimeout(function () {
+      var el = document.querySelector('#drawer [data-recplay]');
+      if (!el) return;
+      db.storage.from('call-recordings').createSignedUrl(el.dataset.recplay, 3600).then(function (r) {
+        var u = r && r.data && r.data.signedUrl;
+        el.outerHTML = u ? '<audio controls preload="none" style="width:100%" src="' + esc(u) + '"></audio>'
+                         : '<span class="muted">ההקלטה לא נמצאה</span>';
+      }, function () {});
+    }, 0);
     openDrawer('<div class="row-between" style="margin-bottom:12px"><h3 style="margin:0">📞 שיחה · ' +
       esc(c.started_at ? fmtDateTime(c.started_at) : '') + '</h3>' +
       '<button class="btn btn-ghost btn-sm" onclick="C2B.closeDrawer()">✕</button></div>' + html);
