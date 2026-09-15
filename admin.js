@@ -1511,6 +1511,104 @@
     loadHist();
   }
 
+  //  כרטיס נציג מפורט — drill-down בלחיצה על שם נציג בדוחות.
+  function acInfo(k, v, cls) { return '<div class="cv-info-item"><div class="cv-info-k">' + esc(k) + '</div><div class="cv-info-v ' + (cls || '') + '">' + esc(v) + '</div></div>'; }
+  function renderAgentCard(name, all) {
+    var calls = all.filter(function (c) { return (c.agent_name || 'ללא נציג') === name; });
+    var az = calls.filter(function (c) { return c.crm_analysis && typeof c.crm_analysis.score === 'number'; });
+    var ans = calls.filter(function (c) { return c.answered === true; });
+    var talk = ans.reduce(function (a, c) { return a + (+c.talk_sec || 0); }, 0);
+    var won = calls.filter(function (c) { return c.crm_analysis && c.crm_analysis.status_suggestion === 'won'; }).length;
+
+    var sc = [], skk = { objection_handling: [], empathy: [], clarity: [], needs_discovery: [] }, enk = { confidence: [], courtesy: [], patience: [], initiative: [], optimism: [] };
+    var sent = { 'חיובי': 0, 'ניטרלי': 0, 'שלילי': 0 }, sentScores = [], str = {}, weak = {}, flags = 0;
+    var objs = [], stageAgg = {}, styles = {};
+    az.forEach(function (c) {
+      var a = c.crm_analysis; sc.push(a.score);
+      var s = a.agent_skills || {}; Object.keys(skk).forEach(function (k) { if (typeof s[k] === 'number') skk[k].push(s[k]); });
+      var e = a.agent_energy || {}; Object.keys(enk).forEach(function (k) { if (typeof e[k] === 'number') enk[k].push(e[k]); });
+      if (sent[a.sentiment] !== undefined) sent[a.sentiment]++;
+      if (typeof a.sentiment_call === 'number') sentScores.push(a.sentiment_call);
+      (a.agent_strengths || []).forEach(function (x) { str[x] = (str[x] || 0) + 1; });
+      (a.agent_weaknesses || []).forEach(function (x) { weak[x] = (weak[x] || 0) + 1; });
+      flags += (a.red_flags || []).length;
+      (a.objections_detailed || []).forEach(function (o) { objs.push(o); });
+      (a.stages || []).forEach(function (st) { var t = st.title || '—'; var o = stageAgg[t] || (stageAgg[t] = { n: 0, s: [] }); o.n++; if (typeof st.score === 'number') o.s.push(st.score); });
+      if (a.sales_style) styles[a.sales_style] = (styles[a.sales_style] || 0) + 1;
+    });
+    var score = avg(sc), sentAvg = sentScores.length ? Math.round(sentScores.reduce(function (a, b) { return a + b; }, 0) / sentScores.length * 10) / 10 : null;
+    var topStr = Object.keys(str).sort(function (a, b) { return str[b] - str[a]; }).slice(0, 5);
+    var topWeak = Object.keys(weak).sort(function (a, b) { return weak[b] - weak[a]; }).slice(0, 5);
+    var topStyle = Object.keys(styles).sort(function (a, b) { return styles[b] - styles[a]; })[0];
+    var best = az.slice().sort(function (a, b) { return b.crm_analysis.score - a.crm_analysis.score; })[0];
+
+    //  התנגדויות לפי קטגוריה
+    var CATS = ['דחייה יסודית', 'לא עכשיו', 'מחיר', 'אי וודאות', 'אי הבנה', 'בדיקת עובדות', 'גישה', 'רגשי'];
+    var oc = {}; CATS.forEach(function (c) { oc[c] = { n: 0, res: 0 }; });
+    objs.forEach(function (o) { var cat = o.category || ''; CATS.forEach(function (c) { if (cat.indexOf(c) >= 0) { oc[c].n++; if (/טופל/.test(o.status || '')) oc[c].res++; } }); });
+    var ocRows = CATS.filter(function (c) { return oc[c].n > 0; }).sort(function (a, b) { return oc[b].n - oc[a].n; }).map(function (c) {
+      var pctv = oc[c].n ? Math.round(oc[c].res / oc[c].n * 100) : 0;
+      return '<tr><td>' + esc(c) + '</td><td>' + oc[c].n + '</td><td><span style="color:' + (pctv >= 70 ? 'var(--ok)' : pctv >= 40 ? 'var(--warn)' : 'var(--danger)') + ';font-weight:700">' + pctv + '%</span></td></tr>';
+    }).join('');
+
+    var stageRows = Object.keys(stageAgg).map(function (t) { return { t: t, n: stageAgg[t].n, sc: avg(stageAgg[t].s) }; }).sort(function (a, b) { return b.n - a.n; }).slice(0, 10).map(function (r) {
+      return '<tr><td>' + esc(r.t) + '</td><td>' + r.n + '</td><td>' + (r.sc != null ? scoreChip(r.sc) : '—') + '</td></tr>';
+    }).join('');
+
+    var recent = calls.slice(0, 12).map(function (c) {
+      var a = c.crm_analysis;
+      return '<tr data-callinfo="' + esc(c.id) + '" style="cursor:pointer" title="פתח שיחה"><td class="muted">' + esc(fmtDateTime(c.started_at)) + '</td>' +
+        '<td class="ltr">' + esc(callPhone(c) || '—') + '</td>' +
+        '<td>' + (a && typeof a.score === 'number' ? scoreChip(a.score) : '—') + '</td>' +
+        '<td>' + (c.answered ? '<span class="cl-yes">✓</span>' : '<span class="cl-no">✗</span>') + '</td>' +
+        '<td>' + (c.talk_sec ? esc(mmss(c.talk_sec)) : '—') + '</td></tr>';
+    }).join('');
+
+    var sk = { objection_handling: avg(skk.objection_handling), empathy: avg(skk.empathy), clarity: avg(skk.clarity), needs_discovery: avg(skk.needs_discovery) };
+    var en = { confidence: avg(enk.confidence), courtesy: avg(enk.courtesy), patience: avg(enk.patience), initiative: avg(enk.initiative), optimism: avg(enk.optimism) };
+
+    view('<div class="cv-wrap">' +
+      '<div class="lead-top"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">' +
+        '<button class="btn btn-ghost btn-sm" id="acBack">→ חזרה לדוחות</button>' +
+        '<h3 style="margin:0">👤 ' + esc(name) + '</h3>' +
+        (score != null ? scoreChip(score) : '') +
+        (topStyle ? '<span class="tag">' + esc(topStyle) + '</span>' : '') +
+      '</div></div>' +
+      '<div class="cv-info">' +
+        acInfo('שיחות', calls.length) + acInfo('נותחו', az.length) +
+        acInfo('שיעור מענה', pct(ans.length, calls.length) + '%') +
+        acInfo('זמן שיחה בפועל', hms(talk)) + acInfo('עסקאות', won) + acInfo('דגלים', flags) +
+      '</div>' +
+
+      '<div class="cv-grid">' +
+        '<div class="cv-left">' +
+          '<div class="card cv-block"><h3 class="cv-bt">📊 ציונים</h3>' +
+            '<div class="gauge-row">' + gauge(score, 'ציון ממוצע') + gauge(sentAvg, 'סנטימנט', null, 10) + gauge(pct(won, calls.length), 'המרה %') + '</div></div>' +
+          '<div class="card cv-block"><h3 class="cv-bt">🎯 כישורים</h3><div class="skill-list">' +
+            skillBar('טיפול בהתנגדויות', sk.objection_handling || 0) + skillBar('אמפתיה', sk.empathy || 0) + skillBar('בהירות תקשורת', sk.clarity || 0) + skillBar('גילוי צרכים', sk.needs_discovery || 0) + '</div></div>' +
+          '<div class="card cv-block"><h3 class="cv-bt">⚡ אנרגיה</h3><div class="skill-list">' +
+            skillBar('ביטחון', en.confidence || 0) + skillBar('אדיבות', en.courtesy || 0) + skillBar('סבלנות', en.patience || 0) + skillBar('יוזמה', en.initiative || 0) + skillBar('אופטימיות', en.optimism || 0) + '</div></div>' +
+        '</div>' +
+        '<div class="cv-analysis">' +
+          ((topStr.length || topWeak.length) ? '<div class="card cv-block"><h3 class="cv-bt">💪 חוזקות ונקודות לשיפור</h3>' +
+            (topStr.length ? '<div class="cv-sub-h" style="color:var(--ok)">✓ חוזקות</div><ul class="cv-ul">' + topStr.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul>' : '') +
+            (topWeak.length ? '<div class="cv-sub-h" style="color:var(--danger)">△ לשיפור</div><ul class="cv-ul">' + topWeak.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul>' : '') +
+            (topWeak.length ? '<div class="cv-hl cv-hl-info">🎓 תוכנית אימון: להתמקד ב"' + esc(topWeak[0]) + '"</div>' : '') + '</div>' : '') +
+          (ocRows ? '<div class="card cv-block"><h3 class="cv-bt">⚠️ טיפול בהתנגדויות לפי קטגוריה</h3><div class="table-scroll"><table><thead><tr><th>קטגוריה</th><th>כמות</th><th>% פתרון</th></tr></thead><tbody>' + ocRows + '</tbody></table></div></div>' : '') +
+          (stageRows ? '<div class="card cv-block"><h3 class="cv-bt">📈 ביצוע לפי שלב</h3><div class="table-scroll"><table><thead><tr><th>שלב</th><th>מופעים</th><th>ציון</th></tr></thead><tbody>' + stageRows + '</tbody></table></div></div>' : '') +
+          (best ? '<div class="card cv-block"><h3 class="cv-bt">🏆 השיחה החזקה</h3>' +
+            '<div class="row-between"><span>' + scoreChip(best.crm_analysis.score) + ' ' + esc(fmtDateTime(best.started_at)) + '</span><button class="btn btn-ghost btn-sm" data-callinfo="' + esc(best.id) + '">🎧 פתח</button></div>' +
+            (best.crm_analysis.summary ? '<div class="cv-txt" style="margin-top:8px">' + esc(best.crm_analysis.summary) + '</div>' : '') + '</div>' : '') +
+          '<div class="card cv-block"><h3 class="cv-bt">⏱️ שיחות אחרונות</h3><div class="table-scroll"><table><thead><tr><th>מועד</th><th>מספר</th><th>ציון</th><th>נענתה</th><th>משך</th></tr></thead><tbody>' + (recent || '<tr><td colspan="5" class="empty">אין</td></tr>') + '</tbody></table></div></div>' +
+        '</div>' +
+      '</div></div>');
+
+    $('acBack').addEventListener('click', function () { renderCalls('reports'); });
+    $('view').querySelectorAll('[data-callinfo]').forEach(function (b) {
+      b.addEventListener('click', function () { openCall(b.dataset.callinfo, 'reports'); });
+    });
+  }
+
   function paintReports(all, head) {
     var az = all.filter(function (c) { return c.crm_analysis && typeof c.crm_analysis.score === 'number'; });
     if (!az.length) {
@@ -1618,7 +1716,7 @@
 
     //  ---- טבלת ביצועי נציגים ----
     var agRows = agents.map(function (a) {
-      return '<tr><td><b>' + A(a.name, esc(a.name)) + '</b></td>' +
+      return '<tr><td><b><a href="#" class="cl-go" data-agentcard="' + esc(a.name) + '">' + esc(a.name) + '</a></b></td>' +
         '<td>' + A(a.name, a.calls) + '</td>' +
         '<td>' + (a.score != null ? scoreChip(a.score) : '—') + '</td>' +
         '<td>' + (a.oh != null ? a.oh : '—') + '</td>' +
@@ -1875,6 +1973,8 @@
     //  בלי לחווט כל שורה בנפרד ובלי לדלוף מאזינים בכל ציור מחדש.
     var host = $('view');
     host.addEventListener('click', function (e2) {
+      var ac = e2.target.closest('[data-agentcard]');
+      if (ac) { e2.preventDefault(); return renderAgentCard(ac.dataset.agentcard, all); }
       var g = e2.target.closest('[data-go]');
       if (g) {
         e2.preventDefault();
