@@ -1013,8 +1013,8 @@
           : '<span class="muted">—</span>') + '</td>';
       } },
     { key: 'agent', label: 'נציג', w: 130,
-      sort: function (c) { return c.agent_name || ''; },
-      cell: function (c) { return '<td>' + esc(c.agent_name || '—') + '</td>'; } },
+      sort: function (c) { return agentOf(c); },
+      cell: function (c) { return '<td>' + esc(agentOf(c)) + '</td>'; } },
     { key: 'dept', label: 'מחלקה / מותג', w: 150,
       sort: function (c) { return c.department || ''; },
       cell: function (c) { return '<td>' + (c.department ? '<span class="tag">' + esc(c.department) + '</span>' : '—') + '</td>'; } },
@@ -1104,6 +1104,14 @@
   //  שיחה נכללת אם אחד המספרים מעורב בה (מתקשר או יעד).
   var CALL_AGENTS = ['533945097', '534493184', '534494707', '534495185', '534495197', '535463720', '539295952'];
   var CALL_AGENT_OR = CALL_AGENTS.map(function (n) { return 'from_number.ilike.*' + n + ',to_number.ilike.*' + n; }).join(',');
+  //  Voicenter מחזירה ב-agent_name תוויות פנימיות (תור/רכז/DID) ולא את
+  //  שם הנציג. לכן מזהים את הנציג לפי המספר (אחד מ-7) וממפים לשם הנכון.
+  //  ליאור לוי מחזיק שני מספרים — שניהם ממופים אליו (איחוד).
+  var AGENT_NAMES = { '534494707': 'שון', '539295952': 'עילאי', '534493184': 'אור', '535463720': 'נדב', '533945097': 'ליאור לוי', '534495197': 'ליאור לוי', '534495185': 'אילעי' };
+  function agentOf(c) {
+    var f = last9(c.from_number), t = last9(c.to_number);
+    return AGENT_NAMES[f] || AGENT_NAMES[t] || (c.agent_name || '—');
+  }
   //  כל מספר במסך מוביל לרשימה המסוננת שמאחוריו. הסינון מוחזק כאן ולא
   //  בכתובת, כדי שחזרה ללשונית תשמור את ההקשר שממנו הגעת.
   var callFilter = { dept: '', dir: '', ans: '', q: '', agent: '', hour: '', phone: '', rec: '', today: '', sentiment: '', ctype: '', scoreband: '', analyzed: '' };
@@ -1321,7 +1329,7 @@
 
     var byAg = {};
     all.forEach(function (c) {
-      var k = c.agent_name || 'ללא נציג';
+      var k = agentOf(c);
       byAg[k] = byAg[k] || { n: 0, ans: 0, talk: 0, scores: [], sent: { 'חיובי': 0, 'ניטרלי': 0, 'שלילי': 0 }, sugg: {} };
       var o = byAg[k]; o.n++;
       if (c.answered) { o.ans++; o.talk += (+c.talk_sec || 0); }
@@ -1350,7 +1358,7 @@
 
     var alertRows = alerts.slice(0, 8).map(function (c) {
       return '<tr data-callinfo="' + esc(c.id) + '" style="cursor:pointer" title="לחצו לפרטי השיחה">' +
-        '<td>' + scoreChip(c.crm_analysis.score) + '</td><td>' + esc(c.agent_name || '—') + '</td>' +
+        '<td>' + scoreChip(c.crm_analysis.score) + '</td><td>' + esc(agentOf(c)) + '</td>' +
         '<td class="ltr">' + esc(callPhone(c) || '—') + '</td>' +
         '<td class="muted cl-sum">' + esc((c.crm_analysis.summary || '').slice(0, 90)) + '</td>' +
         '<td class="muted">' + esc(fmtDateTime(c.started_at)) + '</td></tr>';
@@ -1361,7 +1369,7 @@
       return '<tr data-callinfo="' + esc(c.id) + '" style="cursor:pointer" title="לחצו לפרטי השיחה"><td class="muted">' + esc(fmtDateTime(c.started_at)) + '</td>' +
         '<td><span class="cl-dir ' + (c.direction === 'out' ? 'cl-out">↗' : 'cl-in">↙') + '</span></td>' +
         '<td class="ltr">' + esc(callPhone(c) || '—') + '</td>' +
-        '<td>' + esc(c.agent_name || '—') + '</td>' +
+        '<td>' + esc(agentOf(c)) + '</td>' +
         '<td>' + (a && typeof a.score === 'number' ? scoreChip(a.score) : '—') + '</td>' +
         '<td>' + (c.answered ? '<span class="cl-yes">✓</span>' : '<span class="cl-no">✗</span>') + '</td>' +
         '<td>' + (c.talk_sec ? esc(mmss(c.talk_sec)) : '—') + '</td></tr>';
@@ -1399,7 +1407,7 @@
   function paintAgents(all, head) {
     var by = {};
     all.forEach(function (c) {
-      var k = c.agent_name || 'ללא נציג';
+      var k = agentOf(c);
       by[k] = by[k] || { n: 0, ans: 0, out: 0, inn: 0, talk: 0, last: null, depts: {}, scores: [], sent: { 'חיובי': 0, 'ניטרלי': 0, 'שלילי': 0 }, sugg: {}, alerts: 0 };
       var o = by[k]; o.n++;
       if (c.answered) { o.ans++; o.talk += (+c.talk_sec || 0); }
@@ -1524,7 +1532,7 @@
   //  כרטיס נציג מפורט — drill-down בלחיצה על שם נציג בדוחות.
   function acInfo(k, v, cls) { return '<div class="cv-info-item"><div class="cv-info-k">' + esc(k) + '</div><div class="cv-info-v ' + (cls || '') + '">' + esc(v) + '</div></div>'; }
   function renderAgentCard(name, all) {
-    var calls = all.filter(function (c) { return (c.agent_name || 'ללא נציג') === name; });
+    var calls = all.filter(function (c) { return (agentOf(c)) === name; });
     var az = calls.filter(function (c) { return c.crm_analysis && typeof c.crm_analysis.score === 'number'; });
     var ans = calls.filter(function (c) { return c.answered === true; });
     var talk = ans.reduce(function (a, c) { return a + (+c.talk_sec || 0); }, 0);
@@ -1633,9 +1641,9 @@
     var teamEn = { confidence: [], courtesy: [], patience: [], initiative: [], optimism: [] };
     az.forEach(function (c) {
       var a = c.crm_analysis;
-      (a.objections_detailed || []).forEach(function (o) { objs.push({ o: o, agent: c.agent_name || '—', call: c.id }); });
-      (a.red_flags || []).forEach(function (f) { flags.push({ f: f, agent: c.agent_name || '—', call: c.id }); });
-      (a.action_items || []).forEach(function (t) { acts.push({ t: t, agent: c.agent_name || '—', call: c.id }); });
+      (a.objections_detailed || []).forEach(function (o) { objs.push({ o: o, agent: agentOf(c), call: c.id }); });
+      (a.red_flags || []).forEach(function (f) { flags.push({ f: f, agent: agentOf(c), call: c.id }); });
+      (a.action_items || []).forEach(function (t) { acts.push({ t: t, agent: agentOf(c), call: c.id }); });
       var s = a.agent_skills || {}; Object.keys(teamSk).forEach(function (k) { if (typeof s[k] === 'number') teamSk[k].push(s[k]); });
       var e = a.agent_energy || {}; Object.keys(teamEn).forEach(function (k) { if (typeof e[k] === 'number') teamEn[k].push(e[k]); });
     });
@@ -1697,7 +1705,7 @@
     //  אגרגציה פר-נציג
     var byAg = {};
     az.forEach(function (c) {
-      var k = c.agent_name || 'ללא נציג', a = c.crm_analysis;
+      var k = agentOf(c), a = c.crm_analysis;
       var o = byAg[k] || (byAg[k] = { calls: 0, scores: [], sk: { objection_handling: [], empathy: [], clarity: [], needs_discovery: [] }, objs: 0, objRes: 0, flags: 0, sent: { 'חיובי': 0, 'ניטרלי': 0, 'שלילי': 0 }, weak: {}, sugg: {} });
       o.calls++; o.scores.push(a.score);
       var s = a.agent_skills || {}; Object.keys(o.sk).forEach(function (k2) { if (typeof s[k2] === 'number') o.sk[k2].push(s[k2]); });
@@ -1905,7 +1913,7 @@
       if (callFilter.dir && c.direction !== callFilter.dir) return false;
       if (callFilter.ans === 'y' && c.answered !== true) return false;
       if (callFilter.ans === 'n' && c.answered !== false) return false;
-      if (callFilter.agent && (c.agent_name || 'ללא נציג') !== callFilter.agent) return false;
+      if (callFilter.agent && (agentOf(c)) !== callFilter.agent) return false;
       if (callFilter.phone && last9(callPhone(c)) !== last9(callFilter.phone)) return false;
       if (callFilter.rec === 'y' && !c.recording_url) return false;
       if (callFilter.rec === 'n' && c.recording_url) return false;
@@ -1920,7 +1928,7 @@
       }
       if (callFilter.q) {
         var q = callFilter.q.toLowerCase();
-        var hay = [c.from_number, c.to_number, c.did, c.agent_name, c.department,
+        var hay = [c.from_number, c.to_number, c.did, c.agent_name, agentOf(c), c.department,
                    c._lead && c._lead.name, c.transcript].filter(Boolean).join(' ').toLowerCase();
         if (hay.indexOf(q) < 0) return false;
       }
@@ -2115,7 +2123,7 @@
       (has(a.score_reason) ? '<div class="cv-txt" style="margin-top:8px">' + esc(a.score_reason) + '</div>' : ''));
 
     var sk = a.agent_skills || {};
-    if (Object.keys(sk).length || (a.agent_strengths && a.agent_strengths.length) || (a.agent_weaknesses && a.agent_weaknesses.length) || has(a.manager_insight)) blocks += sec('🎯 ביצועי נציג' + (c.agent_name ? ' · ' + esc(c.agent_name) : ''),
+    if (Object.keys(sk).length || (a.agent_strengths && a.agent_strengths.length) || (a.agent_weaknesses && a.agent_weaknesses.length) || has(a.manager_insight)) blocks += sec('🎯 ביצועי נציג' + ' · ' + esc(agentOf(c)),
       (Object.keys(sk).length ? '<div class="skill-list">' + skillBar('טיפול בהתנגדויות', sk.objection_handling) + skillBar('אמפתיה', sk.empathy) + skillBar('בהירות תקשורת', sk.clarity) + skillBar('גילוי צרכים', sk.needs_discovery) + '</div>' : '') +
       ((a.agent_strengths && a.agent_strengths.length) ? '<div class="cv-sub-h" style="color:var(--ok)">✓ חוזקות</div>' + ul(a.agent_strengths) : '') +
       ((a.agent_weaknesses && a.agent_weaknesses.length) ? '<div class="cv-sub-h" style="color:var(--danger)">△ לשיפור</div>' + ul(a.agent_weaknesses) : '') +
@@ -2161,7 +2169,7 @@
     if (!blocks) blocks = '<div class="card cv-block"><div class="ai-empty">' + (c.transcript ? 'הניתוח בדרך (עד כמה דקות).' : 'הניתוח יופק אחרי התמלול.') + '</div></div>';
 
     var det = [
-      ['נציג', (c.agent_name || '—') + (c.agent_ext ? ' · שלוחה ' + c.agent_ext : '')],
+      ['נציג', agentOf(c) + (c.agent_ext ? ' · שלוחה ' + c.agent_ext : '')],
       ['מחלקה', c.department || '—'],
       ['מספר הלקוח', callPhone(c) || '—'],
       ['משך שיחה', c.talk_sec ? mmss(c.talk_sec) : '—'],
@@ -2185,7 +2193,7 @@
       '</div></div>' +
       (headBadges ? '<div class="cv-headbadges">' + headBadges + '</div>' : '') +
       '<div class="cv-info">' +
-        info('נציג', c.agent_name || '—') +
+        info('נציג', agentOf(c)) +
         info('מספר הלקוח', callPhone(c) || '—', 'ltr') +
         info('מחלקה', c.department || '—') +
         info('משך שיחה', c.talk_sec ? mmss(c.talk_sec) : '—') +
