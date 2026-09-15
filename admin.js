@@ -1480,24 +1480,35 @@
   }
   function wireMgrReport() {
     var rng = callRange(), lbl = callRangeLabel();
-    var mgrKey = 'fdmgr:' + rng.since.slice(0, 10) + ':' + rng.until.slice(0, 10);
-    var body = $('mgrBody'), btn = $('mgrGen'); if (!btn || !body) return;
-    function showCached() {
-      try { var c = JSON.parse(localStorage.getItem(mgrKey) || 'null'); if (c && c.report) { body.innerHTML = renderMgrReport(c.report, c.stats) + '<div class="muted" style="font-size:11px;margin-top:10px">\u05e0\u05d5\u05e6\u05e8: ' + new Date(c.generated_at).toLocaleString('he-IL') + '</div>'; btn.textContent = '\ud83d\udd04 \u05e8\u05e2\u05e0\u05df \u05d3\u05d5\u05d7'; return true; } } catch (e) { }
-      return false;
+    var body = $('mgrBody'), btn = $('mgrGen'), hist = $('mgrHist'); if (!btn || !body) return;
+    var rows = [];
+    function showReport(rec, note) {
+      body.innerHTML = renderMgrReport(rec.data || rec.report, rec.stats) +
+        (note ? '<div class="muted" style="font-size:11px;margin-top:10px">' + esc(note) + '</div>' : '');
+    }
+    //  היסטוריית הדוחות היומיים השמורים במסד — לראות שיפור מיום ליום.
+    function loadHist(selectDate) {
+      db.from('call_reports').select('report_date,label,data,stats,created_at').eq('report_type', 'manager').order('report_date', { ascending: false }).limit(120).then(function (r) {
+        rows = (r && r.data) || [];
+        if (hist) hist.innerHTML = '<option value="">\u05d3\u05d5\u05d7\u05d5\u05ea \u05e9\u05de\u05d5\u05e8\u05d9\u05dd (' + rows.length + ')\u2026</option>' +
+          rows.map(function (x) { return '<option value="' + esc(x.report_date) + '">' + esc(x.report_date) + (x.label ? ' \u00b7 ' + esc(x.label) : '') + '</option>'; }).join('');
+        var pick = selectDate ? rows.filter(function (x) { return x.report_date === selectDate; })[0] : rows[0];
+        if (pick) { if (hist) hist.value = pick.report_date; showReport(pick, '\u05d3\u05d5\u05d7 \u05de-' + pick.report_date + ' \u00b7 \u05e0\u05e9\u05de\u05e8 ' + new Date(pick.created_at).toLocaleString('he-IL')); }
+        else body.innerHTML = '<div class="muted" style="font-size:12.5px">\u05d0\u05d9\u05df \u05e2\u05d3\u05d9\u05d9\u05df \u05d3\u05d5\u05d7\u05d5\u05ea \u05e9\u05de\u05d5\u05e8\u05d9\u05dd. \u05dc\u05d7\u05e6\u05d5 "\u05e6\u05d5\u05e8 \u05dc\u05d8\u05d5\u05d5\u05d7 \u05d4\u05e0\u05d5\u05db\u05d7\u05d9" \u05dc\u05d3\u05d5\u05d7 \u05d4\u05e8\u05d0\u05e9\u05d5\u05df (\u05d9\u05d9\u05e9\u05de\u05e8, \u05d5\u05de\u05d7\u05e8 \u05d9\u05d5\u05e4\u05e7 \u05d3\u05d5\u05d7 \u05d9\u05d5\u05de\u05d9 \u05d0\u05d5\u05d8\u05d5\u05de\u05d8\u05d9).</div>';
+      }, function () { });
     }
     function gen() {
       btn.disabled = true; btn.textContent = '\u05de\u05e4\u05d9\u05e7\u2026'; body.innerHTML = '<div class="ai-empty">\u05de\u05e4\u05d9\u05e7 \u05d3\u05d5\u05d7 \u05d0\u05d9\u05de\u05d5\u05df (\u05e2\u05d3 ~20 \u05e9\u05e0\u05d9\u05d5\u05ea)\u2026</div>';
       db.functions.invoke('call-report', { body: { since: rng.since, until: rng.until, label: lbl } }).then(function (r) {
-        btn.disabled = false; btn.textContent = '\ud83d\udd04 \u05e8\u05e2\u05e0\u05df \u05d3\u05d5\u05d7';
+        btn.disabled = false; btn.textContent = '\u2728 \u05e6\u05d5\u05e8 \u05dc\u05d8\u05d5\u05d5\u05d7 \u05d4\u05e0\u05d5\u05db\u05d7\u05d9';
         var d = (r && r.data) || {};
         if (d.error || !d.report) { body.innerHTML = '<div class="ai-empty">' + (d.empty ? '\u05d0\u05d9\u05df \u05e0\u05ea\u05d5\u05e0\u05d9\u05dd \u05d1\u05d8\u05d5\u05d5\u05d7.' : '\u05e9\u05d2\u05d9\u05d0\u05d4: ' + esc(d.error || '\u05dc\u05d0 \u05d9\u05d3\u05d5\u05e2\u05d4')) + '</div>'; return; }
-        try { localStorage.setItem(mgrKey, JSON.stringify(d)); } catch (e) { }
-        body.innerHTML = renderMgrReport(d.report, d.stats) + '<div class="muted" style="font-size:11px;margin-top:10px">\u05e0\u05d5\u05e6\u05e8 \u05e2\u05db\u05e9\u05d9\u05d5</div>';
-      }, function () { btn.disabled = false; btn.textContent = '\ud83d\udd04 \u05e8\u05e2\u05e0\u05df \u05d3\u05d5\u05d7'; body.innerHTML = '<div class="ai-empty">\u05e9\u05d2\u05d9\u05d0\u05d4 \u05d1\u05d4\u05e4\u05e7\u05d4</div>'; });
+        showReport(d, '\u05e0\u05d5\u05e6\u05e8 \u05e2\u05db\u05e9\u05d9\u05d5 \u00b7 \u05e0\u05e9\u05de\u05e8 \u05dc-' + d.report_date); loadHist(d.report_date);
+      }, function () { btn.disabled = false; btn.textContent = '\u2728 \u05e6\u05d5\u05e8 \u05dc\u05d8\u05d5\u05d5\u05d7 \u05d4\u05e0\u05d5\u05db\u05d7\u05d9'; body.innerHTML = '<div class="ai-empty">\u05e9\u05d2\u05d9\u05d0\u05d4 \u05d1\u05d4\u05e4\u05e7\u05d4</div>'; });
     }
-    if (!showCached()) body.innerHTML = '<div class="muted" style="font-size:12.5px">\u05dc\u05d7\u05e6\u05d5 "\u05e6\u05d5\u05e8 \u05d3\u05d5\u05d7" \u05dc\u05e1\u05d9\u05db\u05d5\u05dd \u05d0\u05d9\u05de\u05d5\u05df \u05de\u05e0\u05d4\u05dc\u05d9\u05dd \u05dc-' + esc(lbl) + ' (\u05e7\u05e8\u05d9\u05d0\u05ea AI \u05d0\u05d7\u05ea).</div>';
+    if (hist) hist.addEventListener('change', function () { var v = this.value; if (!v) return; var rec = rows.filter(function (x) { return x.report_date === v; })[0]; if (rec) showReport(rec, '\u05d3\u05d5\u05d7 \u05de-' + rec.report_date + ' \u00b7 \u05e0\u05e9\u05de\u05e8 ' + new Date(rec.created_at).toLocaleString('he-IL')); });
     btn.addEventListener('click', gen);
+    loadHist();
   }
 
   function paintReports(all, head) {
@@ -1650,7 +1661,7 @@
     }).join('');
 
     view('<div class="card">' + head +
-      '<div class="card cl-sub" style="margin-bottom:14px"><div class="row-between" style="flex-wrap:wrap;gap:8px;align-items:center"><h3 class="cl-h" style="margin:0">🧑‍🏫 אימון מנהלים (AI)</h3><button class="btn btn-sm" id="mgrGen">✨ צור דוח</button></div><div id="mgrBody" style="margin-top:12px"></div></div>' +
+      '<div class="card cl-sub" style="margin-bottom:14px"><div class="row-between" style="flex-wrap:wrap;gap:8px;align-items:center"><h3 class="cl-h" style="margin:0">🧑‍🏫 אימון מנהלים (AI)</h3><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><select class="inp" id="mgrHist" style="width:210px"></select><button class="btn btn-sm" id="mgrGen">✨ צור לטווח הנוכחי</button></div></div><div id="mgrBody" style="margin-top:12px"></div></div>' +
       '<div class="cards" style="margin-bottom:16px">' +
         stat('שיחות מנותחות', az.length, null, 'analyzed') +
         stat('ציון צוות ממוצע', teamScore, null, null, teamScore >= 70 ? 'טוב' : teamScore >= 40 ? 'בינוני' : 'דורש שיפור') +
