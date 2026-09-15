@@ -1105,15 +1105,18 @@
   var CALL_AGENT_OR = CALL_AGENTS.map(function (n) { return 'from_number.ilike.*' + n + ',to_number.ilike.*' + n; }).join(',');
   //  כל מספר במסך מוביל לרשימה המסוננת שמאחוריו. הסינון מוחזק כאן ולא
   //  בכתובת, כדי שחזרה ללשונית תשמור את ההקשר שממנו הגעת.
-  var callFilter = { dept: '', dir: '', ans: '', q: '', agent: '', hour: '', phone: '', rec: '', today: '' };
+  var callFilter = { dept: '', dir: '', ans: '', q: '', agent: '', hour: '', phone: '', rec: '', today: '', sentiment: '', ctype: '', scoreband: '', analyzed: '' };
   var CF_LABELS = { dept: 'מחלקה', dir: 'כיוון', ans: 'מענה', q: 'חיפוש', agent: 'נציג',
-                    hour: 'שעה', phone: 'מספר', rec: 'הקלטה', today: 'תקופה' };
+                    hour: 'שעה', phone: 'מספר', rec: 'הקלטה', today: 'תקופה',
+                    sentiment: 'סנטימנט', ctype: 'סוג שיחה', scoreband: 'ציון', analyzed: 'ניתוח' };
   function cfText(k, v) {
     if (k === 'dir') return v === 'in' ? 'נכנסות' : 'יוצאות';
     if (k === 'ans') return v === 'y' ? 'נענו' : 'לא נענו';
     if (k === 'hour') return v + ':00';
     if (k === 'rec') return v === 'y' ? 'עם הקלטה' : 'בלי הקלטה';
     if (k === 'today') return 'היום בלבד';
+    if (k === 'scoreband') return v === 'low' ? 'ציון נמוך (<40)' : v;
+    if (k === 'analyzed') return 'נותחו בלבד';
     return v;
   }
   function cfClear() { Object.keys(callFilter).forEach(function (k) { callFilter[k] = ''; }); }
@@ -1175,14 +1178,15 @@
   //  עמודות מיני — אותו רעיון של הגרפים בדוחות, בלי ספרייה חיצונית
   function miniBars(items, fmt) {
     var max = Math.max.apply(null, items.map(function (i) { return i[1]; }).concat([1]));
-    return '<div style="display:flex;align-items:flex-end;gap:3px;height:120px;direction:ltr">' +
+    var H = 92;
+    return '<div style="display:flex;align-items:flex-end;gap:4px;height:' + (H + 22) + 'px;direction:ltr;border-bottom:1px solid var(--line);padding-bottom:2px">' +
       items.map(function (i) {
-        var h = Math.round(i[1] / max * 100);
-        return '<div class="cl-bar" ' + (i[1] ? 'data-go=\'{"hour":"' + (+i[0]) + '"}\' style="cursor:pointer;" ' : 'style="') +
-          'flex:1;min-width:0;display:flex;flex-direction:column;justify-content:flex-end;height:100%" title="' +
+        var barPx = i[1] ? Math.max(4, Math.round(i[1] / max * H)) : 0;
+        return '<div class="cl-bar" ' + (i[1] ? 'data-go="{&quot;hour&quot;:&quot;' + (+i[0]) + '&quot;}" ' : '') +
+          'style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;' + (i[1] ? 'cursor:pointer' : '') + '" title="' +
           esc(i[0] + ':00 · ' + (fmt ? fmt(i[1]) : i[1]) + (i[1] ? ' — לחצו לרשימה' : '')) + '">' +
-          '<div style="font-size:9.5px;color:var(--muted);text-align:center">' + (i[1] || '') + '</div>' +
-          '<div style="background:var(--brand);border-radius:3px 3px 0 0;height:' + Math.max(i[1] ? 3 : 0, h) + '%"></div></div>';
+          '<div style="font-size:9.5px;color:var(--muted);margin-bottom:2px">' + (i[1] || '') + '</div>' +
+          '<div style="width:70%;max-width:24px;background:var(--brand);border-radius:3px 3px 0 0;height:' + barPx + 'px"></div></div>';
       }).join('') + '</div>' +
       '<div style="display:flex;gap:3px;direction:ltr;margin-top:4px">' +
         items.map(function (i, n) {
@@ -1192,16 +1196,31 @@
   }
 
 
+  //  שליפה מלאה בעמודים: PostgREST מגביל את מספר השורות לכל בקשה, ולכן
+  //  שולפים עד שעמוד חוזר קטן מהמבוקש — כך לא מחסירים אף שיחה בטווח.
+  function fetchAll(build) {
+    return new Promise(function (resolve, reject) {
+      var out = [], size = 1000;
+      (function page(from) {
+        build().range(from, from + size - 1).then(function (r) {
+          if (r.error) return reject(r.error);
+          var rows = r.data || [];
+          out = out.concat(rows);
+          if (rows.length < size) resolve(out); else page(from + size);
+        }, reject);
+      })(0);
+    });
+  }
+
   function renderCalls(sub) {
     sub = sub || 'overview';
     loading();
     var rng = callRange();
     Promise.all([
-      db.from('calls').select('*').or(CALL_AGENT_OR).gte('started_at', rng.since).lte('started_at', rng.until).order('started_at', { ascending: false }).limit(5000),
-      db.from('leads').select('id,name,phone,status').is('deleted_at', null).limit(5000)
+      fetchAll(function () { return db.from('calls').select('*').or(CALL_AGENT_OR).gte('started_at', rng.since).lte('started_at', rng.until).order('started_at', { ascending: false }); }),
+      fetchAll(function () { return db.from('leads').select('id,name,phone,status').is('deleted_at', null); })
     ]).then(function (res) {
-      if (res[0].error) return errBox(res[0].error.message);
-      var all = res[0].data || [], leads = res[1].data || [], lmap = {}, byPhone = {};
+      var all = res[0] || [], leads = res[1] || [], lmap = {}, byPhone = {};
       leads.forEach(function (l) { lmap[l.id] = l; if (l.phone) byPhone[last9(l.phone)] = l; });
       all.forEach(function (c) { c._lead = c.lead_id ? lmap[c.lead_id] : (byPhone[last9(callPhone(c))] || null); });
 
@@ -1260,9 +1279,9 @@
       '<div class="donut" style="background:conic-gradient(var(--ok) 0 ' + pa + 'deg,var(--warn) ' + pa + 'deg ' + (pa + na) + 'deg,var(--danger) ' + (pa + na) + 'deg 360deg)">' +
         '<div class="donut-hole"><div class="donut-num">' + P(pos) + '%</div><div class="donut-lbl">חיובי</div></div></div>' +
       '<div class="donut-leg">' +
-        '<div><span class="sdot" style="background:var(--ok)"></span>חיובי <b>' + pos + '</b> · ' + P(pos) + '%</div>' +
-        '<div><span class="sdot" style="background:var(--warn)"></span>ניטרלי <b>' + neu + '</b> · ' + P(neu) + '%</div>' +
-        '<div><span class="sdot" style="background:var(--danger)"></span>שלילי <b>' + neg + '</b> · ' + P(neg) + '%</div>' +
+        '<div class="cl-legrow" data-go="{&quot;sentiment&quot;:&quot;חיובי&quot;}"><span class="sdot" style="background:var(--ok)"></span>חיובי <b>' + pos + '</b> · ' + P(pos) + '%</div>' +
+        '<div class="cl-legrow" data-go="{&quot;sentiment&quot;:&quot;ניטרלי&quot;}"><span class="sdot" style="background:var(--warn)"></span>ניטרלי <b>' + neu + '</b> · ' + P(neu) + '%</div>' +
+        '<div class="cl-legrow" data-go="{&quot;sentiment&quot;:&quot;שלילי&quot;}"><span class="sdot" style="background:var(--danger)"></span>שלילי <b>' + neg + '</b> · ' + P(neg) + '%</div>' +
       '</div></div>';
   }
   function typeBars(types) {
@@ -1272,7 +1291,7 @@
     var COL = { 'מכירה ראשונית': '#6366f1', 'המשך מכירה': 'var(--brand)', 'שירות': '#0ea5e9', 'לא רלוונטי': 'var(--danger)' };
     return keys.sort(function (a, b) { return types[b] - types[a]; }).map(function (k) {
       var w = Math.round(types[k] / max * 100);
-      return '<div class="hbar-row"><div class="hbar-lbl">' + esc(k) + '</div>' +
+      return '<div class="hbar-row" data-go="{&quot;ctype&quot;:&quot;' + esc(k) + '&quot;}" style="cursor:pointer"><div class="hbar-lbl">' + esc(k) + '</div>' +
         '<div class="hbar-track"><div class="hbar-fill" style="width:' + Math.max(4, w) + '%;background:' + (COL[k] || 'var(--brand)') + '"></div></div>' +
         '<div class="hbar-n">' + types[k] + '</div></div>';
     }).join('');
@@ -1350,8 +1369,8 @@
         stat('סה"כ בטווח', all.length, null, 'all') +
         stat('שיעור מענה', pct(ans.length, all.length) + '%', null, 'ansOnly') +
         stat('משך שיחה ממוצע', ans.length ? mmss(talk / ans.length) : '—', null, 'ansOnly') +
-        stat('ציון שיחה ממוצע', avgScore != null ? avgScore : '—', null, null, az.length + ' נותחו') +
-        stat('התראות (ציון<40)', alerts.length, null, null, 'דורש תשומת לב') +
+        stat('ציון שיחה ממוצע', avgScore != null ? avgScore : '—', null, 'analyzed', az.length + ' נותחו') +
+        stat('התראות (ציון<40)', alerts.length, null, 'alerts', 'דורש תשומת לב') +
       '</div>' +
       '<div class="grid2" style="gap:14px">' +
         '<div class="card cl-sub"><h3 class="cl-h">😊 סנטימנט שיחות</h3>' + sentDonut(sent['חיובי'], sent['ניטרלי'], sent['שלילי']) + '</div>' +
@@ -1518,6 +1537,10 @@
       if (callFilter.phone && last9(callPhone(c)) !== last9(callFilter.phone)) return false;
       if (callFilter.rec === 'y' && !c.recording_url) return false;
       if (callFilter.rec === 'n' && c.recording_url) return false;
+      if (callFilter.sentiment && (!c.crm_analysis || c.crm_analysis.sentiment !== callFilter.sentiment)) return false;
+      if (callFilter.ctype && (!c.crm_analysis || c.crm_analysis.call_type !== callFilter.ctype)) return false;
+      if (callFilter.scoreband === 'low' && (!c.crm_analysis || typeof c.crm_analysis.score !== 'number' || c.crm_analysis.score >= 40)) return false;
+      if (callFilter.analyzed === 'y' && (!c.crm_analysis || typeof c.crm_analysis.score !== 'number')) return false;
       if (callFilter.hour !== '' && c.started_at && new Date(c.started_at).getHours() !== +callFilter.hour) return false;
       if (callFilter.today) {
         var t0 = new Date(); t0.setHours(0, 0, 0, 0);
@@ -1602,6 +1625,8 @@
         if (k === 'ansOnly') return goList({ ans: 'y' });
         if (k === 'noAns') return goList({ ans: 'n' });
         if (k === 'rec') return goList({ rec: 'y' });
+        if (k === 'analyzed') return goList({ analyzed: 'y' });
+        if (k === 'alerts') return goList({ scoreband: 'low' });
         return goList({});
       }
       var row = e2.target.closest('tr[data-callinfo]');
