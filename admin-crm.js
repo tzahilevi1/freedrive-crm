@@ -411,7 +411,7 @@
     { key: 'status', label: 'סטטוס לקוח', w: 130, cell: function (l) { return '<td>' + badge(l.status || 'new', true, l.id) + '</td>'; } },
     { key: 'source', label: 'מקור הגעה', w: 130, cell: function (l) { return '<td>' + (l.source ? '<span class="tag">' + esc(l.source) + '</span>' : '—') + '</td>'; } },
     { key: 'car', label: 'רכב', w: 280, cell: function (l) { return '<td class="ltr wrap2" title="' + esc(l.car || '') + '">' + esc(l.car || '—') + '</td>'; } },
-    { key: 'updated', label: 'עדכון אחרון', w: 150, sort: function (l) { return l.updated_at || l.status_changed_at || l.created_at || ''; }, cell: function (l) { return '<td class="muted">' + fmt(l.updated_at || l.status_changed_at || l.created_at) + '</td>'; } },
+    { key: 'updated', label: 'עדכון אחרון', w: 150, descFirst: true, sort: function (l) { return l.updated_at || l.status_changed_at || l.created_at || ''; }, cell: function (l) { return '<td class="muted">' + fmt(l.updated_at || l.status_changed_at || l.created_at) + '</td>'; } },
     { key: 'brand', label: 'מותג', w: 120, def: false, cell: function (l) { return '<td>' + esc(l.brand || '—') + '</td>'; } },
     { key: 'city', label: 'עיר', w: 110, def: false, cell: function (l) { return '<td>' + esc(l.city || '—') + '</td>'; } },
     { key: 'email', label: 'אימייל', w: 210, def: false, cell: function (l) { return '<td class="muted ltr" title="' + esc(l.email || '') + '">' + esc(l.email || '—') + '</td>'; } },
@@ -421,7 +421,7 @@
     { key: 'marketing_company', label: 'חברת שיווק', w: 150, def: false, cell: function (l) { return '<td class="muted">' + esc(l.marketing_company || '—') + '</td>'; } },
     { key: 'message', label: 'תיאור / הודעה', w: 260, def: false, cell: function (l) { return '<td class="muted" style="max-width:220px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + esc(l.message || '—') + '</td>'; } },
     { key: 'lead_no', label: 'מספר לקוח', w: 130, def: false, sort: function (l) { return l.lead_no || l.id || ''; }, cell: function (l) { return '<td class="muted">' + esc(l.lead_no || l.id || '—') + '</td>'; } },
-    { key: 'created', label: 'נוצר בתאריך', w: 140, def: false, sort: function (l) { return l.created_at || ''; }, cell: function (l) { return '<td class="muted">' + fmt(l.created_at) + '</td>'; } },
+    { key: 'created', label: 'נוצר בתאריך', w: 140, def: false, descFirst: true, sort: function (l) { return l.created_at || ''; }, cell: function (l) { return '<td class="muted">' + fmt(l.created_at) + '</td>'; } },
     //  שאר שדות הליד. עד היום הם נראו רק בכרטיס הליד, ולכן אי אפשר
     //  היה לסנן, למיין או לייצא לפיהם מתוך הרשימה.
     C.txtCol('utm_medium', 'utm_medium', { ltr: true, w: 130 }),
@@ -2957,7 +2957,7 @@
     { key: 'salesperson', label: 'איש מכירות', def: false, cell: function (d) { return '<td>' + esc(d.salesperson || '—') + '</td>'; } },
     { key: 'brand', label: 'מותג', def: false, cell: function (d) { return '<td>' + esc(d.brand || '—') + '</td>'; } },
     { key: 'phone', label: 'טלפון', def: false, cell: function (d) { return '<td>' + esc(d.client_phone || '—') + '</td>'; } },
-    { key: 'created', label: 'נוצר', def: false, cell: function (d) { return '<td class="muted">' + fmt(d.created_at) + '</td>'; } },
+    { key: 'created', label: 'נוצר', def: false, descFirst: true, sort: function (d) { return d.created_at || ''; }, cell: function (d) { return '<td class="muted">' + fmt(d.created_at) + '</td>'; } },
     //  שאר שדות העסקה. לא נכללים שדות פנימיים (טוקן חתימה, HTML של
     //  ההסכם, סימוני מחיקה) שאין להם משמעות כעמודה בטבלה.
     C.txtCol('status', 'סטטוס עסקה', { w: 130 }),

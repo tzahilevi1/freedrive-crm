@@ -931,8 +931,11 @@
       var th = e.target.closest && e.target.closest('th[data-cv="' + viewKey + '"][data-sortcol]');
       if (!th || (e.target.closest && e.target.closest('.col-grip'))) return;
       var k = th.dataset.sortcol, s = state.sort;
-      if (!s || s.key !== k) state.sort = { key: k, dir: 'asc' };
-      else if (s.dir === 'asc') state.sort = { key: k, dir: 'desc' };
+      //  עמודות תאריך (descFirst) מתחילות ביורד — חדש→ישן — הסדר
+      //  הטבעי למועד; שאר העמודות מתחילות בעולה (א→ת / קטן→גדול).
+      var col = byKey[k], first = (col && col.descFirst) ? 'desc' : 'asc', second = first === 'asc' ? 'desc' : 'asc';
+      if (!s || s.key !== k) state.sort = { key: k, dir: first };
+      else if (s.dir === first) state.sort = { key: k, dir: second };
       else state.sort = null;
       save(); onChange();
     });
@@ -986,7 +989,7 @@
   //  והשאר ממתין בלשונית משלו עם הסבר מה חסם אותו — במקום כרטיסים ריקים
   //  שנראים כמו תקלה.
   var CALL_COLS = [
-    { key: 'when', label: 'מועד', w: 150, fixed: true,
+    { key: 'when', label: 'מועד', w: 150, fixed: true, descFirst: true,
       sort: function (c) { return c.started_at || c.created_at || ''; },
       cell: function (c) { return '<td class="muted">' + esc(c.started_at ? fmtDateTime(c.started_at) : '—') + '</td>'; } },
     { key: 'dir', label: 'כיוון', w: 90,
@@ -1129,7 +1132,10 @@
     var node;
     if (url) {
       node = document.createElement('audio');
-      node.className = cls; node.controls = true; node.preload = 'none'; node.src = url;
+      node.className = cls; node.controls = true;
+      //  עמוד השיחה (cl-wide) טוען מראש את הקובץ הקטן (~120KB) כדי שהמשך
+      //  יוצג ואפשר לנגן מיד; ברשימה טוענים רק מטא-דאטה לקִלוּת.
+      node.preload = (cls === 'cl-wide') ? 'auto' : 'metadata'; node.src = url;
     } else {
       node = document.createElement('span');
       node.className = 'muted'; node.style.fontSize = '11px';
@@ -1820,7 +1826,7 @@
     { key: 'status', label: 'סטטוס', cell: function (a) { return '<td>' + (a._handled ? '<span class="done-badge">✓ בוצעה</span>' : a._soon ? '<span class="task-open">● עתידית</span>' : a._overdue ? '<span class="tag" style="background:rgba(220,38,38,.12);color:var(--danger)">⏰ עברה</span>' : '<span class="tag">חדשה</span>') + '</td>'; } },
     { key: 'name', label: 'שם', fixed: true, cell: function (a) { return '<td><b>' + esc(a.name) + '</b>' + (a._lid ? ' <span class="muted" style="font-size:11px">→ לכרטיס</span>' : '') + '</td>'; } },
     { key: 'phone', label: 'טלפון', cell: function (a) { return '<td>' + esc(a.phone || '—') + '</td>'; } },
-    { key: 'when', label: 'מועד', cell: function (a) { return '<td><input type="datetime-local" class="inp" data-appt-when="' + a.id + '" value="' + a._dt + '" onclick="event.stopPropagation()" style="font-size:12.5px"></td>'; } },
+    { key: 'when', label: 'מועד', descFirst: true, sort: function (a) { return a._dt || ''; }, cell: function (a) { return '<td><input type="datetime-local" class="inp" data-appt-when="' + a.id + '" value="' + a._dt + '" onclick="event.stopPropagation()" style="font-size:12.5px"></td>'; } },
     { key: 'mode', label: 'אופן', cell: function (a) { return '<td><select class="inp" data-appt-mode="' + a.id + '" onclick="event.stopPropagation()" style="width:auto;font-size:12.5px"><option value="">אופן…</option>' + APPT_MODES.map(function (m) { return '<option' + (a.appt_mode === m ? ' selected' : '') + '>' + m + '</option>'; }).join('') + '</select></td>'; } },
     { key: 'brand', label: 'מותג', cell: function (a) { return '<td><select class="inp" data-appt-brand="' + a.id + '" onclick="event.stopPropagation()" style="width:120px;font-size:12.5px">' + window.C2B.selOpts((window.C2B.marketingBrands || []), a.brand, '— מותג —') + '</select></td>'; } },
     { key: 'note', label: 'הערות', cell: function (a) { return '<td><input class="inp" data-appt-note="' + a.id + '" value="' + esc(a.note || '') + '" placeholder="הערות…" onclick="event.stopPropagation()" style="width:100%;min-width:150px;font-size:12.5px"></td>'; } },
@@ -1928,7 +1934,7 @@
     { key: 'title', label: 'משימה', fixed: true, cell: function (t) { return '<td' + (t.done ? ' class="muted" style="text-decoration:line-through"' : '') + '>' + esc(t.title) + '</td>'; } },
     { key: 'client', label: 'לקוח', cell: function (t) { var l = t._lead; return '<td>' + (l ? '<b>' + esc(l.name || '—') + '</b>' + (l.phone ? '<div class="muted" style="font-size:11px">' + esc(l.phone) + (l.car ? ' · ' + esc(l.car) : '') + '</div>' : '') : '<span class="muted">—</span>') + '</td>'; } },
     { key: 'created', label: 'נוצרה', cell: function (t) { return '<td class="muted">' + (t.created_at ? fmtDateTime(t.created_at) : '—') + '</td>'; } },
-    { key: 'due', label: 'מועד', cell: function (t) { var over = !t.done && t.due_at && new Date(t.due_at).getTime() < Date.now(); return '<td' + (over ? ' style="color:var(--danger);font-weight:600"' : ' class="muted"') + '>' + (t.due_at ? fmtDateTime(t.due_at) : '—') + '</td>'; } },
+    { key: 'due', label: 'מועד', descFirst: true, sort: function (t) { return t.due_at || ''; }, cell: function (t) { var over = !t.done && t.due_at && new Date(t.due_at).getTime() < Date.now(); return '<td' + (over ? ' style="color:var(--danger);font-weight:600"' : ' class="muted"') + '>' + (t.due_at ? fmtDateTime(t.due_at) : '—') + '</td>'; } },
     { key: 'notes', label: 'הערות', cell: function (t) { return '<td><input class="inp" data-tnote="' + t.id + '" value="' + esc(t.notes || '') + '" placeholder="הוסף הערה…" style="width:100%;min-width:150px;font-size:13px"></td>'; } },
     { key: 'open', label: 'פעולות', cell: function (t) { return '<td>' + (t.lead_id ? '<a href="#" data-lead="' + t.lead_id + '">פתח ליד →</a>' : '') + '</td>'; } },
     { key: 'assigned', label: 'אחראי', def: false, w: 160,
