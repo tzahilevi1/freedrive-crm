@@ -1727,6 +1727,7 @@
     //  ---- בלוקי הניתוח ----
     function sec(title, body) { return body ? '<div class="card cv-block"><h3 class="cv-bt">' + title + '</h3>' + body + '</div>' : ''; }
     function ul(arr) { return (Array.isArray(arr) && arr.length) ? '<ul class="cv-ul">' + arr.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul>' : ''; }
+    function info(k, v, cls) { return '<div class="cv-info-item"><div class="cv-info-k">' + esc(k) + '</div><div class="cv-info-v ' + (cls || '') + '">' + esc(v) + '</div></div>'; }
     var blocks = '';
 
     if (has(a.summary) || has(a.bottom_line) || has(a.what_done)) blocks += sec('📝 סיכום שיחה',
@@ -1809,11 +1810,20 @@
         (c._lead ? '<a href="#" class="btn btn-ghost btn-sm" data-golead="' + esc(c.lead_id) + '">👤 ' + esc(c._lead.name) + '</a>' : '') +
       '</div></div>' +
       (headBadges ? '<div class="cv-headbadges">' + headBadges + '</div>' : '') +
+      '<div class="cv-info">' +
+        info('נציג', c.agent_name || '—') +
+        info('מספר הלקוח', callPhone(c) || '—', 'ltr') +
+        info('מחלקה', c.department || '—') +
+        info('משך שיחה', c.talk_sec ? mmss(c.talk_sec) : '—') +
+        info('נענתה', c.answered === true ? 'כן' : c.answered === false ? 'לא' : '—') +
+      '</div>' +
 
       '<div class="cv-grid">' +
         '<div class="card cv-left"><h3 style="margin:0 0 12px">💬 מהלך השיחה</h3>' + recBlock + '<div class="cv-convo">' + convo + '</div>' +
-          '<div class="cl-kv" style="margin-top:14px">' + det.map(function (r) { return '<div class="k">' + esc(r[0]) + '</div><div class="v">' + esc(r[1]) + '</div>'; }).join('') + '</div>' +
-          (c.transcript ? '<details style="margin-top:12px"><summary class="muted" style="font-size:12px;cursor:pointer">תמלול גולמי</summary><div class="cl-tr" style="margin-top:8px">' + esc(c.transcript) + '</div></details>' : '') +
+          '<details style="margin-top:14px"><summary class="muted" style="font-size:12px;cursor:pointer">פרטים מלאים ותמלול גולמי</summary>' +
+          '<div class="cl-kv" style="margin-top:10px">' + det.map(function (r) { return '<div class="k">' + esc(r[0]) + '</div><div class="v">' + esc(r[1]) + '</div>'; }).join('') + '</div>' +
+          (c.transcript ? '<div class="cl-tr" style="margin-top:10px">' + esc(c.transcript) + '</div>' : '') +
+          '</details>' +
         '</div>' +
         '<div class="cv-analysis">' + blocks + '</div>' +
       '</div></div>');
