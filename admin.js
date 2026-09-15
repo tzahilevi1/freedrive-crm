@@ -1133,6 +1133,12 @@
     var f = last9(c.from_number), t = last9(c.to_number);
     return AGENT_NAMES[f] || AGENT_NAMES[t] || (c.agent_name || '—');
   }
+  //  המספר בן 9 הספרות של הנציג שדיבר (הצד שמזוהה בטבלת השמות) — לשיוך
+  //  משימה לנציג הנכון דרך profiles.agent_phone.
+  function agentNumOf(c) {
+    var f = last9(c.from_number), t = last9(c.to_number);
+    return AGENT_NAMES[f] ? f : (AGENT_NAMES[t] ? t : '');
+  }
   //  Voicenter מפיקה רשומת CDR לכל צלצול; שיחה נכנסת שלא נענתה מופיעה
   //  עשרות פעמים בשניות. מכווצים רצף כזה (אותו לקוח+נציג+כיוון, לא נענו,
   //  בפער < 2 דק') לאירוע אחד עם ספירת ניסיונות (_attempts).
@@ -2482,7 +2488,7 @@
     if (has(a.status_suggestion)) blocks += sec('🎯 סטטוס מומלץ',
       '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">' + badgeFor(a.status_suggestion, '') +
       (has(a.status_reason) ? '<span class="muted" style="font-size:12.5px">' + esc(a.status_reason) + '</span>' : '') +
-      (c.lead_id ? '<button class="btn btn-sm" data-applyst="' + esc(c.lead_id) + '" data-st="' + esc(a.status_suggestion) + '">החל על הליד</button>' + (a.next_step ? ' <button class="btn btn-ghost btn-sm" data-applytask="' + esc(c.lead_id) + '" data-st="' + esc(a.status_suggestion) + '" data-ns="' + esc(a.next_step) + '" data-nw="' + esc(a.next_step_when || '') + '">✓ החל + פתח משימה</button>' : '') : '') + '</div>');
+      (c._lead ? '<button class="btn btn-sm" data-applyst="' + esc(c._lead.id) + '" data-st="' + esc(a.status_suggestion) + '">החל על כרטיס הלקוח</button>' + (a.next_step ? ' <button class="btn btn-ghost btn-sm" data-applytask="' + esc(c._lead.id) + '" data-st="' + esc(a.status_suggestion) + '" data-ns="' + esc(a.next_step) + '" data-nw="' + esc(a.next_step_when || '') + '" data-agent="' + esc(c._agentUserId || '') + '">✓ החל + פתח משימה לנציג</button>' : '') : '<span class="muted" style="font-size:12px">הלקוח אינו קיים ככרטיס במערכת — לא נוצר ליד חדש</span>') + '</div>');
 
     if (!blocks) blocks = '<div class="card cv-block"><div class="ai-empty">' + (c.transcript ? 'הניתוח בדרך (עד כמה דקות).' : 'הניתוח יופק אחרי התמלול.') + '</div></div>';
 
@@ -2507,7 +2513,7 @@
         '<h3 style="margin:0">📞 שיחה · ' + esc(c.started_at ? fmtDateTime(c.started_at) : '') + '</h3>' +
         '<span class="cl-dir ' + dirCls + '">' + dir + '</span>' +
         (c.answered === false ? '<span class="cl-no">✗ לא נענתה</span>' : '') +
-        (c._lead ? '<a href="#" class="btn btn-ghost btn-sm" data-golead="' + esc(c.lead_id) + '">👤 ' + esc(c._lead.name) + '</a>' : '') +
+        (c._lead ? '<a href="#" class="btn btn-ghost btn-sm" data-golead="' + esc(c._lead.id) + '">👤 ' + esc(c._lead.name) + '</a>' : '') +
       '</div></div>' +
       (headBadges ? '<div class="cv-headbadges">' + headBadges + '</div>' : '') +
       '<div class="cv-info">' +
@@ -2576,7 +2582,7 @@
         var due = new Date(Date.now() + 864e5); due.setHours(10, 0, 0, 0);
         Promise.all([
           db.from('leads').update({ status: btn.dataset.st }).eq('id', btn.dataset.applytask),
-          db.from('tasks').insert({ lead_id: btn.dataset.applytask, title: btn.dataset.ns + (btn.dataset.nw ? ' (' + btn.dataset.nw + ')' : ''), due_at: due.toISOString(), done: false, created_by: (window.C2B && window.C2B.userId) || null })
+          db.from('tasks').insert({ lead_id: btn.dataset.applytask, title: btn.dataset.ns + (btn.dataset.nw ? ' (' + btn.dataset.nw + ')' : ''), due_at: due.toISOString(), done: false, assigned_to: btn.dataset.agent || null, created_by: (window.C2B && window.C2B.userId) || null })
         ]).then(function () { btn.textContent = '✓ הוחל + משימה'; if (window.C2B.refreshBadges) window.C2B.refreshBadges(); }, function () { btn.textContent = 'שגיאה'; });
       });
     });
@@ -2596,9 +2602,14 @@
       var ph = last9(callPhone(c));
       var q = ph ? db.from('leads').select('id,name').is('deleted_at', null)
         .filter('phone', 'ilike', '%' + ph).limit(1) : Promise.resolve({ data: [] });
-      q.then(function (lr) {
+      //  מפענחים את הנציג שדיבר לפי המספר שלו כדי לשייך אליו את המשימה.
+      var an = agentNumOf(c);
+      var qa = an ? db.from('profiles').select('user_id').ilike('agent_phone', '%' + an + '%').limit(1) : Promise.resolve({ data: [] });
+      Promise.all([q, qa]).then(function (res) {
         if (myTok !== viewToken) return;
+        var lr = res[0], pr = res[1];
         c._lead = (lr && lr.data && lr.data[0]) || (c.lead_id ? { id: c.lead_id, name: 'ליד' } : null);
+        c._agentUserId = (pr && pr.data && pr.data[0] && pr.data[0].user_id) || null;
         renderCallView(c);
       });
     });
