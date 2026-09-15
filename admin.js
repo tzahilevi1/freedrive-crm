@@ -1414,7 +1414,11 @@
     });
 
     if (!callCols) callCols = window.C2B.colPicker('calls', CALL_COLS, function () { renderCalls('list'); }, { sortable: true });
-    var rows = callCols.sortRows(list).map(function (c) { return '<tr>' + callCols.cells(c) + '</tr>'; }).join('');
+    //  כל השורה לחיצה — פותחת את עמוד השיחה. הבודק ב-wireCalls מדלג על
+    //  לחיצות על קישורים/כפתורים בתוך השורה (טלפון, ליד, וואטסאפ).
+    var rows = callCols.sortRows(list).map(function (c) {
+      return '<tr data-callinfo="' + esc(c.id) + '" style="cursor:pointer" title="לחצו לפתיחת עמוד השיחה">' + callCols.cells(c) + '</tr>';
+    }).join('');
     var dOpts = Object.keys(depts).sort(function (a, b) { return depts[b] - depts[a]; })
       .map(function (d) { return '<option value="' + esc(d) + '"' + (callFilter.dept === d ? ' selected' : '') + '>' + esc(d) + ' (' + depts[d] + ')</option>'; }).join('');
 
