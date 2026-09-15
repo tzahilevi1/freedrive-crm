@@ -518,8 +518,12 @@
       }).join('');
   }
 
+  //  אסימון תצוגה: כל ניווט מגדיל אותו; רינדור אסינכרוני מיושן (שנטען
+  //  לפני שעברת מסך) מבוטל ולא דורס את המסך החדש.
+  var viewToken = 0;
   function go(nav, opts) {
     opts = opts || {};
+    viewToken++;
     if (window.C2B && window.C2B.role && !navAllowed(nav, window.C2B.role)) { nav = 'dashboard'; opts = {}; }
     drawSubnav(nav);
     if (nav === 'users') { setActive(nav); if (window.innerWidth <= 820) { $('side').classList.remove('open'); $('overlay').classList.remove('open'); } return renderUsers(); }
@@ -1260,6 +1264,7 @@
 
   function renderCalls(sub) {
     sub = sub || 'overview';
+    var myTok = ++viewToken;
     //  כניסה ל"התראות" מסמנת אותן כנקראו — מאפסת את מונה ההתראות בתפריט.
     if (sub === 'alerts') { try { localStorage.setItem('fdAlertsSeen', new Date().toISOString()); } catch (e) { } var _ab = $('bAlerts'); if (_ab) { _ab.textContent = '0'; _ab.classList.add('hidden'); } }
     loading();
@@ -1268,6 +1273,7 @@
       fetchAll(function () { return db.from('calls').select('*').or(CALL_AGENT_OR).gte('started_at', rng.since).lte('started_at', rng.until).order('started_at', { ascending: false }); }),
       fetchAll(function () { return db.from('leads').select('id,name,phone,status').is('deleted_at', null); })
     ]).then(function (res) {
+      if (myTok !== viewToken) return;
       var all = dedupeCalls(res[0] || []), leads = res[1] || [], lmap = {}, byPhone = {};
       leads.forEach(function (l) { lmap[l.id] = l; if (l.phone) byPhone[last9(l.phone)] = l; });
       all.forEach(function (c) { c._lead = c.lead_id ? lmap[c.lead_id] : (byPhone[last9(callPhone(c))] || null); });
@@ -2370,14 +2376,17 @@
   var callBackSub = 'list';
   function openCall(id, backSub) {
     callBackSub = backSub || 'list';
+    var myTok = ++viewToken;
     loading();
     db.from('calls').select('*').eq('id', id).single().then(function (r) {
+      if (myTok !== viewToken) return;
       if (r.error || !r.data) return errBox('השיחה לא נמצאה');
       var c = r.data;
       var ph = last9(callPhone(c));
       var q = ph ? db.from('leads').select('id,name').is('deleted_at', null)
         .filter('phone', 'ilike', '%' + ph).limit(1) : Promise.resolve({ data: [] });
       q.then(function (lr) {
+        if (myTok !== viewToken) return;
         c._lead = (lr && lr.data && lr.data[0]) || (c.lead_id ? { id: c.lead_id, name: 'ליד' } : null);
         renderCallView(c);
       });
