@@ -1332,6 +1332,7 @@
         if (a.status_suggestion) o.sugg[a.status_suggestion] = (o.sugg[a.status_suggestion] || 0) + 1;
       }
     });
+    var maxTalk = Math.max.apply(null, Object.keys(byAg).map(function (k) { return byAg[k].talk; }).concat([1]));
     var agRows = Object.keys(byAg).sort(function (a, b) { return byAg[b].n - byAg[a].n; }).map(function (k) {
       var o = byAg[k];
       var sc = o.scores.length ? Math.round(o.scores.reduce(function (a, b) { return a + b; }, 0) / o.scores.length) : null;
@@ -1343,6 +1344,7 @@
         '<td>' + (sc != null ? scoreChip(sc) : '<span class="muted">—</span>') + '</td>' +
         '<td>' + (o.sent[ts] ? sentDot(ts) : '<span class="muted">—</span>') + '</td>' +
         '<td>' + (o.ans ? esc(mmss(o.talk / o.ans)) : '—') + '</td>' +
+        '<td><div class="talk-cell"><div class="talk-bar"><div class="talk-fill" style="width:' + Math.round(o.talk / maxTalk * 100) + '%"></div></div><span>' + hms(o.talk) + '</span></div></td>' +
         '<td>' + (top ? badgeFor(top, '') : '<span class="muted">—</span>') + '</td></tr>';
     }).join('');
 
@@ -1381,8 +1383,8 @@
       '<div class="grid2" style="gap:14px;margin-top:14px">' +
         '<div class="card cl-sub"><h3 class="cl-h">🕐 שיחות לפי שעה</h3>' + miniBars(hourItems) + '</div>' +
         '<div class="card cl-sub"><h3 class="cl-h">👥 ביצועי נציגים</h3>' +
-          '<div class="table-scroll"><table><thead><tr><th>נציג</th><th>שיחות</th><th>ציון</th><th>סנטימנט</th><th>משך ממוצע</th><th>תוצאה נפוצה</th></tr></thead>' +
-          '<tbody>' + (agRows || '<tr><td colspan="6" class="empty">אין נתונים</td></tr>') + '</tbody></table></div></div>' +
+          '<div class="table-scroll"><table><thead><tr><th>נציג</th><th>שיחות</th><th>ציון</th><th>סנטימנט</th><th>משך ממוצע</th><th>זמן שיחה בפועל</th><th>תוצאה נפוצה</th></tr></thead>' +
+          '<tbody>' + (agRows || '<tr><td colspan="7" class="empty">אין נתונים</td></tr>') + '</tbody></table></div></div>' +
       '</div>' +
       (alerts.length ? '<div class="card cl-sub" style="margin-top:14px"><h3 class="cl-h">⚠️ התראות — שיחות בציון נמוך</h3>' +
         '<div class="table-scroll"><table><thead><tr><th>ציון</th><th>נציג</th><th>מספר</th><th>סיכום</th><th>מועד</th></tr></thead>' +
