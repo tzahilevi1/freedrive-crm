@@ -1071,7 +1071,31 @@
     { key: 'open', label: '', w: 90, sortable: false,
       cell: function (c) { return '<td><button class="btn btn-ghost btn-sm" data-callinfo="' + esc(c.id) + '">פרטים</button></td>'; } }
   ];
-  var callCols = null, callDays = 7;
+  //  טווח התאריכים של מסך השיחות. callDays הוא פריסט (מספר ימים, או
+  //  'today'/'yesterday'); callFrom/callTo הם טווח מותאם שגובר עליו.
+  //  החישוב לפי שעון הדפדפן (ישראל), כי started_at נשמר כ-UTC אמיתי.
+  var callCols = null, callDays = 7, callFrom = "", callTo = "";
+  function callRange() {
+    var now = new Date(), until = now.toISOString(), since;
+    if (callFrom && callTo) {
+      since = new Date(callFrom + "T00:00:00").toISOString();
+      var u = new Date(callTo + "T00:00:00"); u.setDate(u.getDate() + 1);
+      until = u.toISOString();
+    } else if (callDays === "today") {
+      var t = new Date(); t.setHours(0, 0, 0, 0); since = t.toISOString();
+    } else if (callDays === "yesterday") {
+      var y = new Date(); y.setHours(0, 0, 0, 0);
+      until = y.toISOString(); y.setDate(y.getDate() - 1); since = y.toISOString();
+    } else {
+      since = new Date(Date.now() - (+callDays) * 864e5).toISOString();
+    }
+    return { since: since, until: until };
+  }
+  function callRangeLabel() {
+    if (callFrom && callTo) return callFrom + " עד " + callTo;
+    var L = { today: "היום", yesterday: "אתמול", 3650: "כל הזמן" };
+    return L[callDays] || (callDays + " הימים האחרונים");
+  }
   //  המסך מציג רק שיחות של שני נציגי פרי דרייב, לפי המספרים המדויקים.
   //  שיחה נכללת אם אחד המספרים מעורב בה (מתקשר או יעד).
   var CALL_AGENTS = ['533945097', '534493184', '534494707', '534495185', '534495197', '535463720', '539295952'];
@@ -1165,9 +1189,9 @@
   function renderCalls(sub) {
     sub = sub || 'overview';
     loading();
-    var since = new Date(Date.now() - callDays * 864e5).toISOString();
+    var rng = callRange();
     Promise.all([
-      db.from('calls').select('*').or(CALL_AGENT_OR).gte('started_at', since).order('started_at', { ascending: false }).limit(5000),
+      db.from('calls').select('*').or(CALL_AGENT_OR).gte('started_at', rng.since).lte('started_at', rng.until).order('started_at', { ascending: false }).limit(5000),
       db.from('leads').select('id,name,phone,status').is('deleted_at', null).limit(5000)
     ]).then(function (res) {
       if (res[0].error) return errBox(res[0].error.message);
@@ -1175,13 +1199,20 @@
       leads.forEach(function (l) { lmap[l.id] = l; if (l.phone) byPhone[last9(l.phone)] = l; });
       all.forEach(function (c) { c._lead = c.lead_id ? lmap[c.lead_id] : (byPhone[last9(callPhone(c))] || null); });
 
+      var custom = !!(callFrom && callTo);
       var head = '<div class="row-between" style="flex-wrap:wrap;gap:10px;margin-bottom:12px">' +
         '<h3 style="margin:0">📞 שיחות טלפון <span class="muted" style="font-size:12px;font-weight:400">· ' +
-          all.length + ' שיחות · ' + (callDays >= 3650 ? 'כל הזמן' : callDays === 1 ? 'היום ואתמול' : callDays + ' הימים האחרונים') + ' · מתעדכן אוטומטית</span></h3>' +
-        '<select class="inp" id="clDays" style="width:170px">' +
-          [[1, 'היום ואתמול'], [7, '7 ימים אחרונים'], [30, '30 יום אחרונים'], [90, '90 יום אחרונים'], [180, 'חצי שנה אחרונה'], [365, 'שנה אחרונה'], [3650, 'כל הזמן']]
-            .map(function (d) { return '<option value="' + d[0] + '"' + (callDays === d[0] ? ' selected' : '') + '>' + d[1] + '</option>'; }).join('') +
-        '</select></div>';
+          all.length + ' שיחות · ' + esc(callRangeLabel()) + ' · מתעדכן אוטומטית</span></h3>' +
+        '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">' +
+          '<select class="inp" id="clDays" style="width:150px"' + (custom ? ' disabled' : '') + '>' +
+            [['today', 'היום'], ['yesterday', 'אתמול'], [7, '7 ימים אחרונים'], [30, '30 יום אחרונים'], [90, '90 יום אחרונים'], [180, 'חצי שנה אחרונה'], [365, 'שנה אחרונה'], [3650, 'כל הזמן']]
+              .map(function (d) { return '<option value="' + d[0] + '"' + (String(callDays) === String(d[0]) ? ' selected' : '') + '>' + d[1] + '</option>'; }).join('') +
+          '</select>' +
+          '<span class="muted" style="font-size:12px">או טווח:</span>' +
+          '<input class="inp" type="date" id="clFrom" value="' + esc(callFrom) + '" style="width:145px" title="מתאריך">' +
+          '<input class="inp" type="date" id="clTo" value="' + esc(callTo) + '" style="width:145px" title="עד תאריך">' +
+          (custom ? '<button class="btn btn-ghost btn-sm" id="clClear">נקה טווח</button>' : '') +
+        '</div></div>';
 
       if (sub === 'list') paintList(all, head);
       else if (sub === 'agents') paintAgents(all, head);
@@ -1189,7 +1220,17 @@
       else if (sub === 'ai') paintAi(all, head);
       else paintOverview(all, head);
 
-      if ($('clDays')) $('clDays').addEventListener('change', function () { callDays = +this.value; renderCalls(sub); });
+      if ($('clDays')) $('clDays').addEventListener('change', function () {
+        var v = this.value; callDays = /^\d+$/.test(v) ? +v : v; callFrom = ""; callTo = ""; renderCalls(sub);
+      });
+      //  טווח מותאם: מחילים ברגע ששני התאריכים מלאים
+      function onRange() {
+        var f = $('clFrom').value, t = $('clTo').value;
+        if (f && t) { if (f > t) { var x = f; f = t; t = x; } callFrom = f; callTo = t; renderCalls(sub); }
+      }
+      if ($('clFrom')) $('clFrom').addEventListener('change', onRange);
+      if ($('clTo')) $('clTo').addEventListener('change', onRange);
+      if ($('clClear')) $('clClear').addEventListener('click', function () { callFrom = ""; callTo = ""; renderCalls(sub); });
       wireCalls(all);
     }).catch(function (e) { errBox(e.message || e); });
   }

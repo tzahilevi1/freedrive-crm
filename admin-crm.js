@@ -1187,7 +1187,18 @@
       items.push({ ts: e.at, icon: '✏️', who: e.actor_name, tag: 'שינוי', cls: 'audit',
                    html: '<span class="muted" style="font-size:12.5px">' + esc(txt) + '</span>' });
     });
-    acts.forEach(function (a) { items.push({ ts: a.created_at, icon: ACT_ICON[a.type] || '•', who: profiles[a.created_by], html: a.body ? esc(a.body) : '', tag: FEED_TAG[a.type] || a.type }); });
+    acts.forEach(function (a) {
+      //  סיכום שיחה שנכתב מהניתוח (meta.source==='call') מוצג עם אייקון
+      //  שיחה, תג "ניתוח שיחה", וקישור לפתיחת עמוד השיחה המלא.
+      var isCall = a.meta && a.meta.source === 'call';
+      var body = a.body ? esc(a.body) : '';
+      if (isCall && a.meta.call_id) {
+        body = '<div style="white-space:pre-wrap;line-height:1.7">' + body + '</div>' +
+          '<a href="#" data-opencall="' + esc(a.meta.call_id) + '" class="btn btn-ghost btn-sm" style="margin-top:7px">🎧 פתח את השיחה המלאה</a>';
+      }
+      items.push({ ts: a.created_at, icon: isCall ? '📞' : (ACT_ICON[a.type] || '•'), who: profiles[a.created_by],
+        html: body, tag: isCall ? 'ניתוח שיחה' : (FEED_TAG[a.type] || a.type) });
+    });
     docs.forEach(function (d) {
       var u = urls[d.storage_path], body, isPdf = /\.pdf$/i.test(d.name || '') || /\.pdf$/i.test(d.storage_path || '');
       if (u && docIsImage(d.name)) body = '<div style="margin:2px 0 4px">' + esc(d.name) + '</div><a href="' + u + '" target="_blank" rel="noopener"><img src="' + u + '" alt="' + esc(d.name) + '" style="max-width:100%;max-height:280px;border-radius:10px;border:1px solid var(--line);display:block"></a>';
@@ -1473,6 +1484,7 @@
     tl.querySelectorAll('input[data-task]').forEach(function (cb) { cb.addEventListener('change', function () { db.from('tasks').update({ done: cb.checked }).eq('id', cb.dataset.task).then(function () { C.refreshBadges && C.refreshBadges(); }); }); });
     tl.querySelectorAll('a[data-open-deal]').forEach(function (a) { a.addEventListener('click', function (e) { e.preventDefault(); var dd = curDeals.filter(function (x) { return x.id === a.dataset.openDeal; })[0]; if (dd) dealForm(lead, dd); }); });
     tl.querySelectorAll('a[data-doc]').forEach(function (a) { a.addEventListener('click', function (e) { e.preventDefault(); C.viewDoc(a.dataset.doc, a.dataset.docname); }); });
+    tl.querySelectorAll('a[data-opencall]').forEach(function (a) { a.addEventListener('click', function (e) { e.preventDefault(); if (window.C2B_openCall) window.C2B_openCall(a.dataset.opencall); }); });
     // consolidated action bar (role-tailored)
     $('view').querySelectorAll('button[data-act2]').forEach(function (b) { b.addEventListener('click', function () { leadAction(lead, b.dataset.act2); }); });
   }
