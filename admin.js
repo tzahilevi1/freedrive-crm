@@ -1072,8 +1072,10 @@
       cell: function (c) { return '<td><button class="btn btn-ghost btn-sm" data-callinfo="' + esc(c.id) + '">פרטים</button></td>'; } }
   ];
   var callCols = null, callDays = 7;
-  //  המסך הזה מכיל רק את מחלקת פרי דרייב; שאר המחלקות שייכות ל-CRM אחר.
-  var CALL_DEPT = 'נ.ש פוקס מוטורס בע"מ';
+  //  המסך מציג רק שיחות של שני נציגי פרי דרייב, לפי המספרים המדויקים.
+  //  שיחה נכללת אם אחד המספרים מעורב בה (מתקשר או יעד).
+  var CALL_AGENTS = ['533945097', '534495197'];
+  var CALL_AGENT_OR = CALL_AGENTS.map(function (n) { return 'from_number.ilike.*' + n + ',to_number.ilike.*' + n; }).join(',');
   //  כל מספר במסך מוביל לרשימה המסוננת שמאחוריו. הסינון מוחזק כאן ולא
   //  בכתובת, כדי שחזרה ללשונית תשמור את ההקשר שממנו הגעת.
   var callFilter = { dept: '', dir: '', ans: '', q: '', agent: '', hour: '', phone: '', rec: '', today: '' };
@@ -1165,7 +1167,7 @@
     loading();
     var since = new Date(Date.now() - callDays * 864e5).toISOString();
     Promise.all([
-      db.from('calls').select('*').eq('department', CALL_DEPT).gte('started_at', since).order('started_at', { ascending: false }).limit(5000),
+      db.from('calls').select('*').or(CALL_AGENT_OR).gte('started_at', since).order('started_at', { ascending: false }).limit(5000),
       db.from('leads').select('id,name,phone,status').is('deleted_at', null).limit(5000)
     ]).then(function (res) {
       if (res[0].error) return errBox(res[0].error.message);
