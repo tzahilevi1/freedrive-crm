@@ -1667,73 +1667,123 @@
   //  עמוד השיחה המלא — נפתח בלחיצה על שיחה. כאן יושב כל מה שראינו
   //  אצל Nivision ויותר: השיחה כדיאלוג נציג/לקוח, הקלטה, סיכום,
   //  התנגדויות, מה הנציג התחייב, הצעד הבא, והמלצת סטטוס עם החלה בקליק.
+  //  מד עגול (conic) לציון, סרגל כישור אופקי, ויחס דיבור מחושב מהדיאלוג.
+  function gauge(val, label, sub, max) {
+    max = max || 100;
+    var v = (val == null || isNaN(+val)) ? null : +val;
+    var p = v == null ? 0 : Math.max(0, Math.min(100, Math.round(v / max * 100)));
+    var col = p >= 70 ? 'var(--ok)' : p >= 40 ? 'var(--warn)' : 'var(--danger)';
+    return '<div class="gauge-wrap">' +
+      '<div class="gauge" style="background:conic-gradient(' + col + ' 0 ' + (p * 3.6) + 'deg,var(--surface-2) ' + (p * 3.6) + 'deg 360deg)">' +
+        '<div class="gauge-hole"><div class="gauge-num" style="color:' + col + '">' + (v == null ? '—' : v) + '</div></div></div>' +
+      '<div class="gauge-lbl">' + esc(label) + '</div>' + (sub ? '<div class="gauge-sub">' + esc(sub) + '</div>' : '') +
+    '</div>';
+  }
+  function skillBar(label, val) {
+    val = Math.max(0, Math.min(100, Math.round(+val || 0)));
+    var col = val >= 70 ? 'var(--ok)' : val >= 40 ? 'var(--warn)' : 'var(--danger)';
+    return '<div class="skill-row"><div class="skill-lbl">' + esc(label) + '</div>' +
+      '<div class="skill-track"><div class="skill-fill" style="width:' + val + '%;background:' + col + '"></div></div>' +
+      '<div class="skill-n">' + val + '</div></div>';
+  }
+  function talkRatio(c) {
+    var d = c.transcript_dialog; if (!Array.isArray(d) || !d.length) return null;
+    var wa = 0, wc = 0;
+    d.forEach(function (t) {
+      var n = String(t.text || '').split(/\s+/).filter(Boolean).length;
+      if (/נציג|agent/i.test(t.speaker || '')) wa += n; else wc += n;
+    });
+    var tot = wa + wc; if (!tot) return null;
+    return { agent: Math.round(wa / tot * 100), customer: Math.round(wc / tot * 100) };
+  }
+
   function renderCallView(c) {
     var a = c.crm_analysis || {};
     var dir = c.direction === 'out' ? '↗ יוצאת' : c.direction === 'in' ? '↙ נכנסת' : '—';
     var dirCls = c.direction === 'out' ? 'cl-out' : 'cl-in';
+    var has = function (v) { return v != null && v !== ''; };
 
-    //  ---- השיחה כדיאלוג ----
+    //  ---- דיאלוג ----
     var convo;
     if (Array.isArray(c.transcript_dialog) && c.transcript_dialog.length) {
       convo = c.transcript_dialog.map(function (t) {
         var me = /נציג|agent/i.test(t.speaker || '');
-        return '<div class="cv-turn' + (me ? ' me' : '') + '">' +
-          '<div class="cv-who">' + esc(t.speaker || '') + '</div>' +
+        return '<div class="cv-turn' + (me ? ' me' : '') + '"><div class="cv-who">' + esc(t.speaker || '') + '</div>' +
           '<div class="cv-bub">' + esc(t.text || '') + '</div></div>';
       }).join('');
     } else if (c.transcript) {
-      convo = '<div class="muted" style="font-size:12px;margin-bottom:8px">התמלול טרם עובד לדיאלוג — מוצג גולמי:</div>' +
-        '<div class="cl-tr">' + esc(c.transcript) + '</div>';
+      convo = '<div class="muted" style="font-size:12px;margin-bottom:8px">התמלול טרם עובד לדיאלוג — מוצג גולמי:</div><div class="cl-tr">' + esc(c.transcript) + '</div>';
     } else {
-      convo = '<div class="ai-empty">אין עדיין תמלול לשיחה הזו.<br>' +
-        (c.recording_path ? 'הקובץ הורד וממתין לתמלול (עד כמה דקות).' : 'ההקלטה טרם הורדה.') + '</div>';
+      convo = '<div class="ai-empty">אין עדיין תמלול לשיחה הזו.<br>' + (c.recording_path ? 'הקובץ הורד וממתין לתמלול (עד כמה דקות).' : 'ההקלטה טרם הורדה.') + '</div>';
     }
 
-    //  ---- לוח הניתוח ----
-    function lst(t, arr, icon) {
-      if (!Array.isArray(arr) || !arr.length) return '';
-      return '<div class="cv-sec"><div class="cv-lbl">' + icon + ' ' + t + '</div><ul class="cv-ul">' +
-        arr.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul></div>';
-    }
-    var analysis;
-    if (a.summary || a.status_suggestion) {
-      analysis =
-        (a.summary ? '<div class="cv-summary">' + esc(a.summary) + '</div>' : '') +
-        (a.status_suggestion ? '<div class="cv-sec"><div class="cv-lbl">🎯 סטטוס מומלץ</div>' +
-          '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">' + badgeFor(a.status_suggestion, '') +
-          (a.status_reason ? '<span class="muted" style="font-size:12.5px">' + esc(a.status_reason) + '</span>' : '') +
-          (c.lead_id ? '<button class="btn btn-sm" data-applyst="' + esc(c.lead_id) + '" data-st="' + esc(a.status_suggestion) + '">החל על הליד</button>' : '') +
-          '</div></div>' : '') +
-        (a.customer_wants ? '<div class="cv-sec"><div class="cv-lbl">🛒 הלקוח ביקש</div><div class="cv-txt">' + esc(a.customer_wants) + '</div></div>' : '') +
-        lst('התנגדויות וחששות', a.objections, '⚠️') +
-        lst('מה הנציג התחייב', a.agent_promised, '🤝') +
-        (a.next_step ? '<div class="cv-sec"><div class="cv-lbl">➡️ הצעד הבא</div><div class="cv-txt">' + esc(a.next_step) +
-          (a.next_step_when ? ' <span class="muted">(' + esc(a.next_step_when) + ')</span>' : '') + '</div></div>' : '') +
-        '<div class="cv-tags">' +
-          (a.car_mentioned ? '<span class="tag">🚗 ' + esc(a.car_mentioned) + '</span>' : '') +
-          (a.sentiment ? '<span class="tag">רגש: ' + esc(a.sentiment) + '</span>' : '') +
-          (a.confidence ? '<span class="tag muted">ודאות ' + Math.round(a.confidence * 100) + '%</span>' : '') +
-        '</div>';
-    } else if (c.transcript) {
-      analysis = '<div class="ai-empty">התמלול מוכן, הניתוח בדרך (עד כמה דקות).</div>';
-    } else {
-      analysis = '<div class="ai-empty">הניתוח יופק אחרי התמלול.</div>';
-    }
-
-    //  ---- הקלטה: בלוק נגן בולט שיושב בראש כרטיס השיחה, כדי שאפשר
-    //  יהיה להאזין ישירות מעמוד השיחה. שיחה שלא נענתה — אין לה הקלטה.
+    //  ---- הקלטה ----
     var recBlock;
-    if (c.recording_path)
-      recBlock = '<div class="cv-rec"><span class="cv-rec-lbl">🎧 הקלטת השיחה</span>' +
-        '<span data-recplay="' + esc(c.recording_path) + '" class="muted" style="font-size:12px">טוען הקלטה…</span></div>';
-    else if (c.answered === false)
-      recBlock = '<div class="cv-rec cv-rec-none">☎️ השיחה לא נענתה — אין הקלטה</div>';
-    else if (c.recording_url)
-      recBlock = '<div class="cv-rec"><span class="cv-rec-lbl">🎧 הקלטת השיחה</span>' +
-        '<a class="btn btn-ghost btn-sm" href="' + esc(c.recording_url) + '" target="_blank" rel="noopener">האזן ב-Voicenter</a>' +
-        '<span class="muted" style="font-size:11px">ההקלטה יורדת למערכת ותופיע כאן בקרוב</span></div>';
-    else
-      recBlock = '<div class="cv-rec cv-rec-none">אין הקלטה זמינה לשיחה זו</div>';
+    if (c.recording_path) recBlock = '<div class="cv-rec"><span class="cv-rec-lbl">🎧 הקלטת השיחה</span><span data-recplay="' + esc(c.recording_path) + '" class="muted" style="font-size:12px">טוען הקלטה…</span></div>';
+    else if (c.answered === false) recBlock = '<div class="cv-rec cv-rec-none">☎️ השיחה לא נענתה — אין הקלטה</div>';
+    else if (c.recording_url) recBlock = '<div class="cv-rec"><span class="cv-rec-lbl">🎧 הקלטת השיחה</span><a class="btn btn-ghost btn-sm" href="' + esc(c.recording_url) + '" target="_blank" rel="noopener">האזן ב-Voicenter</a><span class="muted" style="font-size:11px">ההקלטה יורדת למערכת ותופיע כאן בקרוב</span></div>';
+    else recBlock = '<div class="cv-rec cv-rec-none">אין הקלטה זמינה לשיחה זו</div>';
+
+    //  ---- בלוקי הניתוח ----
+    function sec(title, body) { return body ? '<div class="card cv-block"><h3 class="cv-bt">' + title + '</h3>' + body + '</div>' : ''; }
+    function ul(arr) { return (Array.isArray(arr) && arr.length) ? '<ul class="cv-ul">' + arr.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul>' : ''; }
+    var blocks = '';
+
+    if (has(a.summary) || has(a.bottom_line) || has(a.what_done)) blocks += sec('📝 סיכום שיחה',
+      (has(a.summary) ? '<div class="cv-summary">' + esc(a.summary) + '</div>' : '') +
+      (has(a.bottom_line) ? '<div class="cv-hl cv-hl-line"><b>השורה התחתונה:</b> ' + esc(a.bottom_line) + '</div>' : '') +
+      (has(a.what_done) ? '<div class="cv-hl cv-hl-done">✓ מה בוצע: ' + esc(a.what_done) + '</div>' : ''));
+
+    if (has(a.score) || has(a.customer_score) || has(a.agent_score)) blocks += sec('📊 ציוני שיחה',
+      '<div class="gauge-row">' + gauge(a.customer_score, 'ציון לקוח') + gauge(a.agent_score, 'ציון נציג') + gauge(a.score, 'ציון שיחה') + '</div>' +
+      (has(a.difficulty) ? '<div class="cv-inline"><span class="muted">רמת קושי:</span> <span class="tag">' + esc(a.difficulty) + '</span></div>' : '') +
+      (has(a.score_reason) ? '<div class="cv-txt" style="margin-top:8px">' + esc(a.score_reason) + '</div>' : ''));
+
+    var sk = a.agent_skills || {};
+    if (Object.keys(sk).length || (a.agent_strengths && a.agent_strengths.length) || (a.agent_weaknesses && a.agent_weaknesses.length) || has(a.manager_insight)) blocks += sec('🎯 ביצועי נציג' + (c.agent_name ? ' · ' + esc(c.agent_name) : ''),
+      (Object.keys(sk).length ? '<div class="skill-list">' + skillBar('טיפול בהתנגדויות', sk.objection_handling) + skillBar('אמפתיה', sk.empathy) + skillBar('בהירות תקשורת', sk.clarity) + skillBar('גילוי צרכים', sk.needs_discovery) + '</div>' : '') +
+      ((a.agent_strengths && a.agent_strengths.length) ? '<div class="cv-sub-h" style="color:var(--ok)">✓ חוזקות</div>' + ul(a.agent_strengths) : '') +
+      ((a.agent_weaknesses && a.agent_weaknesses.length) ? '<div class="cv-sub-h" style="color:var(--danger)">△ לשיפור</div>' + ul(a.agent_weaknesses) : '') +
+      (has(a.manager_insight) ? '<div class="cv-hl cv-hl-info">💡 תובנה למנהל: ' + esc(a.manager_insight) + '</div>' : ''));
+
+    var en = a.agent_energy || {};
+    if (Object.keys(en).length) blocks += sec('⚡ אנרגיית נציג',
+      '<div class="skill-list">' + skillBar('ביטחון', en.confidence) + skillBar('אדיבות', en.courtesy) + skillBar('סבלנות', en.patience) + skillBar('יוזמה', en.initiative) + skillBar('אופטימיות', en.optimism) + '</div>' +
+      (has(a.energy_summary) ? '<div class="cv-txt" style="margin-top:8px">' + esc(a.energy_summary) + '</div>' : ''));
+
+    if (has(a.sentiment_call) || has(a.sentiment_customer) || has(a.sentiment_agent)) blocks += sec('😊 סנטימנט שיחה',
+      '<div class="gauge-row">' + gauge(a.sentiment_customer, 'לקוח', a.sentiment_customer_label, 10) + gauge(a.sentiment_agent, 'נציג', a.sentiment_agent_label, 10) + gauge(a.sentiment_call, 'שיחה', a.sentiment_call_label, 10) + '</div>' +
+      (has(a.sentiment_insight) ? '<div class="cv-txt" style="margin-top:8px">' + esc(a.sentiment_insight) + '</div>' : ''));
+
+    var tr = talkRatio(c) || (a.talk_ratio && (a.talk_ratio.agent || a.talk_ratio.customer) ? a.talk_ratio : null);
+    if (tr) blocks += sec('🗣️ יחס דיבור', '<div class="tr-bar"><div class="tr-seg tr-a" style="width:' + (tr.agent || 0) + '%">נציג ' + (tr.agent || 0) + '%</div><div class="tr-seg tr-c" style="width:' + (tr.customer || 0) + '%">לקוח ' + (tr.customer || 0) + '%</div></div>');
+
+    if (a.stages && a.stages.length) blocks += sec('📈 ציר זמן שיחה',
+      a.stages.map(function (st, i) { return '<div class="stage-row"><div class="stage-n">' + (i + 1) + '</div><div style="flex:1"><div class="stage-t">' + esc(st.title || '') + (has(st.score) ? ' ' + scoreChip(st.score) : '') + '</div>' + (has(st.note) ? '<div class="muted" style="font-size:12px">' + esc(st.note) + '</div>' : '') + '</div></div>'; }).join(''));
+
+    if (a.objections_detailed && a.objections_detailed.length) blocks += sec('⚠️ התנגדויות וחששות',
+      a.objections_detailed.map(function (o) { return '<div class="cv-obj"><div class="cv-obj-q">"' + esc(o.quote || '') + '"</div>' + (has(o.agent_response) ? '<div class="cv-obj-r"><span class="muted">תגובת הנציג:</span> ' + esc(o.agent_response) + '</div>' : '') + (has(o.improvement) ? '<div class="cv-obj-i"><span class="muted">לשיפור:</span> ' + esc(o.improvement) + '</div>' : '') + '<div class="cv-obj-tags">' + (has(o.status) ? '<span class="tag">' + esc(o.status) + '</span>' : '') + (has(o.difficulty) ? '<span class="tag muted">קושי: ' + esc(o.difficulty) + '</span>' : '') + '</div></div>'; }).join(''));
+
+    if (a.red_flags && a.red_flags.length) blocks += sec('🚩 דגלים אדומים',
+      a.red_flags.map(function (f) { var hot = /חם|גבוה/.test(f.severity || ''); return '<div class="cv-flag ' + (hot ? 'hot' : '') + '"><div class="cv-flag-t">' + (hot ? '🔴' : '🟠') + ' ' + esc(f.title || '') + '</div>' + (has(f.detail) ? '<div class="muted" style="font-size:12.5px">' + esc(f.detail) + '</div>' : '') + (has(f.action) ? '<div class="cv-flag-a">▸ ' + esc(f.action) + '</div>' : '') + '</div>'; }).join(''));
+
+    if (a.action_items && a.action_items.length) blocks += sec('✅ פעולות לביצוע',
+      a.action_items.map(function (t) { return '<div class="cv-act"><span class="cv-act-t">' + esc(t.title || '') + '</span>' + (has(t.priority) ? '<span class="tag' + (/גבוה/.test(t.priority) ? '' : ' muted') + '">' + esc(t.priority) + '</span>' : '') + (has(t.owner) ? '<span class="muted" style="font-size:11.5px">' + esc(t.owner) + '</span>' : '') + '</div>'; }).join(''));
+
+    if (a.key_quotes && a.key_quotes.length) blocks += sec('💬 ציטוטי מפתח', a.key_quotes.map(function (q) { return '<div class="cv-quote">"' + esc(q) + '"</div>'; }).join(''));
+
+    if (has(a.vehicle_context)) blocks += sec('🚗 הקשר רכב', '<div class="cv-txt">' + esc(a.vehicle_context) + '</div>' + (has(a.car_mentioned) ? '<div style="margin-top:6px"><span class="tag">🚗 ' + esc(a.car_mentioned) + '</span></div>' : ''));
+
+    if (a.next_action && has(a.next_action.text)) blocks += sec('➡️ הצעד הבא',
+      '<div class="cv-hl cv-hl-info">' + (has(a.next_action.who) ? '<b>' + esc(a.next_action.who) + ' מחזיק בכדור:</b> ' : '') + esc(a.next_action.text) + '</div>' +
+      (has(a.next_step) ? '<div class="cv-txt" style="margin-top:6px">' + esc(a.next_step) + (has(a.next_step_when) ? ' <span class="muted">(' + esc(a.next_step_when) + ')</span>' : '') + '</div>' : ''));
+
+    if (has(a.status_suggestion)) blocks += sec('🎯 סטטוס מומלץ',
+      '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">' + badgeFor(a.status_suggestion, '') +
+      (has(a.status_reason) ? '<span class="muted" style="font-size:12.5px">' + esc(a.status_reason) + '</span>' : '') +
+      (c.lead_id ? '<button class="btn btn-sm" data-applyst="' + esc(c.lead_id) + '" data-st="' + esc(a.status_suggestion) + '">החל על הליד</button>' : '') + '</div>');
+
+    if (!blocks) blocks = '<div class="card cv-block"><div class="ai-empty">' + (c.transcript ? 'הניתוח בדרך (עד כמה דקות).' : 'הניתוח יופק אחרי התמלול.') + '</div></div>';
 
     var det = [
       ['נציג', (c.agent_name || '—') + (c.agent_ext ? ' · שלוחה ' + c.agent_ext : '')],
@@ -1746,6 +1796,10 @@
       ['מזהה שיחה', c.external_id ? String(c.external_id).slice(0, 20) : '—']
     ];
 
+    var headBadges = (has(a.outcome) ? '<span class="tag">' + esc(a.outcome) + '</span>' : '') +
+      (has(a.call_type) ? '<span class="tag muted">' + esc(a.call_type) + '</span>' : '') +
+      (has(a.difficulty) ? '<span class="tag muted">קושי: ' + esc(a.difficulty) + '</span>' : '');
+
     view('<div class="cv-wrap">' +
       '<div class="lead-top"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">' +
         '<button class="btn btn-ghost btn-sm" id="cvBack">→ חזרה לשיחות</button>' +
@@ -1754,19 +1808,14 @@
         (c.answered === false ? '<span class="cl-no">✗ לא נענתה</span>' : '') +
         (c._lead ? '<a href="#" class="btn btn-ghost btn-sm" data-golead="' + esc(c.lead_id) + '">👤 ' + esc(c._lead.name) + '</a>' : '') +
       '</div></div>' +
+      (headBadges ? '<div class="cv-headbadges">' + headBadges + '</div>' : '') +
 
       '<div class="cv-grid">' +
-        '<div class="card"><h3 style="margin:0 0 12px">💬 מהלך השיחה</h3>' + recBlock + '<div class="cv-convo">' + convo + '</div></div>' +
-        '<div>' +
-          '<div class="card"><h3 style="margin:0 0 12px">🤖 ניתוח השיחה</h3>' + analysis + '</div>' +
-          '<div class="card" style="margin-top:14px"><h3 style="margin:0 0 10px">פרטי השיחה</h3>' +
-            '<div class="cl-kv">' + det.map(function (r) {
-              return '<div class="k">' + esc(r[0]) + '</div><div class="v">' + esc(r[1]) + '</div>';
-            }).join('') + '</div>' +
-            (c.transcript ? '<details style="margin-top:12px"><summary class="muted" style="font-size:12px;cursor:pointer">תמלול גולמי</summary>' +
-              '<div class="cl-tr" style="margin-top:8px">' + esc(c.transcript) + '</div></details>' : '') +
-          '</div>' +
+        '<div class="card cv-left"><h3 style="margin:0 0 12px">💬 מהלך השיחה</h3>' + recBlock + '<div class="cv-convo">' + convo + '</div>' +
+          '<div class="cl-kv" style="margin-top:14px">' + det.map(function (r) { return '<div class="k">' + esc(r[0]) + '</div><div class="v">' + esc(r[1]) + '</div>'; }).join('') + '</div>' +
+          (c.transcript ? '<details style="margin-top:12px"><summary class="muted" style="font-size:12px;cursor:pointer">תמלול גולמי</summary><div class="cl-tr" style="margin-top:8px">' + esc(c.transcript) + '</div></details>' : '') +
         '</div>' +
+        '<div class="cv-analysis">' + blocks + '</div>' +
       '</div></div>');
 
     $('cvBack').addEventListener('click', function () { renderCalls(callBackSub || 'list'); });
