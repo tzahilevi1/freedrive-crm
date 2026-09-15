@@ -1540,6 +1540,38 @@
     var stageRows = Object.keys(stageAgg).map(function (t) { return { t: t, n: stageAgg[t].n, sc: avg(stageAgg[t].scores) }; }).sort(function (a, b) { return b.n - a.n; }).slice(0, 12).map(function (r) {
       return '<tr><td>' + esc(r.t) + '</td><td>' + r.n + '</td><td>' + (r.sc != null ? scoreChip(r.sc) : '—') + '</td></tr>';
     }).join('');
+    //  סגנונות מכירה (מהשדה sales_style)
+    var styles = {}; az.forEach(function (c) { var st = c.crm_analysis.sales_style; if (st) styles[st] = (styles[st] || 0) + 1; });
+    var styleKeys = Object.keys(styles).sort(function (a, b) { return styles[b] - styles[a]; });
+    var styleMax = Math.max.apply(null, styleKeys.map(function (k) { return styles[k]; }).concat([1]));
+    var styleBars = styleKeys.map(function (k) {
+      return '<div class="hbar-row"><div class="hbar-lbl" style="flex-basis:150px">' + esc(k) + '</div>' +
+        '<div class="hbar-track"><div class="hbar-fill" style="width:' + Math.max(4, Math.round(styles[k] / styleMax * 100)) + '%;background:#6366f1"></div></div>' +
+        '<div class="hbar-n">' + styles[k] + '</div></div>';
+    }).join('');
+    //  שלב הנפילה במשפך — השלב החלש ביותר בשיחות שלא נסגרו
+    var dropStages = {};
+    az.forEach(function (c) { var a = c.crm_analysis; if (a.status_suggestion === 'won') return; var st = a.stages || []; if (!st.length) return; var weak = st.slice().sort(function (x, y) { return (x.score == null ? 100 : x.score) - (y.score == null ? 100 : y.score); })[0]; if (weak && weak.title) dropStages[weak.title] = (dropStages[weak.title] || 0) + 1; });
+    var dropRows = Object.keys(dropStages).map(function (t) { return { t: t, n: dropStages[t] }; }).sort(function (a, b) { return b.n - a.n; }).slice(0, 8).map(function (r) {
+      return '<tr><td>' + esc(r.t) + '</td><td><span style="color:var(--danger);font-weight:700">' + r.n + '</span></td></tr>';
+    }).join('');
+    //  פלייבוק התנגדויות — 4 הקטגוריות המובילות: ציטוטים, שיפורים ואלוף
+    var playbookCards = catKeys.slice(0, 4).map(function (cat) {
+      var catObjs = objs.filter(function (x) { return (x.o.category || '').indexOf(cat) >= 0; });
+      var samples = [], improvements = [], byAgCat = {};
+      catObjs.forEach(function (x) {
+        if (samples.length < 3 && x.o.quote) samples.push(x.o.quote);
+        if (improvements.length < 2 && x.o.improvement) improvements.push(x.o.improvement);
+        var o = byAgCat[x.agent] || (byAgCat[x.agent] = { n: 0, res: 0 }); o.n++; if (/טופל/.test(x.o.status || '')) o.res++;
+      });
+      var topAgent = Object.keys(byAgCat).filter(function (k) { return byAgCat[k].n >= 2; }).sort(function (a, b) { return (byAgCat[b].res / byAgCat[b].n) - (byAgCat[a].res / byAgCat[a].n); })[0];
+      var topPct = topAgent ? Math.round(byAgCat[topAgent].res / byAgCat[topAgent].n * 100) : null;
+      return '<div class="card cl-sub" style="margin:0"><div class="row-between"><b>' + esc(cat) + '</b><span class="tag">' + objByCat[cat].n + ' · ' + (objByCat[cat].n ? Math.round(objByCat[cat].res / objByCat[cat].n * 100) : 0) + '% נפתרו</span></div>' +
+        (samples.length ? '<div class="cv-sub-h">איך זה נשמע</div>' + samples.map(function (q) { return '<div class="cv-quote" style="margin-bottom:6px">"' + esc(q) + '"</div>'; }).join('') : '') +
+        (improvements.length ? '<div class="cv-sub-h" style="color:var(--ok)">איך לשפר</div><ul class="cv-ul">' + improvements.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul>' : '') +
+        (topAgent ? '<div class="cv-hl cv-hl-info" style="margin-top:8px">🏆 אלוף הקטגוריה: <b>' + esc(topAgent) + '</b> · ' + topPct + '% פתרון</div>' : '') +
+        '</div>';
+    }).join('');
 
     //  אגרגציה פר-נציג
     var byAg = {};
@@ -1647,6 +1679,11 @@
         '<p class="muted" style="font-size:12px;margin:0 0 10px">כמות · אחוז שטופל</p>' + catBars + '</div>' : '') +
       (stageRows ? '<div class="card cl-sub" style="margin-top:14px"><h3 class="cl-h">📈 ניתוח שלבי שיחה</h3>' +
         '<div class="table-scroll"><table><thead><tr><th>שלב בשיחה</th><th>מופעים</th><th>ציון ממוצע</th></tr></thead><tbody>' + stageRows + '</tbody></table></div></div>' : '') +
+      (styleBars ? '<div class="card cl-sub" style="margin-top:14px"><h3 class="cl-h">🎭 סגנונות מכירה</h3>' + styleBars + '</div>' : '') +
+      (dropRows ? '<div class="card cl-sub" style="margin-top:14px"><h3 class="cl-h">📉 שלב הנפילה במשפך <span class="muted" style="font-size:11px;font-weight:400">· השלב החלש בשיחות שלא נסגרו</span></h3>' +
+        '<div class="table-scroll"><table><thead><tr><th>שלב בשיחה</th><th>נפילות</th></tr></thead><tbody>' + dropRows + '</tbody></table></div></div>' : '') +
+      (playbookCards ? '<div class="card cl-sub" style="margin-top:14px"><h3 class="cl-h">📖 פלייבוק התנגדויות <span class="muted" style="font-size:11px;font-weight:400">· מבנה מנצח לכל התנגדות</span></h3>' +
+        '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px">' + playbookCards + '</div></div>' : '') +
       (flagRows ? '<div class="card cl-sub" style="margin-top:14px"><h3 class="cl-h">🚩 דגלים אדומים חמים · ' + flagsHot + '</h3>' +
         '<div class="table-scroll"><table><thead><tr><th>דגל</th><th>נציג</th><th>פעולה נדרשת</th></tr></thead><tbody>' + flagRows + '</tbody></table></div></div>' : '') +
       '</div>');
