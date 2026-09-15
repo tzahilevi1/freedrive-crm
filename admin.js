@@ -484,7 +484,8 @@
       ['calls:agents', '\ud83d\udc65 ביצועי נציגים'], 
       ['calls:todo', '\u26a0\ufe0f דורש חזרה'], 
       ['calls:ai', '\ud83e\udd16 ניתוח שיחות'],
-      ['calls:reports', '📈 דוחות תקופתיים']
+      ['calls:reports', '📈 דוחות תקופתיים'],
+      ['calls:alerts', '🔔 התראות']
     ],
     settings: [
       ['settings', '\ud83d\udccb רשימות ובחירות'],
@@ -1275,6 +1276,7 @@
       else if (sub === 'todo') paintTodo(all, head);
       else if (sub === 'ai') paintAi(all, head);
       else if (sub === 'reports') paintReports(all, head);
+      else if (sub === 'alerts') paintAlerts(all, head);
       else paintOverview(all, head);
 
       if ($('clDays')) $('clDays').addEventListener('change', function () {
@@ -1443,6 +1445,7 @@
         if (a.status_suggestion) o.sugg[a.status_suggestion] = (o.sugg[a.status_suggestion] || 0) + 1;
       }
     });
+    var maxTalk = Math.max.apply(null, Object.keys(by).map(function (k) { return by[k].talk; }).concat([1]));
     var rows = Object.keys(by).sort(function (a, b) { return by[b].n - by[a].n; }).map(function (k) {
       var o = by[k];
       var dept = Object.keys(o.depts).sort(function (a, b) { return o.depts[b] - o.depts[a]; })[0] || '—';
@@ -1457,6 +1460,7 @@
         '<td>' + (o.inn ? A(',"dir":"in"', o.inn) : '0') + '</td>' +
         '<td><span style="color:' + (rate >= 70 ? 'var(--ok)' : rate >= 40 ? 'var(--warn)' : 'var(--danger)') + ';font-weight:700">' + rate + '%</span></td>' +
         '<td>' + (o.ans ? esc(mmss(o.talk / o.ans)) : '—') + '</td>' +
+        '<td><div class="talk-cell"><div class="talk-bar"><div class="talk-fill" style="width:' + Math.round(o.talk / maxTalk * 100) + '%"></div></div><span>' + hms(o.talk) + '</span></div></td>' +
         '<td>' + (sc != null ? scoreChip(sc) : '<span class="muted">—</span>') + '</td>' +
         '<td>' + (o.sent[ts] ? sentDot(ts) : '<span class="muted">—</span>') + '</td>' +
         '<td>' + (o.alerts ? '<span style="color:var(--danger);font-weight:700">' + o.alerts + '</span>' : '0') + '</td>' +
@@ -1469,8 +1473,8 @@
       'לחצו על שם נציג או על מספר כדי לסנן את הרשימה.</p>' +
       '<div class="table-scroll"><table><thead><tr>' +
         '<th>נציג</th><th>שיחות</th><th>יוצאות</th><th>נכנסות</th><th>שיעור מענה</th>' +
-        '<th>משך ממוצע</th><th>ציון ממוצע</th><th>סנטימנט</th><th>התראות</th><th>תוצאה נפוצה</th><th>מחלקה</th>' +
-      '</tr></thead><tbody>' + (rows || '<tr><td colspan="11" class="empty">אין נתונים</td></tr>') + '</tbody></table></div></div>');
+        '<th>משך ממוצע</th><th>זמן שיחה בפועל</th><th>ציון ממוצע</th><th>סנטימנט</th><th>התראות</th><th>תוצאה נפוצה</th><th>מחלקה</th>' +
+      '</tr></thead><tbody>' + (rows || '<tr><td colspan="12" class="empty">אין נתונים</td></tr>') + '</tbody></table></div></div>');
   }
 
   // ---------- דוחות תקופתיים ----------
@@ -1486,7 +1490,7 @@
     var h = '';
     if (R.greeting) h += '<div class="mgr-greet">\u2728 ' + esc(R.greeting) + '</div>';
     if (R.exec_summary) h += '<div class="cv-txt" style="margin:10px 0 14px;line-height:1.75">' + esc(R.exec_summary) + '</div>';
-    h += '<div class="mgr-kpis">' + kpi('\u05e9\u05d9\u05d7\u05d5\u05ea', stats.total) + kpi('\u05e6\u05d9\u05d5\u05df \u05e6\u05d5\u05d5\u05ea', stats.teamScore) + kpi('\u05e2\u05e1\u05e7\u05d0\u05d5\u05ea', stats.deals) + kpi('\u05d4\u05ea\u05e0\u05d2\u05d3\u05d5\u05d9\u05d5\u05ea', stats.objections, stats.objections ? Math.round(stats.objResolved / stats.objections * 100) + '% \u05d8\u05d5\u05e4\u05dc\u05d5' : '') + kpi('\u05d3\u05d2\u05dc\u05d9\u05dd \u05d0\u05d3\u05d5\u05de\u05d9\u05dd', stats.redFlags) + '</div>';
+    h += '<div class="mgr-kpis">' + kpi('שיחות שנותחו', stats.total) + kpi('\u05e6\u05d9\u05d5\u05df \u05e6\u05d5\u05d5\u05ea', stats.teamScore) + kpi('\u05e2\u05e1\u05e7\u05d0\u05d5\u05ea', stats.deals) + kpi('\u05d4\u05ea\u05e0\u05d2\u05d3\u05d5\u05d9\u05d5\u05ea', stats.objections, stats.objections ? Math.round(stats.objResolved / stats.objections * 100) + '% \u05d8\u05d5\u05e4\u05dc\u05d5' : '') + kpi('\u05d3\u05d2\u05dc\u05d9\u05dd \u05d0\u05d3\u05d5\u05de\u05d9\u05dd', stats.redFlags) + '</div>';
     if ((R.actions || []).length) {
       h += '<h4 class="mgr-h">3 \u05e4\u05e2\u05d5\u05dc\u05d5\u05ea \u05dc\u05e4\u05d9 \u05e2\u05d3\u05d9\u05e4\u05d5\u05ea</h4>';
       R.actions.forEach(function (a) {
@@ -1646,6 +1650,78 @@
     $('acBack').addEventListener('click', function () { renderCalls('reports'); });
     $('view').querySelectorAll('[data-callinfo]').forEach(function (b) {
       b.addEventListener('click', function () { openCall(b.dataset.callinfo, 'reports'); });
+    });
+  }
+
+  // ---------- התראות ----------
+  //  מרכז התראות: סורק את ניתוח כל השיחות ומפיק את מה שהכי רלוונטי —
+  //  איום בתביעה, מתחרה, רצון לבטל, סנטימנט שלילי, ציון נמוך ודגלים
+  //  אדומים — עם פירוט, הסבר וצעד הבא. ממוין: קריטי קודם, ואז אחרון.
+  var ALERT_SEV = { 'קריטי': ['var(--danger)', 0], 'גבוה': ['var(--warn)', 1], 'בינוני': ['#0ea5e9', 2] };
+  function callAlerts(all) {
+    var out = [];
+    all.forEach(function (c) {
+      var a = c.crm_analysis; if (!a) return;
+      var txt = [a.summary, a.bottom_line, (a.objections || []).join(' '), a.status_reason, a.customer_wants].filter(Boolean).join(' ');
+      var base = { call: c.id, time: c.started_at, agent: agentOf(c), customer: callPhone(c), lead: c._lead };
+      function push(type, sev, title, detail, action) { out.push({ call: base.call, time: base.time, agent: base.agent, customer: base.customer, lead: base.lead, type: type, sev: sev, title: title, detail: detail || a.summary || '', action: action || '' }); }
+      (a.red_flags || []).forEach(function (f) { push('דגל אדום', /חם|גבוה/.test(f.severity || '') ? 'קריטי' : 'גבוה', f.title || 'דגל אדום', f.detail, f.action); });
+      if (/תביעה|לתבוע|עורך דין|עו"ד|בית משפט|הליך משפטי|תלונה לרשות|רשות ההגבלים|הונאה|לרמות/.test(txt))
+        push('איום בתביעה', 'קריטי', '⚖️ איום בתביעה / הליך משפטי', a.bottom_line || a.summary, 'להסלים לליאור/מנהל מיידית, לתעד את השיחה ולחזור ללקוח בזהירות');
+      if (a.status_suggestion === 'lost' || /לבטל|ביטול העסקה|לא רוצה יותר|מבטל|חוזר בי|מתחרט/.test(txt))
+        push('רצון לבטל', 'קריטי', '🚫 הלקוח מבקש לבטל / לא מעוניין', a.summary, a.next_step || 'שיחת שימור דחופה מול הלקוח');
+      if (/מתחרה|יורוליס|אלדן|חברה אחרת|הצעה אחרת|מחיר יותר טוב|זול יותר|קיבלתי הצעה/.test(txt))
+        push('מתחרה', 'בינוני', '🥊 הוזכר מתחרה / הצעה מתחרה', a.summary, 'להדגיש ערך מוסף ולשקול הצעה משופרת');
+      if (typeof a.score === 'number' && a.score < 40)
+        push('ציון נמוך', 'גבוה', '📉 ציון שיחה נמוך (' + a.score + ')', a.score_reason || a.summary, 'סקירת השיחה עם הנציג ואימון ממוקד');
+      if (a.sentiment === 'שלילי')
+        push('סנטימנט שלילי', 'גבוה', '😠 סנטימנט שלילי בשיחה', a.sentiment_insight || a.summary, 'מעקב ושיחת שימור');
+    });
+    return out.sort(function (x, y) { return ((ALERT_SEV[x.sev] || [0, 3])[1] - (ALERT_SEV[y.sev] || [0, 3])[1]) || (new Date(y.time) - new Date(x.time)); });
+  }
+
+  var alertFilter = { sev: '', type: '' };
+  function paintAlerts(all, head) {
+    var alerts = callAlerts(all);
+    var byType = {}, bySev = { 'קריטי': 0, 'גבוה': 0, 'בינוני': 0 };
+    alerts.forEach(function (al) { byType[al.type] = (byType[al.type] || 0) + 1; if (bySev[al.sev] != null) bySev[al.sev]++; });
+    var shown = alerts.filter(function (al) { return (!alertFilter.sev || al.sev === alertFilter.sev) && (!alertFilter.type || al.type === alertFilter.type); });
+
+    var chip = function (label, key, val, active) {
+      return '<button class="al-chip' + (active ? ' on' : '') + '" data-alf="' + key + '" data-alv="' + esc(val) + '">' + esc(label) + '</button>';
+    };
+    var sevChips = chip('הכל', 'sev', '', !alertFilter.sev) +
+      ['קריטי', 'גבוה', 'בינוני'].map(function (sv) { return chip(sv + ' (' + bySev[sv] + ')', 'sev', sv, alertFilter.sev === sv); }).join('');
+    var typeChips = Object.keys(byType).sort(function (a, b) { return byType[b] - byType[a]; }).map(function (tp) { return chip(tp + ' (' + byType[tp] + ')', 'type', tp, alertFilter.type === tp); }).join('');
+
+    var cards = shown.slice(0, 200).map(function (al) {
+      var col = (ALERT_SEV[al.sev] || ['var(--muted)'])[0];
+      return '<div class="al-card" data-callinfo="' + esc(al.call) + '" style="border-inline-start-color:' + col + '">' +
+        '<div class="al-top"><span class="al-sev" style="background:' + col + '1f;color:' + col + '">' + esc(al.sev) + '</span>' +
+          '<b class="al-title">' + esc(al.title) + '</b>' +
+          '<span class="tag muted">' + esc(al.type) + '</span></div>' +
+        (al.detail ? '<div class="al-detail">' + esc(al.detail) + '</div>' : '') +
+        (al.action ? '<div class="al-action">➡️ ' + esc(al.action) + '</div>' : '') +
+        '<div class="al-meta"><span>👤 ' + esc(al.agent) + '</span><span class="ltr">📞 ' + esc(al.customer || '—') + '</span>' +
+          (al.lead ? '<span>· ' + esc(al.lead.name) + '</span>' : '') +
+          '<span class="muted">' + esc(fmtDateTime(al.time)) + '</span></div>' +
+      '</div>';
+    }).join('');
+
+    view('<div class="card">' + head +
+      '<div class="cards" style="margin-bottom:14px">' +
+        stat('סה"כ התראות', alerts.length) +
+        stat('קריטי', bySev['קריטי'], null, null, 'דורש טיפול מיידי') +
+        stat('גבוה', bySev['גבוה']) +
+        stat('בינוני', bySev['בינוני']) +
+      '</div>' +
+      '<div class="al-filters"><div class="al-frow">' + sevChips + '</div>' +
+        (typeChips ? '<div class="al-frow">' + typeChips + '</div>' : '') + '</div>' +
+      '<div class="al-list">' + (cards || '<div class="ai-empty">✅ אין התראות בטווח שנבחר — הכל תקין.</div>') + '</div>' +
+      '</div>');
+
+    $('view').querySelectorAll('[data-alf]').forEach(function (b) {
+      b.addEventListener('click', function () { alertFilter[b.dataset.alf] = alertFilter[b.dataset.alf] === b.dataset.alv ? '' : b.dataset.alv; paintAlerts(all, head); });
     });
   }
 
