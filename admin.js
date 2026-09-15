@@ -1447,6 +1447,57 @@
   //  מחושב מנתוני ה-crm_analysis של כל שיחה (בלי עלות AI נוספת).
   function avg(arr) { return arr.length ? Math.round(arr.reduce(function (a, b) { return a + b; }, 0) / arr.length) : null; }
 
+  //  דוח אימון מנהלים ב-AI: הפקה ב-call-report + מטמון ב-localStorage.
+  function renderMgrReport(R, stats) {
+    var priCol = function (p) { return /דחוף/.test(p) ? 'var(--danger)' : /השפעה/.test(p) ? 'var(--warn)' : 'var(--brand)'; };
+    var kpi = function (k, v, sub) { return '<div class="mgr-kpi"><div class="mgr-kv">' + v + '</div><div class="mgr-kk">' + esc(k) + '</div>' + (sub ? '<div class="mgr-ks">' + esc(sub) + '</div>' : '') + '</div>'; };
+    var h = '';
+    if (R.greeting) h += '<div class="mgr-greet">\u2728 ' + esc(R.greeting) + '</div>';
+    if (R.exec_summary) h += '<div class="cv-txt" style="margin:10px 0 14px;line-height:1.75">' + esc(R.exec_summary) + '</div>';
+    h += '<div class="mgr-kpis">' + kpi('\u05e9\u05d9\u05d7\u05d5\u05ea', stats.total) + kpi('\u05e6\u05d9\u05d5\u05df \u05e6\u05d5\u05d5\u05ea', stats.teamScore) + kpi('\u05e2\u05e1\u05e7\u05d0\u05d5\u05ea', stats.deals) + kpi('\u05d4\u05ea\u05e0\u05d2\u05d3\u05d5\u05d9\u05d5\u05ea', stats.objections, stats.objections ? Math.round(stats.objResolved / stats.objections * 100) + '% \u05d8\u05d5\u05e4\u05dc\u05d5' : '') + kpi('\u05d3\u05d2\u05dc\u05d9\u05dd \u05d0\u05d3\u05d5\u05de\u05d9\u05dd', stats.redFlags) + '</div>';
+    if ((R.actions || []).length) {
+      h += '<h4 class="mgr-h">3 \u05e4\u05e2\u05d5\u05dc\u05d5\u05ea \u05dc\u05e4\u05d9 \u05e2\u05d3\u05d9\u05e4\u05d5\u05ea</h4>';
+      R.actions.forEach(function (a) {
+        h += '<div class="mgr-act" style="border-inline-start-color:' + priCol(a.priority) + '"><div><span class="tag" style="background:' + priCol(a.priority) + '22;color:' + priCol(a.priority) + '">' + esc(a.priority || '') + '</span> <b>' + esc(a.title || '') + '</b> <span class="muted" style="font-size:11.5px">' + esc(a.agent || '') + (a.when ? ' \u00b7 ' + esc(a.when) : '') + '</span></div>' + (a.detail ? '<div class="cv-txt" style="margin-top:4px">' + esc(a.detail) + '</div>' : '') + (a.impact ? '<div class="muted" style="font-size:12px;margin-top:3px">\ud83d\udcc8 ' + esc(a.impact) + '</div>' : '') + '</div>';
+      });
+    }
+    if ((R.focus_agents || []).length) {
+      h += '<h4 class="mgr-h">\u05de\u05d9\u05e7\u05d5\u05d3 \u05d0\u05d9\u05de\u05d5\u05df \u05e4\u05e8-\u05e0\u05e6\u05d9\u05d2</h4><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px">';
+      R.focus_agents.forEach(function (f) {
+        h += '<div class="card cl-sub" style="margin:0"><div class="row-between"><b>' + esc(f.name || '') + '</b>' + (f.score != null ? scoreChip(f.score) : '') + '</div>' + (f.topic ? '<div style="font-size:12.5px;font-weight:600;margin-top:5px">' + esc(f.topic) + '</div>' : '') + (f.why ? '<div class="muted" style="font-size:12px;margin-top:3px">' + esc(f.why) + '</div>' : '') + ((f.checklist || []).length ? '<ul class="cv-ul" style="margin-top:6px">' + f.checklist.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul>' : '') + '</div>';
+      });
+      h += '</div>';
+    }
+    if (R.workshop && R.workshop.topic) {
+      h += '<h4 class="mgr-h">\u05e1\u05d3\u05e0\u05ea \u05e6\u05d5\u05d5\u05ea \u05e9\u05d1\u05d5\u05e2\u05d9\u05ea</h4><div class="card cl-sub" style="margin:0"><b>' + esc(R.workshop.topic) + '</b>' + ((R.workshop.why || []).length ? '<ul class="cv-ul" style="margin-top:6px">' + R.workshop.why.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul>' : '') + ((R.workshop.structure || []).length ? '<div class="cv-sub-h">\u05de\u05d1\u05e0\u05d4 \u05d4\u05e1\u05d3\u05e0\u05d4</div><ul class="cv-ul">' + R.workshop.structure.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul>' : '') + '</div>';
+    }
+    if ((R.targets || []).length) {
+      h += '<h4 class="mgr-h">\u05d9\u05e2\u05d3\u05d9\u05dd \u05dc\u05de\u05d7\u05e8</h4><div class="mgr-kpis">' + R.targets.map(function (t) { return '<div class="mgr-kpi"><div class="mgr-kk">' + esc(t.metric) + '</div><div style="font-size:14px;font-weight:700;margin-top:3px">' + esc(t.current) + ' \u2192 <span style="color:var(--ok)">' + esc(t.goal) + '</span></div></div>'; }).join('') + '</div>';
+    }
+    return h;
+  }
+  function wireMgrReport() {
+    var rng = callRange(), lbl = callRangeLabel();
+    var mgrKey = 'fdmgr:' + rng.since.slice(0, 10) + ':' + rng.until.slice(0, 10);
+    var body = $('mgrBody'), btn = $('mgrGen'); if (!btn || !body) return;
+    function showCached() {
+      try { var c = JSON.parse(localStorage.getItem(mgrKey) || 'null'); if (c && c.report) { body.innerHTML = renderMgrReport(c.report, c.stats) + '<div class="muted" style="font-size:11px;margin-top:10px">\u05e0\u05d5\u05e6\u05e8: ' + new Date(c.generated_at).toLocaleString('he-IL') + '</div>'; btn.textContent = '\ud83d\udd04 \u05e8\u05e2\u05e0\u05df \u05d3\u05d5\u05d7'; return true; } } catch (e) { }
+      return false;
+    }
+    function gen() {
+      btn.disabled = true; btn.textContent = '\u05de\u05e4\u05d9\u05e7\u2026'; body.innerHTML = '<div class="ai-empty">\u05de\u05e4\u05d9\u05e7 \u05d3\u05d5\u05d7 \u05d0\u05d9\u05de\u05d5\u05df (\u05e2\u05d3 ~20 \u05e9\u05e0\u05d9\u05d5\u05ea)\u2026</div>';
+      db.functions.invoke('call-report', { body: { since: rng.since, until: rng.until, label: lbl } }).then(function (r) {
+        btn.disabled = false; btn.textContent = '\ud83d\udd04 \u05e8\u05e2\u05e0\u05df \u05d3\u05d5\u05d7';
+        var d = (r && r.data) || {};
+        if (d.error || !d.report) { body.innerHTML = '<div class="ai-empty">' + (d.empty ? '\u05d0\u05d9\u05df \u05e0\u05ea\u05d5\u05e0\u05d9\u05dd \u05d1\u05d8\u05d5\u05d5\u05d7.' : '\u05e9\u05d2\u05d9\u05d0\u05d4: ' + esc(d.error || '\u05dc\u05d0 \u05d9\u05d3\u05d5\u05e2\u05d4')) + '</div>'; return; }
+        try { localStorage.setItem(mgrKey, JSON.stringify(d)); } catch (e) { }
+        body.innerHTML = renderMgrReport(d.report, d.stats) + '<div class="muted" style="font-size:11px;margin-top:10px">\u05e0\u05d5\u05e6\u05e8 \u05e2\u05db\u05e9\u05d9\u05d5</div>';
+      }, function () { btn.disabled = false; btn.textContent = '\ud83d\udd04 \u05e8\u05e2\u05e0\u05df \u05d3\u05d5\u05d7'; body.innerHTML = '<div class="ai-empty">\u05e9\u05d2\u05d9\u05d0\u05d4 \u05d1\u05d4\u05e4\u05e7\u05d4</div>'; });
+    }
+    if (!showCached()) body.innerHTML = '<div class="muted" style="font-size:12.5px">\u05dc\u05d7\u05e6\u05d5 "\u05e6\u05d5\u05e8 \u05d3\u05d5\u05d7" \u05dc\u05e1\u05d9\u05db\u05d5\u05dd \u05d0\u05d9\u05de\u05d5\u05df \u05de\u05e0\u05d4\u05dc\u05d9\u05dd \u05dc-' + esc(lbl) + ' (\u05e7\u05e8\u05d9\u05d0\u05ea AI \u05d0\u05d7\u05ea).</div>';
+    btn.addEventListener('click', gen);
+  }
+
   function paintReports(all, head) {
     var az = all.filter(function (c) { return c.crm_analysis && typeof c.crm_analysis.score === 'number'; });
     if (!az.length) {
@@ -1547,6 +1598,7 @@
     }).join('');
 
     view('<div class="card">' + head +
+      '<div class="card cl-sub" style="margin-bottom:14px"><div class="row-between" style="flex-wrap:wrap;gap:8px;align-items:center"><h3 class="cl-h" style="margin:0">🧑‍🏫 אימון מנהלים (AI)</h3><button class="btn btn-sm" id="mgrGen">✨ צור דוח</button></div><div id="mgrBody" style="margin-top:12px"></div></div>' +
       '<div class="cards" style="margin-bottom:16px">' +
         stat('שיחות מנותחות', az.length, null, 'analyzed') +
         stat('ציון צוות ממוצע', teamScore, null, null, teamScore >= 70 ? 'טוב' : teamScore >= 40 ? 'בינוני' : 'דורש שיפור') +
@@ -1576,6 +1628,7 @@
       (flagRows ? '<div class="card cl-sub" style="margin-top:14px"><h3 class="cl-h">🚩 דגלים אדומים חמים · ' + flagsHot + '</h3>' +
         '<div class="table-scroll"><table><thead><tr><th>דגל</th><th>נציג</th><th>פעולה נדרשת</th></tr></thead><tbody>' + flagRows + '</tbody></table></div></div>' : '') +
       '</div>');
+    wireMgrReport();
   }
 
   // ---------- דורש חזרה ----------
