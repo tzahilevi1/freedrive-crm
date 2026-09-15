@@ -5453,8 +5453,11 @@
         fld('שלוחת SIP', 'ue_sip', p.sip_ext) +
         fld('סניף', 'ue_branch', p.branch) +
         '<div class="field" style="margin:0"><label>📞 מספר נציג בוויס סנטר</label>' +
-          '<input class="inp" id="ue_agent_phone" type="tel" value="' + esc(p.agent_phone == null ? '' : p.agent_phone) + '" placeholder="למשל 0534494707" style="width:100%">' +
-          '<span class="muted" style="font-size:11px">קובע אילו שיחות המשתמש רואה — רק שלו. לשני מספרים: מופרד בפסיק.</span></div>' +
+          '<input class="inp" id="ue_agent_phone" type="tel" value="' + esc(((p.agent_phone || '').split(',')[0] || '').trim()) + '" placeholder="למשל 0534494707" style="width:100%">' +
+          '<span class="muted" style="font-size:11px">קובע אילו שיחות המשתמש רואה — רק שלו.</span></div>' +
+        '<div class="field" style="margin:0"><label>📞 מספר נציג נוסף (אם יש)</label>' +
+          '<input class="inp" id="ue_agent_phone2" type="tel" value="' + esc(((p.agent_phone || '').split(',')[1] || '').trim()) + '" placeholder="למשל 0534495197" style="width:100%">' +
+          '<span class="muted" style="font-size:11px">לנציג עם שני מספרים (כמו ליאור).</span></div>' +
       '</div>' +
       (isSelf ? '' :
         '<label id="ue_viewsWrap" class="hidden" style="display:flex;gap:8px;align-items:center;margin-top:10px;font-size:13px">' +
@@ -5476,7 +5479,7 @@
         phone: ($('ue_phone').value || '').trim() || null,
         mobile: ($('ue_mobile').value || '').trim() || null,
         sip_ext: ($('ue_sip').value || '').trim() || null,
-        agent_phone: ($('ue_agent_phone').value || '').trim() || null,
+        agent_phone: [($('ue_agent_phone').value || '').trim(), ($('ue_agent_phone2') ? ($('ue_agent_phone2').value || '').trim() : '')].filter(Boolean).join(',') || null,
         title: roleLabel(newRoleValue()),   // נגזר מהתפקיד — אין יותר שדה נפרד
         branch: ($('ue_branch').value || '').trim() || null,
         notes: ($('ue_notes').value || '').trim() || null
