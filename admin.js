@@ -488,7 +488,8 @@
       ['calls:ai', '\ud83e\udd16 ניתוח שיחות'],
       ['calls:reports', '📈 דוחות תקופתיים'],
       ['calls:alerts', '🔔 התראות'],
-      ['calls:customers', '👤 לקוחות']
+      ['calls:customers', '👤 לקוחות'],
+      ['calls:trends', '📈 מגמות']
     ],
     settings: [
       ['settings', '\ud83d\udccb רשימות ובחירות'],
@@ -1301,6 +1302,7 @@
       else if (sub === 'reports') paintReports(all, head);
       else if (sub === 'alerts') paintAlerts(all, head);
       else if (sub === 'customers') renderCustomers(all, head);
+      else if (sub === 'trends') paintTrends(all, head);
       else paintOverview(all, head);
 
       if ($('clDays')) $('clDays').addEventListener('change', function () {
@@ -1870,6 +1872,79 @@
     });
   }
 
+  // ---------- מגמות ומשפך ----------
+  //  מגמה יומית (נפח + ציון), משפך המרה, וזמן תגובה לשיחות שלא נענו.
+  function paintTrends(all, head) {
+    var az = all.filter(function (c) { return c.crm_analysis && typeof c.crm_analysis.score === 'number'; });
+
+    //  ---- מגמה יומית ----
+    var byDay = {};
+    all.forEach(function (c) { if (!c.started_at) return; var d = String(c.started_at).slice(0, 10); var o = byDay[d] || (byDay[d] = { n: 0, ans: 0, scores: [], sent: { 'חיובי': 0, 'ניטרלי': 0, 'שלילי': 0 } }); o.n++; if (c.answered) o.ans++; var a = c.crm_analysis; if (a) { if (typeof a.score === 'number') o.scores.push(a.score); if (o.sent[a.sentiment] !== undefined) o.sent[a.sentiment]++; } });
+    var days = Object.keys(byDay).sort().slice(-30);
+    var maxN = Math.max.apply(null, days.map(function (d) { return byDay[d].n; }).concat([1]));
+    var trendBars = '<div style="display:flex;align-items:flex-end;gap:5px;height:150px;direction:ltr;border-bottom:1px solid var(--line);padding-bottom:2px">' +
+      days.map(function (d) {
+        var o = byDay[d], h = Math.max(4, Math.round(o.n / maxN * 120));
+        var sc = o.scores.length ? Math.round(o.scores.reduce(function (a, b) { return a + b; }, 0) / o.scores.length) : null;
+        var col = sc == null ? 'var(--line)' : sc >= 70 ? 'var(--ok)' : sc >= 40 ? 'var(--warn)' : 'var(--danger)';
+        return '<div style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:flex-end" title="' + esc(d + ' · ' + o.n + ' שיחות' + (sc != null ? ' · ציון ' + sc : '')) + '">' +
+          '<div style="font-size:9px;color:var(--muted)">' + (sc != null ? sc : '') + '</div>' +
+          '<div style="width:70%;max-width:22px;background:' + col + ';border-radius:3px 3px 0 0;height:' + h + 'px"></div></div>';
+      }).join('') + '</div>' +
+      '<div style="display:flex;gap:5px;direction:ltr;margin-top:4px">' + days.map(function (d, i) { return '<div style="flex:1;min-width:0;text-align:center;font-size:9px;color:var(--muted)">' + (i % 3 === 0 ? esc(d.slice(5)) : '') + '</div>'; }).join('') + '</div>' +
+      '<div class="muted" style="font-size:11px;margin-top:6px">גובה = נפח שיחות · צבע = ציון ממוצע ביום (ירוק=גבוה, אדום=נמוך)</div>';
+
+    //  ---- משפך המרה ----
+    var total = all.length, answered = all.filter(function (c) { return c.answered === true; }).length;
+    var won = az.filter(function (c) { return c.crm_analysis.status_suggestion === 'won'; }).length;
+    var meeting = az.filter(function (c) { return /meeting|quote/.test(c.crm_analysis.status_suggestion || ''); }).length;
+    var funnelSteps = [['כל השיחות', total, 'var(--brand)'], ['נענו', answered, '#6366f1'], ['נותחו', az.length, '#0ea5e9'], ['פגישה/הצעה', meeting, 'var(--warn)'], ['עסקאות', won, 'var(--ok)']];
+    var fMax = total || 1;
+    var funnelHTML = funnelSteps.map(function (s) {
+      var w = Math.round(s[1] / fMax * 100);
+      return '<div class="hbar-row"><div class="hbar-lbl" style="flex-basis:110px">' + esc(s[0]) + '</div>' +
+        '<div class="hbar-track"><div class="hbar-fill" style="width:' + Math.max(3, w) + '%;background:' + s[2] + '"></div></div>' +
+        '<div class="hbar-n" style="flex-basis:90px">' + s[1] + ' · ' + (total ? Math.round(s[1] / total * 100) : 0) + '%</div></div>';
+    }).join('');
+
+    //  ---- זמן תגובה לשיחות נכנסות שלא נענו ----
+    var byCust = {};
+    all.forEach(function (c) { var p = last9(callPhone(c)); if (!p) return; (byCust[p] = byCust[p] || []).push(c); });
+    var gaps = [], stillOpen = 0;
+    Object.keys(byCust).forEach(function (p) {
+      var arr = byCust[p].slice().sort(function (a, b) { return new Date(a.started_at) - new Date(b.started_at); });
+      arr.forEach(function (c, i) {
+        if (c.direction === 'in' && c.answered !== true) {
+          var next = null;
+          for (var j = i + 1; j < arr.length; j++) { if (arr[j].answered === true) { next = arr[j]; break; } }
+          if (next) gaps.push((new Date(next.started_at) - new Date(c.started_at)) / 60000);
+          else stillOpen++;
+        }
+      });
+    });
+    var avgGap = gaps.length ? Math.round(gaps.reduce(function (a, b) { return a + b; }, 0) / gaps.length) : null;
+    var under15 = gaps.filter(function (g) { return g <= 15; }).length;
+    var fmtGap = function (m) { return m == null ? '—' : m < 60 ? m + ' דק\'' : Math.round(m / 60) + ' שע\''; };
+
+    view('<div class="card">' + head +
+      '<div class="cards" style="margin-bottom:16px">' +
+        stat('זמן תגובה ממוצע', fmtGap(avgGap), null, null, gaps.length + ' חזרות') +
+        stat('נענו תוך 15 דק\'', gaps.length ? Math.round(under15 / gaps.length * 100) + '%' : '—') +
+        stat('ממתינים לחזרה', stillOpen, null, 'todo') +
+        stat('שיעור המרה', total ? Math.round(won / total * 100) + '%' : '—', null, null, won + ' עסקאות') +
+      '</div>' +
+      '<div class="card cl-sub"><h3 class="cl-h">📈 מגמה יומית · ' + days.length + ' ימים</h3>' + trendBars + '</div>' +
+      '<div class="grid2" style="gap:14px;margin-top:14px">' +
+        '<div class="card cl-sub"><h3 class="cl-h">🔀 משפך המרה</h3>' + funnelHTML + '</div>' +
+        '<div class="card cl-sub"><h3 class="cl-h">⏱️ זמן תגובה לשיחות שלא נענו</h3>' +
+          '<p class="cv-txt">מרגע שלקוח התקשר ולא נענה — עד השיחה הבאה שנענתה מולו.</p>' +
+          '<div class="cl-kv" style="margin-top:10px"><div class="k">זמן תגובה ממוצע</div><div class="v">' + fmtGap(avgGap) + '</div>' +
+          '<div class="k">נענו תוך 15 דקות</div><div class="v">' + (gaps.length ? Math.round(under15 / gaps.length * 100) + '%' : '—') + '</div>' +
+          '<div class="k">חזרות שנמדדו</div><div class="v">' + gaps.length + '</div>' +
+          '<div class="k">עדיין ממתינים</div><div class="v" style="color:var(--danger)">' + stillOpen + '</div></div></div>' +
+      '</div></div>');
+  }
+
   function paintReports(all, head) {
     var az = all.filter(function (c) { return c.crm_analysis && typeof c.crm_analysis.score === 'number'; });
     if (!az.length) {
@@ -2344,7 +2419,7 @@
 
     //  ---- הקלטה ----
     var recBlock;
-    if (c.recording_path) recBlock = '<div class="cv-rec"><span class="cv-rec-lbl">🎧 הקלטת השיחה</span><span data-recplay="' + esc(c.recording_path) + '" class="muted" style="font-size:12px">טוען הקלטה…</span></div>';
+    if (c.recording_path) recBlock = '<div class="cv-rec"><span class="cv-rec-lbl">🎧 הקלטת השיחה</span><span data-recplay="' + esc(c.recording_path) + '" class="muted" style="font-size:12px">טוען הקלטה…</span><button class="btn btn-ghost btn-sm" data-recdl="' + esc(c.recording_path) + '" title="הורד למחשב">⬇ הורד</button></div>';
     else if (c.answered === false) recBlock = '<div class="cv-rec cv-rec-none">☎️ השיחה לא נענתה — אין הקלטה</div>';
     else if (c.recording_url) recBlock = '<div class="cv-rec"><span class="cv-rec-lbl">🎧 הקלטת השיחה</span><a class="btn btn-ghost btn-sm" href="' + esc(c.recording_url) + '" target="_blank" rel="noopener">האזן ב-Voicenter</a><span class="muted" style="font-size:11px">ההקלטה יורדת למערכת ותופיע כאן בקרוב</span></div>';
     else recBlock = '<div class="cv-rec cv-rec-none">אין הקלטה זמינה לשיחה זו</div>';
@@ -2407,7 +2482,7 @@
     if (has(a.status_suggestion)) blocks += sec('🎯 סטטוס מומלץ',
       '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">' + badgeFor(a.status_suggestion, '') +
       (has(a.status_reason) ? '<span class="muted" style="font-size:12.5px">' + esc(a.status_reason) + '</span>' : '') +
-      (c.lead_id ? '<button class="btn btn-sm" data-applyst="' + esc(c.lead_id) + '" data-st="' + esc(a.status_suggestion) + '">החל על הליד</button>' : '') + '</div>');
+      (c.lead_id ? '<button class="btn btn-sm" data-applyst="' + esc(c.lead_id) + '" data-st="' + esc(a.status_suggestion) + '">החל על הליד</button>' + (a.next_step ? ' <button class="btn btn-ghost btn-sm" data-applytask="' + esc(c.lead_id) + '" data-st="' + esc(a.status_suggestion) + '" data-ns="' + esc(a.next_step) + '" data-nw="' + esc(a.next_step_when || '') + '">✓ החל + פתח משימה</button>' : '') : '') + '</div>');
 
     if (!blocks) blocks = '<div class="card cv-block"><div class="ai-empty">' + (c.transcript ? 'הניתוח בדרך (עד כמה דקות).' : 'הניתוח יופק אחרי התמלול.') + '</div></div>';
 
@@ -2444,7 +2519,7 @@
       '</div>' +
 
       '<div class="cv-grid">' +
-        '<div class="card cv-left"><h3 style="margin:0 0 12px">💬 מהלך השיחה</h3>' + recBlock + '<div class="cv-convo">' + convo + '</div>' +
+        '<div class="card cv-left"><h3 style="margin:0 0 12px">💬 מהלך השיחה</h3>' + recBlock + '<div class="cv-tagbar" id="cvTags"></div>' + '<div class="cv-convo">' + convo + '</div>' +
           '<details style="margin-top:14px"><summary class="muted" style="font-size:12px;cursor:pointer">פרטים מלאים ותמלול גולמי</summary>' +
           '<div class="cl-kv" style="margin-top:10px">' + det.map(function (r) { return '<div class="k">' + esc(r[0]) + '</div><div class="v">' + esc(r[1]) + '</div>'; }).join('') + '</div>' +
           (c.transcript ? '<div class="cl-tr" style="margin-top:10px">' + esc(c.transcript) + '</div>' : '') +
@@ -2476,6 +2551,35 @@
         recEls.forEach(function (el) { swapPlayer(el, rmap[el.dataset.recplay], 'cl-wide'); });
       }, function () {});
     }
+    //  הורדת הקלטה למחשב
+    $('view').querySelectorAll('[data-recdl]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        db.storage.from('call-recordings').createSignedUrl(b.dataset.recdl, 3600, { download: true }).then(function (r) {
+          if (r && r.data && r.data.signedUrl) { var a = document.createElement('a'); a.href = r.data.signedUrl; a.download = ''; document.body.appendChild(a); a.click(); a.remove(); }
+        }, function () {});
+      });
+    });
+    //  תיוג ידני לשיחה
+    var tagBar = $('cvTags');
+    function drawTags() {
+      if (!tagBar) return;
+      var tags = c.tags || [];
+      tagBar.innerHTML = '<span class="cv-rec-lbl">🏷️ תיוגים:</span> ' + tags.map(function (t) { return '<span class="tag">' + esc(t) + ' <a href="#" data-tagdel="' + esc(t) + '" style="cursor:pointer;text-decoration:none">✕</a></span>'; }).join(' ') + ' <input class="inp" id="cvTagIn" placeholder="הוסף תגית…" style="width:130px;font-size:12px;padding:4px 8px">';
+      tagBar.querySelectorAll('[data-tagdel]').forEach(function (x) { x.addEventListener('click', function (e) { e.preventDefault(); c.tags = (c.tags || []).filter(function (t) { return t !== x.dataset.tagdel; }); db.from('calls').update({ tags: c.tags }).eq('id', c.id).then(function () {}, function () {}); drawTags(); }); });
+      var inp = $('cvTagIn'); if (inp) inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') { var v = this.value.trim(); if (v && (c.tags || []).indexOf(v) < 0) { c.tags = (c.tags || []).concat([v]); db.from('calls').update({ tags: c.tags }).eq('id', c.id).then(function () {}, function () {}); drawTags(); } } });
+    }
+    drawTags();
+    //  החל סטטוס + פתיחת משימה מהצעד הבא
+    document.querySelectorAll('[data-applytask]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        btn.disabled = true; btn.textContent = 'מחיל…';
+        var due = new Date(Date.now() + 864e5); due.setHours(10, 0, 0, 0);
+        Promise.all([
+          db.from('leads').update({ status: btn.dataset.st }).eq('id', btn.dataset.applytask),
+          db.from('tasks').insert({ lead_id: btn.dataset.applytask, title: btn.dataset.ns + (btn.dataset.nw ? ' (' + btn.dataset.nw + ')' : ''), due_at: due.toISOString(), done: false, created_by: (window.C2B && window.C2B.userId) || null })
+        ]).then(function () { btn.textContent = '✓ הוחל + משימה'; if (window.C2B.refreshBadges) window.C2B.refreshBadges(); }, function () { btn.textContent = 'שגיאה'; });
+      });
+    });
   }
 
   //  פתיחת שיחה מלאה: טוענים אותה טרייה מהמסד (התמלול/ניתוח מתעדכנים
