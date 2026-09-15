@@ -128,6 +128,20 @@
   tr[data-callinfo]:hover{background:var(--surface-2)}
   .kpi.click{cursor:pointer;transition:border-color .15s}
   .kpi.click:hover{border-color:var(--brand)}
+  .cv-grid{display:grid;grid-template-columns:1.3fr 1fr;gap:16px;align-items:start}
+  @media(max-width:900px){.cv-grid{grid-template-columns:1fr}}
+  .cv-convo{max-height:60vh;overflow:auto;display:flex;flex-direction:column;gap:9px;padding-inline-end:4px}
+  .cv-turn{max-width:82%;align-self:flex-start}
+  .cv-turn.me{align-self:flex-end}
+  .cv-who{font-size:10.5px;color:var(--muted);margin:0 6px 2px}
+  .cv-bub{background:var(--surface-2);border:1px solid var(--line);border-radius:14px;padding:9px 13px;font-size:13.5px;line-height:1.65;white-space:pre-wrap}
+  .cv-turn.me .cv-bub{background:var(--brand-soft);border-color:var(--brand)}
+  .cv-summary{background:var(--brand-soft);border:1px solid var(--line);border-radius:12px;padding:12px 14px;font-size:13.5px;line-height:1.75;margin-bottom:12px}
+  .cv-sec{margin-bottom:12px}
+  .cv-lbl{font-size:12px;color:var(--muted);font-weight:700;margin-bottom:4px}
+  .cv-txt{font-size:13px;line-height:1.65}
+  .cv-ul{margin:2px 0 0;padding-inline-start:18px;font-size:12.5px;line-height:1.75}
+  .cv-tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
   .cl-sum{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font-size:12.5px;line-height:1.5}
   .cl-ai{background:var(--brand-soft);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
   .cl-turn{padding:6px 10px;border-radius:9px;margin-bottom:5px;background:var(--surface);border:1px solid var(--line)}
@@ -593,8 +607,8 @@
 <div id="drawer"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js" integrity="sha384-0w2KAL2YHP6wKOkUDzkCDGgVvfmHnj02DHeQ6XcHOgTfFsGyonKOpShMH1x6nk9o" crossorigin="anonymous"></script>
-<script src="admin.js?v=202609142125"></script>
-<script src="admin-crm.js?v=202609142125"></script>
-<script src="admin-modules.js?v=202609142125"></script>
+<script src="admin.js?v=202609150747"></script>
+<script src="admin-crm.js?v=202609150747"></script>
+<script src="admin-modules.js?v=202609150747"></script>
 </body>
 </html>

@@ -1072,6 +1072,8 @@
       cell: function (c) { return '<td><button class="btn btn-ghost btn-sm" data-callinfo="' + esc(c.id) + '">פרטים</button></td>'; } }
   ];
   var callCols = null, callDays = 7;
+  //  המסך הזה מכיל רק את מחלקת פרי דרייב; שאר המחלקות שייכות ל-CRM אחר.
+  var CALL_DEPT = 'נ.ש פוקס מוטורס בע"מ';
   //  כל מספר במסך מוביל לרשימה המסוננת שמאחוריו. הסינון מוחזק כאן ולא
   //  בכתובת, כדי שחזרה ללשונית תשמור את ההקשר שממנו הגעת.
   var callFilter = { dept: '', dir: '', ans: '', q: '', agent: '', hour: '', phone: '', rec: '', today: '' };
@@ -1163,7 +1165,7 @@
     loading();
     var since = new Date(Date.now() - callDays * 864e5).toISOString();
     Promise.all([
-      db.from('calls').select('*').gte('started_at', since).order('started_at', { ascending: false }).limit(5000),
+      db.from('calls').select('*').eq('department', CALL_DEPT).gte('started_at', since).order('started_at', { ascending: false }).limit(5000),
       db.from('leads').select('id,name,phone,status').is('deleted_at', null).limit(5000)
     ]).then(function (res) {
       if (res[0].error) return errBox(res[0].error.message);
@@ -1480,7 +1482,7 @@
       var row = e2.target.closest('tr[data-callinfo]');
       if (row && !e2.target.closest('a,button')) {
         var c = all.filter(function (x) { return x.id === row.dataset.callinfo; })[0];
-        if (c) callDetail(c);
+        if (c) openCall(c.id);
       }
     });
     if ($('cfClearAll')) $('cfClearAll').addEventListener('click', function (e2) { e2.preventDefault(); cfClear(); renderCalls('list'); });
@@ -1493,7 +1495,7 @@
     $('view').querySelectorAll('[data-callinfo]').forEach(function (b) {
       b.addEventListener('click', function () {
         var c = all.filter(function (x) { return x.id === b.dataset.callinfo; })[0];
-        if (c) callDetail(c);
+        if (c) openCall(c.id);
       });
     });
     //  כתובות חתומות בבקשה אחת ולא אחת לכל שורה
@@ -1512,106 +1514,141 @@
   //  פרטי שיחה — כולל המטען המקורי. הוא מוצג בכוונה: מבנה ה-CDR של
   //  הספק אינו מתועד, וכשמתברר ששדה כלשהו לא מופה נכון אפשר לראות כאן
   //  את הערך האמיתי בלי לגשת למסד.
-  function callDetail(c) {
-    var rows = [
-      ['מועד', c.started_at ? fmtDateTime(c.started_at) : '—'],
-      ['כיוון', c.direction === 'out' ? 'יוצאת' : c.direction === 'in' ? 'נכנסת' : '—'],
-      ['מאת', c.from_number || '—'], ['אל', c.to_number || '—'],
-      ['מספר הארגון', c.did || '—'],
-      ['נענתה', c.answered === true ? 'כן' : c.answered === false ? 'לא' : '—'],
-      ['סטטוס אצל הספק', c.status || '—'],
-      ['זמן צלצול', c.ring_sec != null ? c.ring_sec + ' שניות' : '—'],
-      ['זמן שיחה', c.talk_sec ? mmss(c.talk_sec) : '—'],
-      ['משך כולל', c.duration_sec ? mmss(c.duration_sec) : '—'],
-      ['נציג', (c.agent_name || '—') + (c.agent_code ? ' · קוד ' + c.agent_code : '') + (c.agent_ext ? ' · שלוחה ' + c.agent_ext : '')],
-      ['מחלקה / מותג', c.department || '—'],
-      ['חברה', c.top_department || '—'],
-      ['ליד מקושר', c._lead ? c._lead.name : 'לא שויך'],
-      ['מזהה אצל הספק', c.external_id || '—']
-    ];
-    var html = '<div class="cl-kv">' + rows.map(function (r) {
-      return '<div class="k">' + esc(r[0]) + '</div><div class="v">' + esc(r[1]) + '</div>';
-    }).join('') + '</div>';
+  //  עמוד השיחה המלא — נפתח בלחיצה על שיחה. כאן יושב כל מה שראינו
+  //  אצל Nivision ויותר: השיחה כדיאלוג נציג/לקוח, הקלטה, סיכום,
+  //  התנגדויות, מה הנציג התחייב, הצעד הבא, והמלצת סטטוס עם החלה בקליק.
+  function renderCallView(c) {
+    var a = c.crm_analysis || {};
+    var dir = c.direction === 'out' ? '↗ יוצאת' : c.direction === 'in' ? '↙ נכנסת' : '—';
+    var dirCls = c.direction === 'out' ? 'cl-out' : 'cl-in';
 
-    if (c.recording_path) {
-      html += '<h4 style="margin:16px 0 6px;font-size:13px">🎧 הקלטה</h4>' +
-        '<span data-recplay="' + esc(c.recording_path) + '" class="muted" style="font-size:12px">טוען…</span>';
-    } else if (c.recording_url) {
-      html += '<h4 style="margin:16px 0 6px;font-size:13px">🎧 הקלטה</h4>' +
-        '<a class="btn btn-sm" href="' + esc(c.recording_url) + '" target="_blank" rel="noopener">🎧 האזן ב-Voicenter</a>' +
-        '<p class="muted" style="font-size:11.5px;margin:8px 0 0;line-height:1.6">' +
-        'הקובץ עדיין לא הורד אלינו, ולכן אי אפשר לנגן אותו כאן. ' +
-        (c.recording_err ? 'הסיבה: ' + esc(c.recording_err) : 'הכתובת של Voicenter מוגנת בהתחברות.') + '</p>';
+    //  ---- השיחה כדיאלוג ----
+    var convo;
+    if (Array.isArray(c.transcript_dialog) && c.transcript_dialog.length) {
+      convo = c.transcript_dialog.map(function (t) {
+        var me = /נציג|agent/i.test(t.speaker || '');
+        return '<div class="cv-turn' + (me ? ' me' : '') + '">' +
+          '<div class="cv-who">' + esc(t.speaker || '') + '</div>' +
+          '<div class="cv-bub">' + esc(t.text || '') + '</div></div>';
+      }).join('');
+    } else if (c.transcript) {
+      convo = '<div class="muted" style="font-size:12px;margin-bottom:8px">התמלול טרם עובד לדיאלוג — מוצג גולמי:</div>' +
+        '<div class="cl-tr">' + esc(c.transcript) + '</div>';
+    } else {
+      convo = '<div class="ai-empty">אין עדיין תמלול לשיחה הזו.<br>' +
+        (c.recording_path ? 'הקובץ הורד וממתין לתמלול (עד כמה דקות).' : 'ההקלטה טרם הורדה.') + '</div>';
     }
-    var a = c.crm_analysis;
-    if (a) {
-      var lst = function (t, arr) {
-        return (Array.isArray(arr) && arr.length)
-          ? '<div style="margin-top:8px"><b style="font-size:12.5px">' + t + '</b><ul style="margin:4px 0 0;padding-inline-start:18px;font-size:12.5px;line-height:1.7">' +
-            arr.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul></div>'
-          : '';
-      };
-      html += '<h4 style="margin:18px 0 6px;font-size:13px">🤖 ניתוח השיחה</h4>' +
-        '<div class="cl-ai">' +
-          (a.summary ? '<div style="font-size:13.5px;line-height:1.75">' + esc(a.summary) + '</div>' : '') +
-          (a.status_suggestion ? '<div style="margin-top:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">' +
-            '<span class="muted" style="font-size:12px">סטטוס מומלץ:</span>' + badgeFor(a.status_suggestion, '') +
-            (a.status_reason ? '<span class="muted" style="font-size:12px">' + esc(a.status_reason) + '</span>' : '') +
-            (c.lead_id ? ' <button class="btn btn-sm" data-applyst="' + esc(c.lead_id) + '" data-st="' + esc(a.status_suggestion) + '">החל על הליד</button>' : '') +
-            '</div>' : '') +
-          (a.customer_wants ? '<div style="margin-top:8px;font-size:12.5px"><b>הלקוח ביקש:</b> ' + esc(a.customer_wants) + '</div>' : '') +
-          lst('התנגדויות וחששות', a.objections) +
-          lst('מה הנציג התחייב', a.agent_promised) +
-          (a.next_step ? '<div style="margin-top:8px;font-size:12.5px"><b>הצעד הבא:</b> ' + esc(a.next_step) +
-            (a.next_step_when ? ' <span class="muted">(' + esc(a.next_step_when) + ')</span>' : '') + '</div>' : '') +
-          '<div class="muted" style="font-size:11.5px;margin-top:10px">' +
-            (a.car_mentioned ? '🚗 ' + esc(a.car_mentioned) + ' · ' : '') +
-            (a.sentiment ? 'רגש: ' + esc(a.sentiment) : '') + '</div>' +
+
+    //  ---- לוח הניתוח ----
+    function lst(t, arr, icon) {
+      if (!Array.isArray(arr) || !arr.length) return '';
+      return '<div class="cv-sec"><div class="cv-lbl">' + icon + ' ' + t + '</div><ul class="cv-ul">' +
+        arr.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul></div>';
+    }
+    var analysis;
+    if (a.summary || a.status_suggestion) {
+      analysis =
+        (a.summary ? '<div class="cv-summary">' + esc(a.summary) + '</div>' : '') +
+        (a.status_suggestion ? '<div class="cv-sec"><div class="cv-lbl">🎯 סטטוס מומלץ</div>' +
+          '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">' + badgeFor(a.status_suggestion, '') +
+          (a.status_reason ? '<span class="muted" style="font-size:12.5px">' + esc(a.status_reason) + '</span>' : '') +
+          (c.lead_id ? '<button class="btn btn-sm" data-applyst="' + esc(c.lead_id) + '" data-st="' + esc(a.status_suggestion) + '">החל על הליד</button>' : '') +
+          '</div></div>' : '') +
+        (a.customer_wants ? '<div class="cv-sec"><div class="cv-lbl">🛒 הלקוח ביקש</div><div class="cv-txt">' + esc(a.customer_wants) + '</div></div>' : '') +
+        lst('התנגדויות וחששות', a.objections, '⚠️') +
+        lst('מה הנציג התחייב', a.agent_promised, '🤝') +
+        (a.next_step ? '<div class="cv-sec"><div class="cv-lbl">➡️ הצעד הבא</div><div class="cv-txt">' + esc(a.next_step) +
+          (a.next_step_when ? ' <span class="muted">(' + esc(a.next_step_when) + ')</span>' : '') + '</div></div>' : '') +
+        '<div class="cv-tags">' +
+          (a.car_mentioned ? '<span class="tag">🚗 ' + esc(a.car_mentioned) + '</span>' : '') +
+          (a.sentiment ? '<span class="tag">רגש: ' + esc(a.sentiment) + '</span>' : '') +
+          (a.confidence ? '<span class="tag muted">ודאות ' + Math.round(a.confidence * 100) + '%</span>' : '') +
         '</div>';
-    } else if (c.crm_err) {
-      html += '<p class="muted" style="font-size:12px;margin-top:14px;color:var(--danger)">ניתוח נכשל: ' + esc(c.crm_err) + '</p>';
+    } else if (c.transcript) {
+      analysis = '<div class="ai-empty">התמלול מוכן, הניתוח בדרך (עד כמה דקות).</div>';
+    } else {
+      analysis = '<div class="ai-empty">הניתוח יופק אחרי התמלול.</div>';
     }
-    if (c.transcript) {
-      //  מוצג כשיחה ולא כגוש טקסט — כך רואים מי אמר מה, כמו בהקלטה עצמה
-      var turns = String(c.transcript).split('\n').filter(function (l) { return l.trim(); });
-      html += '<h4 style="margin:18px 0 6px;font-size:13px">📝 תמלול</h4><div class="cl-tr">' +
-        turns.map(function (l) {
-          var i = l.indexOf(':');
-          var who = i > 0 && i < 14 ? l.slice(0, i) : '';
-          var txt = who ? l.slice(i + 1).trim() : l;
-          return '<div class="cl-turn' + (/נציג|agent/i.test(who) ? ' me' : '') + '">' +
-            (who ? '<b>' + esc(who) + '</b> ' : '') + esc(txt) + '</div>';
-        }).join('') + '</div>';
-    }
-    if (c.ai_summary && (!a || a.summary !== c.ai_summary)) {
-      html += '<h4 style="margin:16px 0 6px;font-size:13px">📋 סיכום הספק</h4>' +
-        '<div class="cl-tr">' + esc(c.ai_summary) + '</div>';
-    }
-    html += '<details style="margin-top:16px"><summary class="muted" style="font-size:12px;cursor:pointer">כל מה שהספק שלח (raw)</summary>' +
-      '<div class="cl-tr" style="margin-top:8px">' + esc(JSON.stringify(c.raw, null, 2)) + '</div></details>';
 
-    setTimeout(function () {
-      //  הכפתורים נוצרים כאן ולא במסך, ולכן החיווט חייב לקרות אחרי
-      //  שהחלונית כבר בעמוד
-      document.querySelectorAll('#drawer [data-applyst]').forEach(function (b) {
-        b.addEventListener('click', function () {
-          b.disabled = true; b.textContent = 'מחיל…';
-          db.from('leads').update({ status: b.dataset.st }).eq('id', b.dataset.applyst).then(function (r) {
-            b.textContent = r.error ? 'שגיאה' : '✓ הוחל';
-            if (!r.error && window.C2B.refreshBadges) window.C2B.refreshBadges();
-          });
+    //  ---- הקלטה ----
+    var rec;
+    if (c.recording_path) rec = '<span data-recplay="' + esc(c.recording_path) + '" class="muted" style="font-size:12px">טוען הקלטה…</span>';
+    else if (c.recording_url) rec = '<a class="btn btn-ghost btn-sm" href="' + esc(c.recording_url) + '" target="_blank" rel="noopener">🎧 האזן ב-Voicenter</a>';
+    else rec = '<span class="muted">אין הקלטה</span>';
+
+    var det = [
+      ['נציג', (c.agent_name || '—') + (c.agent_ext ? ' · שלוחה ' + c.agent_ext : '')],
+      ['מחלקה', c.department || '—'],
+      ['מספר הלקוח', callPhone(c) || '—'],
+      ['משך שיחה', c.talk_sec ? mmss(c.talk_sec) : '—'],
+      ['זמן צלצול', c.ring_sec != null ? c.ring_sec + ' ש\'' : '—'],
+      ['נענתה', c.answered === true ? 'כן' : c.answered === false ? 'לא' : '—'],
+      ['מספר הארגון', c.did || '—'],
+      ['מזהה שיחה', c.external_id ? String(c.external_id).slice(0, 20) : '—']
+    ];
+
+    view('<div class="cv-wrap">' +
+      '<div class="lead-top"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">' +
+        '<button class="btn btn-ghost btn-sm" id="cvBack">→ חזרה לשיחות</button>' +
+        '<h3 style="margin:0">📞 שיחה · ' + esc(c.started_at ? fmtDateTime(c.started_at) : '') + '</h3>' +
+        '<span class="cl-dir ' + dirCls + '">' + dir + '</span>' +
+        (c.answered === false ? '<span class="cl-no">✗ לא נענתה</span>' : '') +
+        (c._lead ? '<a href="#" class="btn btn-ghost btn-sm" data-golead="' + esc(c.lead_id) + '">👤 ' + esc(c._lead.name) + '</a>' : '') +
+      '</div><div>' + rec + '</div></div>' +
+
+      '<div class="cv-grid">' +
+        '<div class="card"><h3 style="margin:0 0 12px">💬 מהלך השיחה</h3><div class="cv-convo">' + convo + '</div></div>' +
+        '<div>' +
+          '<div class="card"><h3 style="margin:0 0 12px">🤖 ניתוח השיחה</h3>' + analysis + '</div>' +
+          '<div class="card" style="margin-top:14px"><h3 style="margin:0 0 10px">פרטי השיחה</h3>' +
+            '<div class="cl-kv">' + det.map(function (r) {
+              return '<div class="k">' + esc(r[0]) + '</div><div class="v">' + esc(r[1]) + '</div>';
+            }).join('') + '</div>' +
+            (c.transcript ? '<details style="margin-top:12px"><summary class="muted" style="font-size:12px;cursor:pointer">תמלול גולמי</summary>' +
+              '<div class="cl-tr" style="margin-top:8px">' + esc(c.transcript) + '</div></details>' : '') +
+          '</div>' +
+        '</div>' +
+      '</div></div>');
+
+    $('cvBack').addEventListener('click', function () { renderCalls(callBackSub || 'list'); });
+    $('view').querySelectorAll('[data-golead]').forEach(function (el) {
+      el.addEventListener('click', function (e) { e.preventDefault(); window.C2B_openLeadCard(el.dataset.golead); });
+    });
+    document.querySelectorAll('[data-applyst]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        btn.disabled = true; btn.textContent = 'מחיל…';
+        db.from('leads').update({ status: btn.dataset.st }).eq('id', btn.dataset.applyst).then(function (r) {
+          btn.textContent = r.error ? 'שגיאה' : '✓ הוחל';
+          if (!r.error && window.C2B.refreshBadges) window.C2B.refreshBadges();
         });
       });
-      var el = document.querySelector('#drawer [data-recplay]');
-      if (!el) return;
-      db.storage.from('call-recordings').createSignedUrl(el.dataset.recplay, 3600).then(function (r) {
-        swapPlayer(el, r && r.data && r.data.signedUrl, 'cl-wide');
-      }, function () {});
-    }, 0);
-    openDrawer('<div class="row-between" style="margin-bottom:12px"><h3 style="margin:0">📞 שיחה · ' +
-      esc(c.started_at ? fmtDateTime(c.started_at) : '') + '</h3>' +
-      '<button class="btn btn-ghost btn-sm" onclick="C2B.closeDrawer()">✕</button></div>' + html);
+    });
+    var rel = $('view').querySelector('[data-recplay]');
+    if (rel) db.storage.from('call-recordings').createSignedUrl(rel.dataset.recplay, 3600).then(function (r) {
+      swapPlayer(rel, r && r.data && r.data.signedUrl, 'cl-wide');
+    }, function () {});
   }
+
+  //  פתיחת שיחה מלאה: טוענים אותה טרייה מהמסד (התמלול/ניתוח מתעדכנים
+  //  ברקע), ומשייכים לליד לפי הטלפון אם עדיין לא שויכה.
+  var callBackSub = 'list';
+  function openCall(id, backSub) {
+    callBackSub = backSub || 'list';
+    loading();
+    db.from('calls').select('*').eq('id', id).single().then(function (r) {
+      if (r.error || !r.data) return errBox('השיחה לא נמצאה');
+      var c = r.data;
+      var ph = last9(callPhone(c));
+      var q = ph ? db.from('leads').select('id,name').is('deleted_at', null)
+        .filter('phone', 'ilike', '%' + ph).limit(1) : Promise.resolve({ data: [] });
+      q.then(function (lr) {
+        c._lead = (lr && lr.data && lr.data[0]) || (c.lead_id ? { id: c.lead_id, name: 'ליד' } : null);
+        renderCallView(c);
+      });
+    });
+  }
+  window.C2B_openCall = openCall;
+
 
   // ---------- CARS (read-only from the Google Sheet → cars.json) ----------
   var SHEET_URL = 'https://docs.google.com/spreadsheets/d/1LiK--j3BCPnHO4rZQj7N2RetdnExEmwimWTwn7kmWe8/edit';
