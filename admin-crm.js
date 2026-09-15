@@ -3041,8 +3041,8 @@
 
   // ---------- DASHBOARD ----------
   var dashRange = { preset: 'year' };   // לא 'all' — ראה dashLoad למטה
-  var PERIODS = [['today', 'היום'], ['7', '7 ימים'], ['30', '30 יום'], ['month', 'החודש'], ['quarter', 'רבעון'], ['year', 'שנה'], ['all', 'הכל']];
-  function periodStart(p) { var d = new Date(); d.setHours(0, 0, 0, 0); if (p === 'today') return d.getTime(); if (p === '7') return Date.now() - 7 * 864e5; if (p === '30') return Date.now() - 30 * 864e5; if (p === 'month') { var m = new Date(); m.setDate(1); m.setHours(0, 0, 0, 0); return m.getTime(); } if (p === 'quarter') return Date.now() - 90 * 864e5; if (p === 'year') return Date.now() - 365 * 864e5; return 0; }
+  var PERIODS = [['today', 'היום'], ['yesterday', 'אתמול'], ['7', '7 ימים'], ['30', '30 יום'], ['month', 'החודש'], ['quarter', 'רבעון'], ['year', 'שנה'], ['all', 'הכל']];
+  function periodStart(p) { var d = new Date(); d.setHours(0, 0, 0, 0); if (p === 'today') return d.getTime(); if (p === 'yesterday') return d.getTime() - 864e5; if (p === '7') return Date.now() - 7 * 864e5; if (p === '30') return Date.now() - 30 * 864e5; if (p === 'month') { var m = new Date(); m.setDate(1); m.setHours(0, 0, 0, 0); return m.getTime(); } if (p === 'quarter') return Date.now() - 90 * 864e5; if (p === 'year') return Date.now() - 365 * 864e5; return 0; }
   // ---- per-block date filters (each dashboard card filters independently) ----
   var blockR = {}, blockF = {}, dashAll = null;
   // שדות שאפשר לסנן לפיהם כל בלוק בדשבורד (שדה + ערך)
@@ -3091,6 +3091,8 @@
   function inRange(ts, r) {
     if (!r || r.preset === 'all' || (!r.preset && !r.from && !r.to)) return true;
     var t = new Date(ts || 0).getTime();
+    //  "אתמול" הוא טווח סגור (יום שלם), לא רק גבול תחתון כמו שאר הפריסטים.
+    if (r.preset === 'yesterday') { var st = periodStart('today'); return t >= st - 864e5 && t < st; }
     if (r.preset) return t >= periodStart(r.preset);
     if (r.from && t < new Date(r.from + 'T00:00:00').getTime()) return false;
     if (r.to && t > new Date(r.to + 'T23:59:59').getTime()) return false;

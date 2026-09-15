@@ -1435,6 +1435,7 @@
       '<div class="cards" style="margin-bottom:16px">' +
         stat('שיחות היום', todayN, true, 'today') +
         stat('סה"כ בטווח', all.length, null, 'all') +
+        stat('שיחות שנענו', ans.length, null, 'ansOnly', 'שיחות בפועל עם לקוחות') +
         stat('שיעור מענה', pct(ans.length, all.length) + '%', null, 'ansOnly') +
         stat('משך שיחה ממוצע', ans.length ? mmss(talk / ans.length) : '—', null, 'ansOnly') +
         stat('ציון שיחה ממוצע', avgScore != null ? avgScore : '—', null, 'analyzed', az.length + ' נותחו') +
