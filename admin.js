@@ -337,6 +337,51 @@
     return h + ' ש\'' + (r ? ' ' + r + ' דק\'' : '');
   };
 
+  //  עורך שעות הפעילות — נפתח מגלגל השיניים שבבלוק "זמן תגובה" בדשבורד
+  //  (במקום מסך הגדרות נפרד). שומר ל-app_config ומרענן את הדשבורד כדי
+  //  שהמדד יחושב מחדש עם החלון החדש.
+  window.C2B.editOfficeHours = function () {
+    var DAYS = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'];
+    var o = Object.assign({ fromDow: 5, fromTime: '13:00', toDow: 0, toTime: '09:00' }, window.C2B.office || {});
+    function daySel(id, cur) {
+      return '<select class="inp" id="' + id + '" style="width:120px">' + DAYS.map(function (d, i) {
+        return '<option value="' + i + '"' + (+cur === i ? ' selected' : '') + '>' + d + '</option>';
+      }).join('') + '</select>';
+    }
+    openDrawer('<div class="dw-head"><h3 style="margin:0">🕒 שעות פעילות המשרד</h3></div>' +
+      '<div class="dw-body">' +
+      '<p class="muted" style="font-size:13px;margin:0 0 14px;line-height:1.7">הזמן שבתוך החלון הסגור אינו נספר במדד <b>זמן תגובה</b>. ליד שנכנס בשישי אחר הצהריים ונענה בראשון בבוקר ייספר לפי דקות העבודה בפועל ולא לפי יומיים של לוח שנה.</p>' +
+      '<div style="display:flex;gap:10px;align-items:end;flex-wrap:wrap">' +
+        '<div class="field" style="margin:0"><label>סגור מיום</label>' + daySel('ohFromD', o.fromDow) + '</div>' +
+        '<div class="field" style="margin:0"><label>בשעה</label><input class="inp" type="time" id="ohFromT" value="' + esc(o.fromTime) + '" style="width:120px"></div>' +
+        '<div class="field" style="margin:0"><label>עד יום</label>' + daySel('ohToD', o.toDow) + '</div>' +
+        '<div class="field" style="margin:0"><label>בשעה</label><input class="inp" type="time" id="ohToT" value="' + esc(o.toTime) + '" style="width:120px"></div>' +
+      '</div>' +
+      '<p class="muted" style="font-size:12px;margin-top:12px" id="ohPreview"></p>' +
+      '<div style="margin-top:16px;display:flex;gap:8px;align-items:center"><button class="btn" id="ohSave">💾 שמור</button><button class="btn btn-ghost" id="ohCancel">סגור</button><span id="ohMsg" style="font-size:12px"></span></div>' +
+      '</div>');
+    function preview() {
+      var span = ((+$('ohToD').value - +$('ohFromD').value + 7) % 7) * 24 * 60 + (hhmm($('ohToT').value) - hhmm($('ohFromT').value));
+      $('ohPreview').innerHTML = span > 0
+        ? 'ℹ️ החלון נמשך <b>' + Math.floor(span / 60) + ' שעות</b> בכל שבוע.'
+        : '<span style="color:var(--danger)">⚠ שעת הסיום מוקדמת מההתחלה — החלון ריק ושום דבר לא ינוכה.</span>';
+    }
+    ['ohFromD', 'ohFromT', 'ohToD', 'ohToT'].forEach(function (id) { $(id).addEventListener('change', preview); });
+    preview();
+    $('ohCancel').addEventListener('click', closeDrawer);
+    $('ohSave').addEventListener('click', function () {
+      var val = { fromDow: +$('ohFromD').value, fromTime: $('ohFromT').value, toDow: +$('ohToD').value, toTime: $('ohToT').value };
+      var msg = $('ohMsg'); msg.style.color = 'var(--muted)'; msg.textContent = 'שומר…';
+      db.from('app_config').upsert({ key: 'office_hours', value: val, updated_at: new Date().toISOString() }, { onConflict: 'key' })
+        .then(function (u) {
+          if (u.error) { msg.style.color = 'var(--danger)'; msg.textContent = 'שגיאה: ' + u.error.message; return; }
+          window.C2B.office = val; msg.style.color = 'var(--ok)'; msg.textContent = '✔ נשמר';
+          if (window.C2B_renderDashboard) window.C2B_renderDashboard();
+          setTimeout(closeDrawer, 700);
+        });
+    });
+  };
+
   // ---------- Telephony (SIP / Click-to-Call) ----------
   window.C2B.tel = { mode: 'tel', sip_domain: '', webhook_url: '', country: '972' };
   function loadConfig() {
@@ -497,7 +542,6 @@
       ['settings:brands', '\ud83c\udff7\ufe0f מותגים'],
       ['settings:quick', '\ud83d\udcac הודעות מהירות'],
       ['settings:phone', '\u260e\ufe0f טלפוניה'],
-      ['settings:hours', '\ud83d\udd52 שעות פעילות'],
       ['settings:actions', '\u26a1 פעולות'],
       ['branches', '\ud83c\udfe2 סניפים'],
       ['ctemplates', '\ud83d\udcdc תבניות הסכמים']

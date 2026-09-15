@@ -3321,6 +3321,19 @@
         var r = f(); leadsPopup(r[0], r[1], r[2]);
       });
     });
+    //  גלגל שיניים בכרטיס "זמן תגובה" → עורך שעות הפעילות (למנהלים בלבד),
+    //  במקום מסך הגדרות נפרד. לחיצה עליו לא פותחת את חלון הלידים (stopPropagation).
+    var rtCard = C.$('view').querySelector('[data-kpi="rt"]');
+    if (rtCard && window.C2B.editOfficeHours && (window.C2B.role === 'admin' || window.C2B.role === 'branch')) {
+      rtCard.style.position = 'relative';
+      var gear = document.createElement('button');
+      gear.type = 'button'; gear.title = 'הגדרת שעות פעילות'; gear.textContent = '⚙️';
+      gear.style.cssText = 'position:absolute;top:6px;inset-inline-end:8px;background:none;border:none;cursor:pointer;font-size:14px;opacity:.5;padding:2px;line-height:1';
+      gear.addEventListener('mouseover', function () { gear.style.opacity = '1'; });
+      gear.addEventListener('mouseout', function () { gear.style.opacity = '.5'; });
+      gear.addEventListener('click', function (e) { e.stopPropagation(); window.C2B.editOfficeHours(); });
+      rtCard.appendChild(gear);
+    }
     C.$('dashPeriod').addEventListener('click', function (e) {
       var b = e.target.closest('[data-p]');
       if (b) {
