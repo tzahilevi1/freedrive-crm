@@ -1242,65 +1242,133 @@
   }
 
   // ---------- סקירה ----------
+  //  צ'יפ ציון, נקודת סנטימנט, דונאט וסוגי שיחה — לוח מחוונים בסגנון
+  //  שהלקוח ביקש: ציון שיחה, סנטימנט, סוגי שיחה והתראות ציון-נמוך.
+  function scoreChip(n) {
+    var col = n >= 70 ? 'var(--ok)' : n >= 40 ? 'var(--warn)' : 'var(--danger)';
+    return '<span class="score-chip" style="background:' + col + '1f;color:' + col + '">' + n + '</span>';
+  }
+  function sentDot(s) {
+    var m = { 'חיובי': 'var(--ok)', 'ניטרלי': 'var(--warn)', 'שלילי': 'var(--danger)' };
+    return '<span style="color:' + (m[s] || 'var(--muted)') + ';font-weight:700">● ' + esc(s) + '</span>';
+  }
+  function sentDonut(pos, neu, neg) {
+    var t = pos + neu + neg;
+    if (!t) return '<div class="ai-empty">אין עדיין נתוני סנטימנט — יופיעו כשהשיחות ינותחו.</div>';
+    var pa = pos / t * 360, na = neu / t * 360, P = function (x) { return Math.round(x / t * 100); };
+    return '<div class="donut-wrap">' +
+      '<div class="donut" style="background:conic-gradient(var(--ok) 0 ' + pa + 'deg,var(--warn) ' + pa + 'deg ' + (pa + na) + 'deg,var(--danger) ' + (pa + na) + 'deg 360deg)">' +
+        '<div class="donut-hole"><div class="donut-num">' + P(pos) + '%</div><div class="donut-lbl">חיובי</div></div></div>' +
+      '<div class="donut-leg">' +
+        '<div><span class="sdot" style="background:var(--ok)"></span>חיובי <b>' + pos + '</b> · ' + P(pos) + '%</div>' +
+        '<div><span class="sdot" style="background:var(--warn)"></span>ניטרלי <b>' + neu + '</b> · ' + P(neu) + '%</div>' +
+        '<div><span class="sdot" style="background:var(--danger)"></span>שלילי <b>' + neg + '</b> · ' + P(neg) + '%</div>' +
+      '</div></div>';
+  }
+  function typeBars(types) {
+    var keys = Object.keys(types).filter(function (k) { return types[k] > 0; });
+    if (!keys.length) return '<div class="ai-empty">אין עדיין נתוני סוג שיחה.</div>';
+    var max = Math.max.apply(null, keys.map(function (k) { return types[k]; }).concat([1]));
+    var COL = { 'מכירה ראשונית': '#6366f1', 'המשך מכירה': 'var(--brand)', 'שירות': '#0ea5e9', 'לא רלוונטי': 'var(--danger)' };
+    return keys.sort(function (a, b) { return types[b] - types[a]; }).map(function (k) {
+      var w = Math.round(types[k] / max * 100);
+      return '<div class="hbar-row"><div class="hbar-lbl">' + esc(k) + '</div>' +
+        '<div class="hbar-track"><div class="hbar-fill" style="width:' + Math.max(4, w) + '%;background:' + (COL[k] || 'var(--brand)') + '"></div></div>' +
+        '<div class="hbar-n">' + types[k] + '</div></div>';
+    }).join('');
+  }
+
   function paintOverview(all, head) {
     var ans = all.filter(function (c) { return c.answered === true; });
     var talk = ans.reduce(function (a, c) { return a + (+c.talk_sec || 0); }, 0);
     var today = new Date(); today.setHours(0, 0, 0, 0);
     var todayN = all.filter(function (c) { return new Date(c.started_at) >= today; }).length;
 
-    //  התפלגות לפי שעה — מראה מתי באמת מתקשרים, ומתי אין מי שיענה
+    var az = all.filter(function (c) { return c.crm_analysis && typeof c.crm_analysis.score === 'number'; });
+    var avgScore = az.length ? Math.round(az.reduce(function (a, c) { return a + c.crm_analysis.score; }, 0) / az.length) : null;
+    var alerts = az.filter(function (c) { return c.crm_analysis.score < 40; }).sort(function (a, b) { return a.crm_analysis.score - b.crm_analysis.score; });
+
+    var sent = { 'חיובי': 0, 'ניטרלי': 0, 'שלילי': 0 };
+    az.forEach(function (c) { var s = c.crm_analysis.sentiment; if (sent[s] !== undefined) sent[s]++; });
+    var types = { 'מכירה ראשונית': 0, 'המשך מכירה': 0, 'שירות': 0, 'לא רלוונטי': 0 };
+    az.forEach(function (c) { var t = c.crm_analysis.call_type; if (t) types[t] = (types[t] || 0) + 1; });
+
     var hours = {}, i;
     for (i = 7; i <= 21; i++) hours[i] = 0;
-    all.forEach(function (c) {
-      if (!c.started_at) return;
-      var h = new Date(c.started_at).getHours();
-      if (hours[h] !== undefined) hours[h]++;
-    });
+    all.forEach(function (c) { if (!c.started_at) return; var h = new Date(c.started_at).getHours(); if (hours[h] !== undefined) hours[h]++; });
     var hourItems = Object.keys(hours).map(function (h) { return [(h < 10 ? '0' : '') + h, hours[h]]; });
 
-    var byDept = {};
+    var byAg = {};
     all.forEach(function (c) {
-      var d = c.department || 'ללא מחלקה';
-      byDept[d] = byDept[d] || { n: 0, ans: 0, talk: 0 };
-      byDept[d].n++; if (c.answered) { byDept[d].ans++; byDept[d].talk += (+c.talk_sec || 0); }
+      var k = c.agent_name || 'ללא נציג';
+      byAg[k] = byAg[k] || { n: 0, ans: 0, talk: 0, scores: [], sent: { 'חיובי': 0, 'ניטרלי': 0, 'שלילי': 0 }, sugg: {} };
+      var o = byAg[k]; o.n++;
+      if (c.answered) { o.ans++; o.talk += (+c.talk_sec || 0); }
+      var a = c.crm_analysis;
+      if (a) {
+        if (typeof a.score === 'number') o.scores.push(a.score);
+        if (o.sent[a.sentiment] !== undefined) o.sent[a.sentiment]++;
+        if (a.status_suggestion) o.sugg[a.status_suggestion] = (o.sugg[a.status_suggestion] || 0) + 1;
+      }
     });
-    var deptRows = Object.keys(byDept).sort(function (a, b) { return byDept[b].n - byDept[a].n; }).map(function (d) {
-      var o = byDept[d];
-      var A = function (extra, txt) { return clickable('data-go=\'{"dept":"' + esc(d) + '"' + extra + '}\'', txt); };
-      return '<tr><td><b>' + A('', esc(d)) + '</b></td>' +
+    var agRows = Object.keys(byAg).sort(function (a, b) { return byAg[b].n - byAg[a].n; }).map(function (k) {
+      var o = byAg[k];
+      var sc = o.scores.length ? Math.round(o.scores.reduce(function (a, b) { return a + b; }, 0) / o.scores.length) : null;
+      var ts = ['חיובי', 'ניטרלי', 'שלילי'].sort(function (a, b) { return o.sent[b] - o.sent[a]; })[0];
+      var top = Object.keys(o.sugg).sort(function (a, b) { return o.sugg[b] - o.sugg[a]; })[0];
+      var A = function (extra, txt) { return clickable('data-go=\'{"agent":"' + esc(k) + '"' + extra + '}\'', txt); };
+      return '<tr><td><b>' + A('', esc(k)) + '</b></td>' +
         '<td>' + A('', o.n) + '</td>' +
-        '<td>' + (o.ans ? A(',"ans":"y"', o.ans) : '0') + '</td>' +
-        '<td>' + pct(o.ans, o.n) + '%</td><td>' + hms(o.talk) + '</td></tr>';
+        '<td>' + (sc != null ? scoreChip(sc) : '<span class="muted">—</span>') + '</td>' +
+        '<td>' + (o.sent[ts] ? sentDot(ts) : '<span class="muted">—</span>') + '</td>' +
+        '<td>' + (o.ans ? esc(mmss(o.talk / o.ans)) : '—') + '</td>' +
+        '<td>' + (top ? badgeFor(top, '') : '<span class="muted">—</span>') + '</td></tr>';
+    }).join('');
+
+    var alertRows = alerts.slice(0, 8).map(function (c) {
+      return '<tr data-callinfo="' + esc(c.id) + '" style="cursor:pointer" title="לחצו לפרטי השיחה">' +
+        '<td>' + scoreChip(c.crm_analysis.score) + '</td><td>' + esc(c.agent_name || '—') + '</td>' +
+        '<td class="ltr">' + esc(callPhone(c) || '—') + '</td>' +
+        '<td class="muted cl-sum">' + esc((c.crm_analysis.summary || '').slice(0, 90)) + '</td>' +
+        '<td class="muted">' + esc(fmtDateTime(c.started_at)) + '</td></tr>';
     }).join('');
 
     var recent = all.slice(0, 10).map(function (c) {
+      var a = c.crm_analysis;
       return '<tr data-callinfo="' + esc(c.id) + '" style="cursor:pointer" title="לחצו לפרטי השיחה"><td class="muted">' + esc(fmtDateTime(c.started_at)) + '</td>' +
         '<td><span class="cl-dir ' + (c.direction === 'out' ? 'cl-out">↗' : 'cl-in">↙') + '</span></td>' +
         '<td class="ltr">' + esc(callPhone(c) || '—') + '</td>' +
         '<td>' + esc(c.agent_name || '—') + '</td>' +
+        '<td>' + (a && typeof a.score === 'number' ? scoreChip(a.score) : '—') + '</td>' +
         '<td>' + (c.answered ? '<span class="cl-yes">✓</span>' : '<span class="cl-no">✗</span>') + '</td>' +
         '<td>' + (c.talk_sec ? esc(mmss(c.talk_sec)) : '—') + '</td></tr>';
     }).join('');
 
     view('<div class="card">' + head +
       '<div class="cards" style="margin-bottom:16px">' +
-        stat('שיחות היום', todayN, null, 'today') +
+        stat('שיחות היום', todayN, true, 'today') +
         stat('סה"כ בטווח', all.length, null, 'all') +
         stat('שיעור מענה', pct(ans.length, all.length) + '%', null, 'ansOnly') +
         stat('משך שיחה ממוצע', ans.length ? mmss(talk / ans.length) : '—', null, 'ansOnly') +
-        stat('זמן שיחה מצטבר', hms(talk), null, 'ansOnly') +
-        stat('לא נענו', all.length - ans.length, null, 'noAns') +
+        stat('ציון שיחה ממוצע', avgScore != null ? avgScore : '—', null, null, az.length + ' נותחו') +
+        stat('התראות (ציון<40)', alerts.length, null, null, 'דורש תשומת לב') +
       '</div>' +
       '<div class="grid2" style="gap:14px">' +
-        '<div class="card" style="box-shadow:none;border:1px solid var(--line)"><h3 style="margin:0 0 10px;font-size:14px">🕐 שיחות לפי שעה</h3>' +
-          miniBars(hourItems) + '</div>' +
-        '<div class="card" style="box-shadow:none;border:1px solid var(--line)"><h3 style="margin:0 0 10px;font-size:14px">🏷️ לפי מחלקה</h3>' +
-          '<div class="table-scroll"><table><thead><tr><th>מחלקה</th><th>שיחות</th><th>נענו</th><th>אחוז</th><th>זמן שיחה</th></tr></thead>' +
-          '<tbody>' + (deptRows || '<tr><td colspan="5" class="empty">אין נתונים</td></tr>') + '</tbody></table></div></div>' +
+        '<div class="card cl-sub"><h3 class="cl-h">😊 סנטימנט שיחות</h3>' + sentDonut(sent['חיובי'], sent['ניטרלי'], sent['שלילי']) + '</div>' +
+        '<div class="card cl-sub"><h3 class="cl-h">🏷️ סוגי שיחה</h3>' + typeBars(types) + '</div>' +
       '</div>' +
-      '<div class="card" style="box-shadow:none;border:1px solid var(--line);margin-top:14px"><h3 style="margin:0 0 10px;font-size:14px">⏱️ שיחות אחרונות</h3>' +
-        '<div class="table-scroll"><table><thead><tr><th>מועד</th><th>כיוון</th><th>מספר</th><th>נציג</th><th>נענתה</th><th>משך</th></tr></thead>' +
-        '<tbody>' + (recent || '<tr><td colspan="6" class="empty">אין שיחות</td></tr>') + '</tbody></table></div></div>' +
+      '<div class="grid2" style="gap:14px;margin-top:14px">' +
+        '<div class="card cl-sub"><h3 class="cl-h">🕐 שיחות לפי שעה</h3>' + miniBars(hourItems) + '</div>' +
+        '<div class="card cl-sub"><h3 class="cl-h">👥 ביצועי נציגים</h3>' +
+          '<div class="table-scroll"><table><thead><tr><th>נציג</th><th>שיחות</th><th>ציון</th><th>סנטימנט</th><th>משך ממוצע</th><th>תוצאה נפוצה</th></tr></thead>' +
+          '<tbody>' + (agRows || '<tr><td colspan="6" class="empty">אין נתונים</td></tr>') + '</tbody></table></div></div>' +
+      '</div>' +
+      (alerts.length ? '<div class="card cl-sub" style="margin-top:14px"><h3 class="cl-h">⚠️ התראות — שיחות בציון נמוך</h3>' +
+        '<div class="table-scroll"><table><thead><tr><th>ציון</th><th>נציג</th><th>מספר</th><th>סיכום</th><th>מועד</th></tr></thead>' +
+        '<tbody>' + alertRows + '</tbody></table></div></div>' : '') +
+      '<div class="card cl-sub" style="margin-top:14px"><h3 class="cl-h">⏱️ שיחות אחרונות</h3>' +
+        '<div class="table-scroll"><table><thead><tr><th>מועד</th><th>כיוון</th><th>מספר</th><th>נציג</th><th>ציון</th><th>נענתה</th><th>משך</th></tr></thead>' +
+        '<tbody>' + (recent || '<tr><td colspan="7" class="empty">אין שיחות</td></tr>') + '</tbody></table></div></div>' +
       '</div>');
   }
 
@@ -1309,38 +1377,47 @@
     var by = {};
     all.forEach(function (c) {
       var k = c.agent_name || 'ללא נציג';
-      by[k] = by[k] || { n: 0, ans: 0, out: 0, inn: 0, talk: 0, last: null, depts: {} };
-      var o = by[k];
-      o.n++;
+      by[k] = by[k] || { n: 0, ans: 0, out: 0, inn: 0, talk: 0, last: null, depts: {}, scores: [], sent: { 'חיובי': 0, 'ניטרלי': 0, 'שלילי': 0 }, sugg: {}, alerts: 0 };
+      var o = by[k]; o.n++;
       if (c.answered) { o.ans++; o.talk += (+c.talk_sec || 0); }
       if (c.direction === 'out') o.out++; else if (c.direction === 'in') o.inn++;
       if (!o.last || c.started_at > o.last) o.last = c.started_at;
       if (c.department) o.depts[c.department] = (o.depts[c.department] || 0) + 1;
+      var a = c.crm_analysis;
+      if (a) {
+        if (typeof a.score === 'number') { o.scores.push(a.score); if (a.score < 40) o.alerts++; }
+        if (o.sent[a.sentiment] !== undefined) o.sent[a.sentiment]++;
+        if (a.status_suggestion) o.sugg[a.status_suggestion] = (o.sugg[a.status_suggestion] || 0) + 1;
+      }
     });
     var rows = Object.keys(by).sort(function (a, b) { return by[b].n - by[a].n; }).map(function (k) {
       var o = by[k];
       var dept = Object.keys(o.depts).sort(function (a, b) { return o.depts[b] - o.depts[a]; })[0] || '—';
       var rate = pct(o.ans, o.n);
+      var sc = o.scores.length ? Math.round(o.scores.reduce(function (a, b) { return a + b; }, 0) / o.scores.length) : null;
+      var ts = ['חיובי', 'ניטרלי', 'שלילי'].sort(function (a, b) { return o.sent[b] - o.sent[a]; })[0];
+      var top = Object.keys(o.sugg).sort(function (a, b) { return o.sugg[b] - o.sugg[a]; })[0];
       var A = function (extra, txt) { return clickable('data-go=\'{"agent":"' + esc(k) + '"' + extra + '}\'', txt); };
       return '<tr><td><b>' + A('', esc(k)) + '</b></td>' +
         '<td>' + A('', o.n) + '</td>' +
         '<td>' + (o.out ? A(',"dir":"out"', o.out) : '0') + '</td>' +
         '<td>' + (o.inn ? A(',"dir":"in"', o.inn) : '0') + '</td>' +
-        '<td>' + (o.ans ? A(',"ans":"y"', o.ans) : '0') + '</td>' +
         '<td><span style="color:' + (rate >= 70 ? 'var(--ok)' : rate >= 40 ? 'var(--warn)' : 'var(--danger)') + ';font-weight:700">' + rate + '%</span></td>' +
         '<td>' + (o.ans ? esc(mmss(o.talk / o.ans)) : '—') + '</td>' +
-        '<td>' + esc(hms(o.talk)) + '</td>' +
-        '<td><span class="tag">' + esc(dept) + '</span></td>' +
-        '<td class="muted">' + esc(o.last ? fmtDateTime(o.last) : '—') + '</td></tr>';
+        '<td>' + (sc != null ? scoreChip(sc) : '<span class="muted">—</span>') + '</td>' +
+        '<td>' + (o.sent[ts] ? sentDot(ts) : '<span class="muted">—</span>') + '</td>' +
+        '<td>' + (o.alerts ? '<span style="color:var(--danger);font-weight:700">' + o.alerts + '</span>' : '0') + '</td>' +
+        '<td>' + (top ? badgeFor(top, '') : '<span class="muted">—</span>') + '</td>' +
+        '<td><span class="tag">' + esc(dept) + '</span></td></tr>';
     }).join('');
     view('<div class="card">' + head +
       '<p class="muted" style="font-size:12.5px;margin:0 0 12px;line-height:1.7">' +
-      'המדדים מחושבים מנתוני ה-CDR בלבד: כמות, כיוון, מענה ומשך. ' +
-      '<b>ציון שיחה, סנטימנט ואיכות דורשים תמלול</b> — ראו את הלשונית "ניתוח שיחות".</p>' +
+      'הטבלה משלבת נתוני CDR (כמות, כיוון, מענה, משך) עם ניתוח ה-AI של השיחות (ציון, סנטימנט, התראות ותוצאה נפוצה). ' +
+      'לחצו על שם נציג או על מספר כדי לסנן את הרשימה.</p>' +
       '<div class="table-scroll"><table><thead><tr>' +
-        '<th>נציג</th><th>שיחות</th><th>יוצאות</th><th>נכנסות</th><th>נענו</th><th>שיעור מענה</th>' +
-        '<th>משך ממוצע</th><th>זמן מצטבר</th><th>מחלקה עיקרית</th><th>שיחה אחרונה</th>' +
-      '</tr></thead><tbody>' + (rows || '<tr><td colspan="10" class="empty">אין נתונים</td></tr>') + '</tbody></table></div></div>');
+        '<th>נציג</th><th>שיחות</th><th>יוצאות</th><th>נכנסות</th><th>שיעור מענה</th>' +
+        '<th>משך ממוצע</th><th>ציון ממוצע</th><th>סנטימנט</th><th>התראות</th><th>תוצאה נפוצה</th><th>מחלקה</th>' +
+      '</tr></thead><tbody>' + (rows || '<tr><td colspan="11" class="empty">אין נתונים</td></tr>') + '</tbody></table></div></div>');
   }
 
   // ---------- דורש חזרה ----------
@@ -1401,9 +1478,11 @@
     var withRec = all.filter(function (c) { return !!c.recording_url; }).length;
     var local = all.filter(function (c) { return !!c.recording_path; }).length;
     var withTr = all.filter(function (c) { return !!c.transcript; }).length;
+    var withAn = all.filter(function (c) { return c.crm_analysis && (c.crm_analysis.summary || typeof c.crm_analysis.score === 'number'); }).length;
+    var pendDl = all.filter(function (c) { return c.recording_url && !c.recording_path && !c.recording_err; }).length;
     var step = function (done, title, body) {
       return '<div style="display:flex;gap:10px;padding:11px 0;border-bottom:1px solid var(--line)">' +
-        '<div style="font-size:17px;line-height:1.2">' + (done ? '✅' : '⬜') + '</div>' +
+        '<div style="font-size:17px;line-height:1.2">' + (done ? '✅' : '⏳') + '</div>' +
         '<div><b style="font-size:13.5px">' + title + '</b>' +
         '<div class="muted" style="font-size:12.5px;margin-top:3px;line-height:1.65">' + body + '</div></div></div>';
     };
@@ -1412,23 +1491,16 @@
         stat('שיחות עם הקלטה', withRec, null, 'rec') +
         stat('הקלטות אצלנו', local, null, 'all') +
         stat('תמלולים', withTr, null, 'all') +
-        stat('ניתוחי AI', all.filter(function (c) { return !!c.ai_data; }).length, null, 'all') +
+        stat('ניתוחי AI', withAn, null, 'all') +
       '</div>' +
-      '<h3 style="margin:0 0 4px;font-size:14px">מה חסר כדי להפעיל ניתוח שיחות</h3>' +
+      '<h3 style="margin:0 0 4px;font-size:14px">מצב צינור התמלול והניתוח</h3>' +
       '<p class="muted" style="font-size:12.5px;margin:0 0 8px;line-height:1.7">' +
-      'סיכום שיחה, ציון שיחה, סנטימנט, התנגדויות, דגלים אדומים והמלצת סטטוס — כולם נגזרים מהתמלול. ' +
-      'בלי תמלול אין מה לחשב, ולכן אין כאן כרטיסים ריקים.</p>' +
-      step(true, 'קליטת שיחות מ-Voicenter', 'פועל. ' + all.length + ' שיחות נקלטו בטווח שנבחר, עם מספר, נציג, מחלקה, משך ומענה.') +
-      step(withRec > 0, 'קישור הקלטה מגיע ב-CDR', withRec + ' מתוך ' + all.length + ' שיחות כוללות קישור להקלטה.') +
-      step(local > 0, 'הורדת ההקלטה לאחסון שלנו',
-        'חסום: הכתובת של Voicenter מוגנת בהתחברות ומחזירה דף כניסה. ' +
-        'נדרשת גישת API — מוגדרת בסוד <code style="direction:ltr;display:inline-block">VOICENTER_AUTH</code>. ' +
-        'התשתית והפונקציה כבר מוכנות ונבדקו.') +
-      step(withTr > 0, 'תמלול',
-        'ממתין להקלטות. השדה <code style="direction:ltr;display:inline-block">aiData</code> של Voicenter מגיע ריק בכל השיחות, ' +
-        'כלומר תוסף התמלול שלהם אינו פעיל. נתמלל בעצמנו — מפתח ה-AI כבר מוגדר במערכת.') +
-      step(false, 'סיכום, ציונים והמלצת סטטוס',
-        'השלב האחרון. ברגע שיש תמלול, הניתוח נכתב לשיחה ולציר הזמן של הליד.') +
+      'הצינור פעיל ורץ אוטומטית: שיחה שנכנסת יורדת, מתומללת (gpt-4o-transcribe) ומנותחת (GPT-4.1) תוך כדקה. ' +
+      'הסיכום, הציון, הסנטימנט וסוג השיחה נכתבים לכרטיס השיחה ולציר הזמן של הליד.</p>' +
+      step(true, 'קליטת שיחות מ-Voicenter', all.length + ' שיחות נקלטו בטווח שנבחר, עם מספר, נציג, מחלקה, משך ומענה.') +
+      step(local > 0, 'הורדת ההקלטה לאחסון', local + ' מתוך ' + withRec + ' הקלטות הורדו.' + (pendDl ? ' ' + pendDl + ' ממתינות להורדה.' : '')) +
+      step(withTr > 0, 'תמלול (gpt-4o-transcribe)', withTr + ' שיחות תומללו לעברית, כדיאלוג נציג/לקוח עם תיקון שגיאות כתיב.') +
+      step(withAn > 0, 'ניתוח (GPT-4.1)', withAn + ' שיחות נותחו: סיכום, ציון, סנטימנט, סוג שיחה, התנגדויות והמלצת סטטוס.') +
       '</div>');
   }
 
