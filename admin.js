@@ -2485,10 +2485,18 @@
       '<div class="cv-hl cv-hl-info">' + (has(a.next_action.who) ? '<b>' + esc(a.next_action.who) + ' מחזיק בכדור:</b> ' : '') + esc(a.next_action.text) + '</div>' +
       (has(a.next_step) ? '<div class="cv-txt" style="margin-top:6px">' + esc(a.next_step) + (has(a.next_step_when) ? ' <span class="muted">(' + esc(a.next_step_when) + ')</span>' : '') + '</div>' : ''));
 
-    if (has(a.status_suggestion)) blocks += sec('🎯 סטטוס מומלץ',
+    //  בלוק הסטטוס המומלץ נבנה בנפרד ומוקדם לראש הניתוח (הדבר הכי
+    //  שימושי לנציג/מנהל). אם הסטטוס "לא רלוונטי" — ה-AI ממליץ גם על סיבה
+    //  מתוך הרשימה הקנונית, וההחלה כותבת אותה ל-close_reason של הכרטיס.
+    var isLost = a.status_suggestion === 'lost';
+    var lreason = isLost && has(a.lost_reason) ? String(a.lost_reason) : '';
+    var statusBlock = '';
+    if (has(a.status_suggestion)) statusBlock = sec('🎯 סטטוס מומלץ',
       '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">' + badgeFor(a.status_suggestion, '') +
       (has(a.status_reason) ? '<span class="muted" style="font-size:12.5px">' + esc(a.status_reason) + '</span>' : '') +
-      (c._lead ? '<button class="btn btn-sm" data-applyst="' + esc(c._lead.id) + '" data-st="' + esc(a.status_suggestion) + '">החל על כרטיס הלקוח</button>' + (a.next_step ? ' <button class="btn btn-ghost btn-sm" data-applytask="' + esc(c._lead.id) + '" data-st="' + esc(a.status_suggestion) + '" data-ns="' + esc(a.next_step) + '" data-nw="' + esc(a.next_step_when || '') + '" data-agent="' + esc(c._agentUserId || '') + '">✓ החל + פתח משימה לנציג</button>' : '') : '<span class="muted" style="font-size:12px">הלקוח אינו קיים ככרטיס במערכת — לא נוצר ליד חדש</span>') + '</div>');
+      (lreason ? '<span class="tag" style="color:var(--danger);border-color:var(--danger)">🚫 סיבה מומלצת: ' + esc(lreason) + '</span>' : '') +
+      (c._lead ? '<button class="btn btn-sm" data-applyst="' + esc(c._lead.id) + '" data-st="' + esc(a.status_suggestion) + '" data-reason="' + esc(lreason) + '">החל על כרטיס הלקוח</button>' + (a.next_step ? ' <button class="btn btn-ghost btn-sm" data-applytask="' + esc(c._lead.id) + '" data-st="' + esc(a.status_suggestion) + '" data-ns="' + esc(a.next_step) + '" data-nw="' + esc(a.next_step_when || '') + '" data-agent="' + esc(c._agentUserId || '') + '" data-reason="' + esc(lreason) + '">✓ החל + פתח משימה לנציג</button>' : '') : '<span class="muted" style="font-size:12px">הלקוח אינו קיים ככרטיס במערכת — לא נוצר ליד חדש</span>') + '</div>');
+    blocks = statusBlock + blocks;
 
     if (!blocks) blocks = '<div class="card cv-block"><div class="ai-empty">' + (c.transcript ? 'הניתוח בדרך (עד כמה דקות).' : 'הניתוח יופק אחרי התמלול.') + '</div></div>';
 
@@ -2541,7 +2549,9 @@
     document.querySelectorAll('[data-applyst]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         btn.disabled = true; btn.textContent = 'מחיל…';
-        db.from('leads').update({ status: btn.dataset.st }).eq('id', btn.dataset.applyst).then(function (r) {
+        var patch = { status: btn.dataset.st };
+        if (btn.dataset.reason) patch.close_reason = btn.dataset.reason;
+        db.from('leads').update(patch).eq('id', btn.dataset.applyst).then(function (r) {
           btn.textContent = r.error ? 'שגיאה' : '✓ הוחל';
           if (!r.error && window.C2B.refreshBadges) window.C2B.refreshBadges();
         });
@@ -2580,8 +2590,10 @@
       btn.addEventListener('click', function () {
         btn.disabled = true; btn.textContent = 'מחיל…';
         var due = new Date(Date.now() + 864e5); due.setHours(10, 0, 0, 0);
+        var leadPatch = { status: btn.dataset.st };
+        if (btn.dataset.reason) leadPatch.close_reason = btn.dataset.reason;
         Promise.all([
-          db.from('leads').update({ status: btn.dataset.st }).eq('id', btn.dataset.applytask),
+          db.from('leads').update(leadPatch).eq('id', btn.dataset.applytask),
           db.from('tasks').insert({ lead_id: btn.dataset.applytask, title: btn.dataset.ns + (btn.dataset.nw ? ' (' + btn.dataset.nw + ')' : ''), due_at: due.toISOString(), done: false, assigned_to: btn.dataset.agent || null, created_by: (window.C2B && window.C2B.userId) || null })
         ]).then(function () { btn.textContent = '✓ הוחל + משימה'; if (window.C2B.refreshBadges) window.C2B.refreshBadges(); }, function () { btn.textContent = 'שגיאה'; });
       });

@@ -24,7 +24,7 @@
   ];
   var FLOW = STATUSES.filter(function (s) { return s.flow; });
   function stDef(k) { for (var i = 0; i < STATUSES.length; i++) if (STATUSES[i].k === k) return STATUSES[i]; return STATUSES[0]; }
-  var CLOSE_REASONS = ['רכש במקום אחר', 'לא מעוניין', 'מחיר גבוה', 'לא עומד בתנאים', 'טעות בפרטים', 'כפילות ליד', 'סיבה אחרת'];
+  var CLOSE_REASONS = ['רכש במקום אחר', 'לא מעוניין', 'מחיר גבוה', 'לא עומד בתנאים', 'לא בשל / עתידי', 'טעות בפרטים', 'כפילות ליד', 'סיבה אחרת'];
   var DEAL_STAGES = [
     { k: 'awaiting', label: 'ממתין לחתימה', color: '#f59e0b' },
     { k: 'initial', label: 'עסקה ראשונית', color: '#3b82f6' },
