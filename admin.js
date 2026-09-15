@@ -1522,6 +1522,24 @@
     var flagsHot = flags.filter(function (x) { return /חם|גבוה/.test(x.f.severity || ''); }).length;
     var objByDiff = { 'קלה': 0, 'בינונית': 0, 'גבוהה': 0 };
     objs.forEach(function (x) { var d = x.o.difficulty || ''; Object.keys(objByDiff).forEach(function (k) { if (d.indexOf(k) >= 0) objByDiff[k]++; }); });
+    //  התנגדויות לפי קטגוריה (מהשדה category שנוסף לניתוח)
+    var CATS = ['דחייה יסודית', 'לא עכשיו', 'מחיר', 'אי וודאות', 'אי הבנה', 'בדיקת עובדות', 'גישה', 'רגשי'];
+    var objByCat = {}; CATS.forEach(function (c) { objByCat[c] = { n: 0, res: 0 }; });
+    objs.forEach(function (x) { var cat = x.o.category || ''; CATS.forEach(function (c) { if (cat.indexOf(c) >= 0) { objByCat[c].n++; if (/טופל/.test(x.o.status || '')) objByCat[c].res++; } }); });
+    var catKeys = CATS.filter(function (c) { return objByCat[c].n > 0; }).sort(function (a, b) { return objByCat[b].n - objByCat[a].n; });
+    var catMax = Math.max.apply(null, catKeys.map(function (c) { return objByCat[c].n; }).concat([1]));
+    var catBars = catKeys.map(function (c) {
+      var o = objByCat[c], w = Math.round(o.n / catMax * 100), r = o.n ? Math.round(o.res / o.n * 100) : 0;
+      return '<div class="hbar-row"><div class="hbar-lbl" style="flex-basis:118px">' + esc(c) + '</div>' +
+        '<div class="hbar-track"><div class="hbar-fill" style="width:' + Math.max(4, w) + '%;background:var(--brand)"></div></div>' +
+        '<div class="hbar-n" style="flex-basis:72px">' + o.n + ' · ' + r + '%</div></div>';
+    }).join('');
+    //  ניתוח שלבי שיחה (מהשדה stages)
+    var stageAgg = {};
+    az.forEach(function (c) { (c.crm_analysis.stages || []).forEach(function (st) { var t = st.title || '—'; var o = stageAgg[t] || (stageAgg[t] = { n: 0, scores: [] }); o.n++; if (typeof st.score === 'number') o.scores.push(st.score); }); });
+    var stageRows = Object.keys(stageAgg).map(function (t) { return { t: t, n: stageAgg[t].n, sc: avg(stageAgg[t].scores) }; }).sort(function (a, b) { return b.n - a.n; }).slice(0, 12).map(function (r) {
+      return '<tr><td>' + esc(r.t) + '</td><td>' + r.n + '</td><td>' + (r.sc != null ? scoreChip(r.sc) : '—') + '</td></tr>';
+    }).join('');
 
     //  אגרגציה פר-נציג
     var byAg = {};
@@ -1625,6 +1643,10 @@
           '<span class="tag">קלה: ' + objByDiff['קלה'] + '</span><span class="tag">בינונית: ' + objByDiff['בינונית'] + '</span><span class="tag">גבוהה: ' + objByDiff['גבוהה'] + '</span></div>' +
         '<div class="table-scroll"><table><thead><tr><th>ציטוט הלקוח</th><th>נציג</th><th>קושי</th></tr></thead><tbody>' + objRows + '</tbody></table></div></div>' : '') +
 
+      (catBars ? '<div class="card cl-sub" style="margin-top:14px"><h3 class="cl-h">📊 התנגדויות לפי קטגוריה</h3>' +
+        '<p class="muted" style="font-size:12px;margin:0 0 10px">כמות · אחוז שטופל</p>' + catBars + '</div>' : '') +
+      (stageRows ? '<div class="card cl-sub" style="margin-top:14px"><h3 class="cl-h">📈 ניתוח שלבי שיחה</h3>' +
+        '<div class="table-scroll"><table><thead><tr><th>שלב בשיחה</th><th>מופעים</th><th>ציון ממוצע</th></tr></thead><tbody>' + stageRows + '</tbody></table></div></div>' : '') +
       (flagRows ? '<div class="card cl-sub" style="margin-top:14px"><h3 class="cl-h">🚩 דגלים אדומים חמים · ' + flagsHot + '</h3>' +
         '<div class="table-scroll"><table><thead><tr><th>דגל</th><th>נציג</th><th>פעולה נדרשת</th></tr></thead><tbody>' + flagRows + '</tbody></table></div></div>' : '') +
       '</div>');
