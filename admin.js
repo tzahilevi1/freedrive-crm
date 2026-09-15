@@ -487,7 +487,8 @@
       ['calls:todo', '\u26a0\ufe0f דורש חזרה'], 
       ['calls:ai', '\ud83e\udd16 ניתוח שיחות'],
       ['calls:reports', '📈 דוחות תקופתיים'],
-      ['calls:alerts', '🔔 התראות']
+      ['calls:alerts', '🔔 התראות'],
+      ['calls:customers', '👤 לקוחות']
     ],
     settings: [
       ['settings', '\ud83d\udccb רשימות ובחירות'],
@@ -1299,6 +1300,7 @@
       else if (sub === 'ai') paintAi(all, head);
       else if (sub === 'reports') paintReports(all, head);
       else if (sub === 'alerts') paintAlerts(all, head);
+      else if (sub === 'customers') renderCustomers(all, head);
       else paintOverview(all, head);
 
       if ($('clDays')) $('clDays').addEventListener('change', function () {
@@ -1761,6 +1763,111 @@
       '<div class="al-set-grid">' + cards + '</div></div>');
     $('alSetBack').addEventListener('click', function () { renderCalls('alerts'); });
     $('view').querySelectorAll('[data-alton]').forEach(function (cb) { cb.addEventListener('click', function () { alertSet(cb.dataset.alton, cb.checked); paintAlertSettings(all, head); }); });
+  }
+
+  // ---------- תיקי לקוחות ----------
+  //  קיבוץ השיחות לפי מספר הלקוח; לחיצה פותחת פרופיל שמסכם את כל
+  //  השיחות איתו ומחלץ פרטים ממה שאמר (עיסוק, מיקום, תקציב, סגנון).
+  function renderCustomers(all, head) {
+    var by = {};
+    all.forEach(function (c) {
+      var ph = last9(callPhone(c)); if (!ph) return;
+      var o = by[ph] || (by[ph] = { phone: callPhone(c), ph: ph, n: 0, ans: 0, scores: [], sent: { 'חיובי': 0, 'ניטרלי': 0, 'שלילי': 0 }, agents: {}, last: null, lead: c._lead, status: null });
+      o.n++; if (c.answered) o.ans++;
+      o.agents[agentOf(c)] = (o.agents[agentOf(c)] || 0) + 1;
+      if (!o.last || c.started_at > o.last) { o.last = c.started_at; if (c.crm_analysis) o.status = c.crm_analysis.status_suggestion; }
+      var a = c.crm_analysis; if (a) { if (typeof a.score === 'number') o.scores.push(a.score); if (o.sent[a.sentiment] !== undefined) o.sent[a.sentiment]++; }
+      if (c._lead) o.lead = c._lead;
+    });
+    var rows = Object.keys(by).map(function (k) { return by[k]; }).sort(function (a, b) { return b.n - a.n; }).map(function (o) {
+      var sc = o.scores.length ? Math.round(o.scores.reduce(function (a, b) { return a + b; }, 0) / o.scores.length) : null;
+      var ts = ['חיובי', 'ניטרלי', 'שלילי'].sort(function (a, b) { return o.sent[b] - o.sent[a]; })[0];
+      var ags = Object.keys(o.agents).sort(function (a, b) { return o.agents[b] - o.agents[a]; }).slice(0, 2).join(', ');
+      return '<tr data-cust="' + esc(o.ph) + '" style="cursor:pointer" title="פתח תיק לקוח">' +
+        '<td><b>' + (o.lead ? esc(o.lead.name) : '<span class="ltr">' + esc(o.phone) + '</span>') + '</b>' + (o.lead ? '<div class="muted ltr" style="font-size:11px">' + esc(o.phone) + '</div>' : '') + '</td>' +
+        '<td>' + o.n + '</td>' +
+        '<td>' + (sc != null ? scoreChip(sc) : '—') + '</td>' +
+        '<td>' + (o.sent[ts] ? sentDot(ts) : '—') + '</td>' +
+        '<td>' + esc(ags || '—') + '</td>' +
+        '<td>' + (o.status ? badgeFor(o.status, '') : '—') + '</td>' +
+        '<td class="muted">' + esc(fmtDateTime(o.last)) + '</td></tr>';
+    }).join('');
+    view('<div class="card">' + head +
+      '<div class="cards" style="margin-bottom:14px">' + stat('לקוחות', Object.keys(by).length) + stat('שיחות', all.length) + '</div>' +
+      '<p class="muted" style="font-size:12.5px;margin:0 0 10px">לחצו על לקוח לתיק המלא — סיכום כל השיחות איתו ופרטים שחולצו ממה שאמר.</p>' +
+      '<div class="table-scroll"><table><thead><tr><th>לקוח</th><th>שיחות</th><th>ציון</th><th>סנטימנט</th><th>נציגים</th><th>סטטוס</th><th>אחרונה</th></tr></thead>' +
+      '<tbody>' + (rows || '<tr><td colspan="7" class="empty">אין לקוחות בטווח</td></tr>') + '</tbody></table></div></div>');
+    $('view').querySelectorAll('[data-cust]').forEach(function (tr) { tr.addEventListener('click', function () { renderCustomerProfile(tr.dataset.cust, all); }); });
+  }
+
+  function custProfileHTML(d) {
+    var cs = d.comm_style || {};
+    var has = function (v) { return v != null && v !== ''; };
+    var det = d.details || {};
+    var kv = [['עיסוק', det.occupation], ['אזור', det.location], ['מחפש', det.wants], ['תקציב', det.budget], ['רכב', det.vehicle], ['משפחה', det.family]].filter(function (x) { return has(x[1]); });
+    var lst = function (t, arr, col) { return (Array.isArray(arr) && arr.length) ? '<div class="cv-sub-h" style="color:' + col + '">' + t + '</div><ul class="cv-ul">' + arr.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul>' : ''; };
+    return (has(d.summary) ? '<div class="cv-summary">' + esc(d.summary) + '</div>' : '') +
+      (has(d.key_insight) ? '<div class="cv-hl cv-hl-line"><b>תובנת מפתח:</b> ' + esc(d.key_insight) + '</div>' : '') +
+      (has(d.action) ? '<div class="cv-hl cv-hl-info">➡️ המלצת פעולה: ' + esc(d.action) + '</div>' : '') +
+      (has(d.profile) ? '<div class="cv-txt" style="margin-top:10px">' + esc(d.profile) + '</div>' : '') +
+      (Object.keys(cs).length ? '<div class="gauge-row" style="margin-top:12px">' + gauge(cs.satisfaction, 'שביעות רצון', null, 10) + gauge(cs.trust, 'אמון', null, 10) + gauge(cs.engagement, 'מעורבות', null, 10) + gauge(cs.frustration, 'תסכול', null, 10) + '</div>' : '') +
+      lst('✓ מה עובד מולו', d.what_works, 'var(--ok)') + lst('△ מה לא עובד', d.what_fails, 'var(--danger)') +
+      (kv.length ? '<div class="cv-sub-h">📋 פרטים שחולצו</div><div class="cl-kv">' + kv.map(function (r) { return '<div class="k">' + esc(r[0]) + '</div><div class="v">' + esc(r[1]) + '</div>'; }).join('') + '</div>' : '') +
+      ((d.keywords && d.keywords.length) ? '<div class="cv-sub-h">🏷️ מילות מפתח</div><div class="cv-tags">' + d.keywords.map(function (k) { return '<span class="tag">' + esc(k) + '</span>'; }).join('') + '</div>' : '');
+  }
+
+  function renderCustomerProfile(ph, all) {
+    var calls = all.filter(function (c) { return last9(callPhone(c)) === ph; });
+    var lead = calls.map(function (c) { return c._lead; }).filter(Boolean)[0];
+    var name = lead ? lead.name : (calls[0] ? callPhone(calls[0]) : ph);
+    var ans = calls.filter(function (c) { return c.answered === true; });
+    var talk = ans.reduce(function (a, c) { return a + (+c.talk_sec || 0); }, 0);
+    var az = calls.filter(function (c) { return c.crm_analysis && typeof c.crm_analysis.score === 'number'; });
+    var sc = az.length ? Math.round(az.reduce(function (a, c) { return a + c.crm_analysis.score; }, 0) / az.length) : null;
+    var flags = calls.reduce(function (a, c) { return a + ((c.crm_analysis && c.crm_analysis.red_flags) ? c.crm_analysis.red_flags.length : 0); }, 0);
+    var ags = {}; calls.forEach(function (c) { ags[agentOf(c)] = (ags[agentOf(c)] || 0) + 1; });
+    var hist = calls.slice().sort(function (a, b) { return new Date(b.started_at) - new Date(a.started_at); }).map(function (c) {
+      var a = c.crm_analysis;
+      return '<tr data-callinfo="' + esc(c.id) + '" style="cursor:pointer" title="פתח שיחה"><td class="muted">' + esc(fmtDateTime(c.started_at)) + '</td>' +
+        '<td>' + esc(agentOf(c)) + '</td><td>' + (a && typeof a.score === 'number' ? scoreChip(a.score) : '—') + '</td>' +
+        '<td>' + (c.answered ? '<span class="cl-yes">✓</span>' : '<span class="cl-no">✗</span>') + '</td>' +
+        '<td>' + (c.talk_sec ? esc(mmss(c.talk_sec)) : '—') + '</td>' +
+        '<td class="muted cl-sum" style="max-width:320px">' + esc((a && a.summary) || '') + '</td></tr>';
+    }).join('');
+
+    view('<div class="cv-wrap">' +
+      '<div class="lead-top"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">' +
+        '<button class="btn btn-ghost btn-sm" id="cpBack">→ חזרה ללקוחות</button>' +
+        '<h3 style="margin:0">👤 ' + esc(name) + '</h3><span class="muted ltr" style="font-size:12.5px">' + esc(calls[0] ? callPhone(calls[0]) : ph) + '</span>' +
+        (lead ? '<a href="#" class="btn btn-ghost btn-sm" data-golead="' + esc(lead.id) + '">📂 כרטיס הליד</a>' : '') +
+      '</div></div>' +
+      '<div class="cv-info">' + acInfo('שיחות', calls.length) + acInfo('נענו', ans.length) + acInfo('ציון ממוצע', sc != null ? sc : '—') + acInfo('זמן שיחה', hms(talk)) + acInfo('דגלים', flags) + '</div>' +
+      '<div class="cv-grid">' +
+        '<div class="cv-left"><div class="card cv-block"><div class="row-between" style="align-items:center"><h3 class="cv-bt" style="margin:0">🧠 פרופיל לקוח (AI)</h3><button class="btn btn-sm" id="cpGen">✨ צור/רענן</button></div>' +
+          '<div id="cpBody" style="margin-top:12px"></div></div>' +
+          '<div class="card cv-block"><h3 class="cv-bt">👥 נציגים ששוחחו איתו</h3><div class="cv-tags">' + Object.keys(ags).sort(function (a, b) { return ags[b] - ags[a]; }).map(function (k) { return '<span class="tag">' + esc(k) + ' · ' + ags[k] + '</span>'; }).join('') + '</div></div></div>' +
+        '<div class="cv-analysis"><div class="card cv-block"><h3 class="cv-bt">📞 היסטוריית שיחות</h3>' +
+          '<div class="table-scroll"><table><thead><tr><th>מועד</th><th>נציג</th><th>ציון</th><th>נענתה</th><th>משך</th><th>סיכום</th></tr></thead><tbody>' + (hist || '<tr><td colspan="6" class="empty">אין</td></tr>') + '</tbody></table></div></div></div>' +
+      '</div></div>');
+
+    $('cpBack').addEventListener('click', function () { renderCalls('customers'); });
+    $('view').querySelectorAll('[data-golead]').forEach(function (el) { el.addEventListener('click', function (e) { e.preventDefault(); window.C2B_openLeadCard(el.dataset.golead); }); });
+    $('view').querySelectorAll('[data-callinfo]').forEach(function (b) { b.addEventListener('click', function () { openCall(b.dataset.callinfo, 'customers'); }); });
+    var body = $('cpBody'), btn = $('cpGen');
+    function show(d, note) { body.innerHTML = custProfileHTML(d) + (note ? '<div class="muted" style="font-size:11px;margin-top:10px">' + esc(note) + '</div>' : ''); }
+    db.from('customer_profiles').select('data,updated_at').eq('phone', ph).maybeSingle().then(function (r) {
+      if (r && r.data && r.data.data) show(r.data.data, 'עודכן ' + new Date(r.data.updated_at).toLocaleString('he-IL'));
+      else body.innerHTML = '<div class="muted" style="font-size:12.5px">לחצו "צור" כדי להפיק פרופיל לקוח מכל השיחות איתו (קריאת AI אחת).</div>';
+    }, function () { });
+    btn.addEventListener('click', function () {
+      btn.disabled = true; btn.textContent = 'מפיק…'; body.innerHTML = '<div class="ai-empty">בונה פרופיל מכל השיחות…</div>';
+      db.functions.invoke('call-profile', { body: { phone: ph, name: name } }).then(function (r) {
+        btn.disabled = false; btn.textContent = '✨ צור/רענן';
+        var d = (r && r.data) || {};
+        if (d.error || d.empty || !d.profile) { body.innerHTML = '<div class="ai-empty">' + (d.empty ? 'אין מספיק שיחות מנותחות ללקוח זה.' : 'שגיאה: ' + esc(d.error || 'לא ידועה')) + '</div>'; return; }
+        show(d.profile, 'נוצר עכשיו · ' + d.calls_count + ' שיחות');
+      }, function () { btn.disabled = false; btn.textContent = '✨ צור/רענן'; body.innerHTML = '<div class="ai-empty">שגיאה בהפקה</div>'; });
+    });
   }
 
   function paintReports(all, head) {
