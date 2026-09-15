@@ -1107,10 +1107,32 @@
   //  Voicenter מחזירה ב-agent_name תוויות פנימיות (תור/רכז/DID) ולא את
   //  שם הנציג. לכן מזהים את הנציג לפי המספר (אחד מ-7) וממפים לשם הנכון.
   //  ליאור לוי מחזיק שני מספרים — שניהם ממופים אליו (איחוד).
-  var AGENT_NAMES = { '534494707': 'שון', '539295952': 'עילאי', '534493184': 'אור', '535463720': 'נדב', '533945097': 'ליאור לוי', '534495197': 'ליאור לוי', '534495185': 'אילעי' };
+  var AGENT_NAMES = { '534494707': 'שון', '539295952': 'עילאי', '534493184': 'אור', '535463720': 'נדב', '533945097': 'ליאור לוי (5097)', '534495197': 'ליאור לוי (5197)', '534495185': 'אילעי' };
   function agentOf(c) {
     var f = last9(c.from_number), t = last9(c.to_number);
     return AGENT_NAMES[f] || AGENT_NAMES[t] || (c.agent_name || '—');
+  }
+  //  Voicenter מפיקה רשומת CDR לכל צלצול; שיחה נכנסת שלא נענתה מופיעה
+  //  עשרות פעמים בשניות. מכווצים רצף כזה (אותו לקוח+נציג+כיוון, לא נענו,
+  //  בפער < 2 דק') לאירוע אחד עם ספירת ניסיונות (_attempts).
+  function dedupeCalls(list) {
+    var srt = list.slice().sort(function (a, b) {
+      var ka = last9(callPhone(a)) + '|' + agentOf(a) + '|' + a.direction;
+      var kb = last9(callPhone(b)) + '|' + agentOf(b) + '|' + b.direction;
+      if (ka !== kb) return ka < kb ? -1 : 1;
+      return new Date(a.started_at) - new Date(b.started_at);
+    });
+    var out = [], prev = null;
+    srt.forEach(function (c) {
+      if (c.answered !== true && prev && prev.answered !== true &&
+          last9(callPhone(c)) === last9(callPhone(prev)) && agentOf(c) === agentOf(prev) &&
+          c.direction === prev.direction &&
+          Math.abs(new Date(c.started_at) - new Date(prev.started_at)) < 120000) {
+        prev._attempts = (prev._attempts || 1) + 1; return;
+      }
+      c._attempts = 1; out.push(c); prev = c;
+    });
+    return out.sort(function (a, b) { return new Date(b.started_at) - new Date(a.started_at); });
   }
   //  כל מספר במסך מוביל לרשימה המסוננת שמאחוריו. הסינון מוחזק כאן ולא
   //  בכתובת, כדי שחזרה ללשונית תשמור את ההקשר שממנו הגעת.
@@ -1229,7 +1251,7 @@
       fetchAll(function () { return db.from('calls').select('*').or(CALL_AGENT_OR).gte('started_at', rng.since).lte('started_at', rng.until).order('started_at', { ascending: false }); }),
       fetchAll(function () { return db.from('leads').select('id,name,phone,status').is('deleted_at', null); })
     ]).then(function (res) {
-      var all = res[0] || [], leads = res[1] || [], lmap = {}, byPhone = {};
+      var all = dedupeCalls(res[0] || []), leads = res[1] || [], lmap = {}, byPhone = {};
       leads.forEach(function (l) { lmap[l.id] = l; if (l.phone) byPhone[last9(l.phone)] = l; });
       all.forEach(function (c) { c._lead = c.lead_id ? lmap[c.lead_id] : (byPhone[last9(callPhone(c))] || null); });
 
