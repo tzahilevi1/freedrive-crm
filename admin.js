@@ -2594,7 +2594,7 @@
         if (btn.dataset.reason) leadPatch.close_reason = btn.dataset.reason;
         Promise.all([
           db.from('leads').update(leadPatch).eq('id', btn.dataset.applytask),
-          db.from('tasks').insert({ lead_id: btn.dataset.applytask, title: btn.dataset.ns + (btn.dataset.nw ? ' (' + btn.dataset.nw + ')' : ''), due_at: due.toISOString(), done: false, assigned_to: btn.dataset.agent || null, created_by: (window.C2B && window.C2B.userId) || null })
+          db.from('tasks').insert({ lead_id: btn.dataset.applytask, title: btn.dataset.ns + (btn.dataset.nw ? ' (' + btn.dataset.nw + ')' : ''), due_at: due.toISOString(), done: false, assigned_to: btn.dataset.agent || null })
         ]).then(function () { btn.textContent = '✓ הוחל + משימה'; if (window.C2B.refreshBadges) window.C2B.refreshBadges(); }, function () { btn.textContent = 'שגיאה'; });
       });
     });
