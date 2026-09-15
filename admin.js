@@ -243,11 +243,13 @@
     loadLists();
     loadConfig();
     loadBrandCompanies();
-    db.from('profiles').select('role,full_name,views,active,sip_ext,phone').eq('user_id', session.user.id).single().then(function (r) {
+    db.from('profiles').select('role,full_name,views,active,sip_ext,phone,agent_phone').eq('user_id', session.user.id).single().then(function (r) {
       window.C2B.userSip = (r.data && r.data.sip_ext) || '';
       //  השם המלא משמש בהודעות המהירות של הווטסאפ ({{נציג}})
       window.C2B.fullName = (r.data && r.data.full_name) || '';
       window.C2B.userPhone = (r.data && r.data.phone) || '';
+      //  מספר הנציג בוויס סנטר — קובע (יחד עם ה-RLS) אילו שיחות המשתמש רואה.
+      window.C2B.agentPhone = (r.data && r.data.agent_phone) || '';
       // אכיפת השבתה — משתמש לא-פעיל מנותק מיד (בנוסף ל-RLS ו-Cloudflare Access)
       if (r.data && r.data.active === false) {
         db.auth.signOut().then(function () { showLogin(); });
@@ -5450,6 +5452,9 @@
         '</div>' +
         fld('שלוחת SIP', 'ue_sip', p.sip_ext) +
         fld('סניף', 'ue_branch', p.branch) +
+        '<div class="field" style="margin:0"><label>📞 מספר נציג בוויס סנטר</label>' +
+          '<input class="inp" id="ue_agent_phone" type="tel" value="' + esc(p.agent_phone == null ? '' : p.agent_phone) + '" placeholder="למשל 0534494707" style="width:100%">' +
+          '<span class="muted" style="font-size:11px">קובע אילו שיחות המשתמש רואה — רק שלו. לשני מספרים: מופרד בפסיק.</span></div>' +
       '</div>' +
       (isSelf ? '' :
         '<label id="ue_viewsWrap" class="hidden" style="display:flex;gap:8px;align-items:center;margin-top:10px;font-size:13px">' +
@@ -5471,6 +5476,7 @@
         phone: ($('ue_phone').value || '').trim() || null,
         mobile: ($('ue_mobile').value || '').trim() || null,
         sip_ext: ($('ue_sip').value || '').trim() || null,
+        agent_phone: ($('ue_agent_phone').value || '').trim() || null,
         title: roleLabel(newRoleValue()),   // נגזר מהתפקיד — אין יותר שדה נפרד
         branch: ($('ue_branch').value || '').trim() || null,
         notes: ($('ue_notes').value || '').trim() || null
