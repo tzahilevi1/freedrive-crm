@@ -391,11 +391,11 @@
     admin: ['dashboard','leads','files','accounting','calls','cars','appointments','tasks','analytics',
             'reports','agents','ai','quotes','documents','whatsapp','heyy','emails','sms','automations','users','branches','trash','audit','ctemplates','settings'],
     // סוכן מכירות: כל התפעול שלו — בלי כספים, בלי דוחות/אנליטיקס, בלי ערוצי הודעות
-    sales: ['dashboard', 'leads', 'files', 'cars', 'appointments', 'tasks', 'ai', 'quotes', 'documents', 'heyy'],
+    sales: ['dashboard', 'leads', 'files', 'calls', 'cars', 'appointments', 'tasks', 'ai', 'quotes', 'documents', 'heyy'],
     // מנהלת תיקי לקוחות: דשבורד, תיקי לקוחות, רכבים, יומן, משימות, הצעות מחיר, מסמכים והסכמים
-    files: ['dashboard', 'files', 'cars', 'appointments', 'tasks', 'quotes', 'documents', 'heyy'],
+    files: ['dashboard', 'files', 'calls', 'cars', 'appointments', 'tasks', 'quotes', 'documents', 'heyy'],
     // מנהלת חשבונות: דשבורד, הנהלת חשבונות, רכבים, יומן, משימות, דוחות, עוזר AI, הצעות מחיר, מסמכים והסכמים
-    accounting: ['dashboard', 'accounting', 'cars', 'appointments', 'tasks', 'reports', 'ai', 'quotes', 'documents', 'heyy'],
+    accounting: ['dashboard', 'accounting', 'calls', 'cars', 'appointments', 'tasks', 'reports', 'ai', 'quotes', 'documents', 'heyy'],
     // מנהל סניף: רואה הכל, למעט מסכי הניהול של המערכת (משתמשים, הגדרות, אוטומציות)
     branch: ['dashboard', 'leads', 'files', 'accounting', 'calls', 'cars', 'appointments', 'tasks', 'analytics',
              'reports', 'agents', 'ai', 'quotes', 'documents', 'whatsapp', 'heyy', 'emails', 'sms', 'users', 'audit']
