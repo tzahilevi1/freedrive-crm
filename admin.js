@@ -1177,9 +1177,9 @@
 
       var head = '<div class="row-between" style="flex-wrap:wrap;gap:10px;margin-bottom:12px">' +
         '<h3 style="margin:0">📞 שיחות טלפון <span class="muted" style="font-size:12px;font-weight:400">· ' +
-          all.length + ' שיחות ב-' + callDays + ' הימים האחרונים · מתעדכן אוטומטית</span></h3>' +
+          all.length + ' שיחות · ' + (callDays >= 3650 ? 'כל הזמן' : callDays === 1 ? 'היום ואתמול' : callDays + ' הימים האחרונים') + ' · מתעדכן אוטומטית</span></h3>' +
         '<select class="inp" id="clDays" style="width:170px">' +
-          [[1, 'היום ואתמול'], [7, '7 ימים אחרונים'], [30, '30 יום אחרונים'], [90, '90 יום אחרונים']]
+          [[1, 'היום ואתמול'], [7, '7 ימים אחרונים'], [30, '30 יום אחרונים'], [90, '90 יום אחרונים'], [180, 'חצי שנה אחרונה'], [365, 'שנה אחרונה'], [3650, 'כל הזמן']]
             .map(function (d) { return '<option value="' + d[0] + '"' + (callDays === d[0] ? ' selected' : '') + '>' + d[1] + '</option>'; }).join('') +
         '</select></div>';
 
