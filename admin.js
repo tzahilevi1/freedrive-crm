@@ -1480,33 +1480,43 @@
   }
   function wireMgrReport() {
     var rng = callRange(), lbl = callRangeLabel();
-    var body = $('mgrBody'), btn = $('mgrGen'), hist = $('mgrHist'); if (!btn || !body) return;
+    var body = $('mgrBody'), btn = $('mgrGen'), list = $('mgrList'); if (!btn || !body) return;
     var rows = [];
     function showReport(rec, note) {
       body.innerHTML = renderMgrReport(rec.data || rec.report, rec.stats) +
         (note ? '<div class="muted" style="font-size:11px;margin-top:10px">' + esc(note) + '</div>' : '');
     }
-    //  היסטוריית הדוחות היומיים השמורים במסד — לראות שיפור מיום ליום.
-    function loadHist(selectDate) {
+    //  פאנל ימני: כל הדוחות השמורים לפי תאריך, שעה ושם — לראות שיפור מיום ליום.
+    function renderList(selDate) {
+      if (!list) return;
+      list.innerHTML = '<div class="mgr-list-h">דוחות שמורים · ' + rows.length + '</div>' + (rows.length ? rows.map(function (x) {
+        var dt = new Date(x.created_at);
+        return '<button class="mgr-item' + (x.report_date === selDate ? ' active' : '') + '" data-rd="' + esc(x.report_date) + '">' +
+          esc(x.label || ('דוח ' + x.report_date)) +
+          '<span class="d">' + esc(x.report_date) + ' · ' + dt.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' }) + '</span></button>';
+      }).join('') : '<div class="muted" style="font-size:12px;padding:10px">אין עדיין דוחות שמורים</div>');
+      list.querySelectorAll('[data-rd]').forEach(function (b) {
+        b.addEventListener('click', function () { var rec = rows.filter(function (x) { return x.report_date === b.dataset.rd; })[0]; if (rec) { renderList(b.dataset.rd); showReport(rec, 'דוח מ-' + rec.report_date + ' · נשמר ' + new Date(rec.created_at).toLocaleString('he-IL')); } });
+      });
+    }
+    function loadHist(selDate) {
       db.from('call_reports').select('report_date,label,data,stats,created_at').eq('report_type', 'manager').order('report_date', { ascending: false }).limit(120).then(function (r) {
         rows = (r && r.data) || [];
-        if (hist) hist.innerHTML = '<option value="">\u05d3\u05d5\u05d7\u05d5\u05ea \u05e9\u05de\u05d5\u05e8\u05d9\u05dd (' + rows.length + ')\u2026</option>' +
-          rows.map(function (x) { return '<option value="' + esc(x.report_date) + '">' + esc(x.report_date) + (x.label ? ' \u00b7 ' + esc(x.label) : '') + '</option>'; }).join('');
-        var pick = selectDate ? rows.filter(function (x) { return x.report_date === selectDate; })[0] : rows[0];
-        if (pick) { if (hist) hist.value = pick.report_date; showReport(pick, '\u05d3\u05d5\u05d7 \u05de-' + pick.report_date + ' \u00b7 \u05e0\u05e9\u05de\u05e8 ' + new Date(pick.created_at).toLocaleString('he-IL')); }
-        else body.innerHTML = '<div class="muted" style="font-size:12.5px">\u05d0\u05d9\u05df \u05e2\u05d3\u05d9\u05d9\u05df \u05d3\u05d5\u05d7\u05d5\u05ea \u05e9\u05de\u05d5\u05e8\u05d9\u05dd. \u05dc\u05d7\u05e6\u05d5 "\u05e6\u05d5\u05e8 \u05dc\u05d8\u05d5\u05d5\u05d7 \u05d4\u05e0\u05d5\u05db\u05d7\u05d9" \u05dc\u05d3\u05d5\u05d7 \u05d4\u05e8\u05d0\u05e9\u05d5\u05df (\u05d9\u05d9\u05e9\u05de\u05e8, \u05d5\u05de\u05d7\u05e8 \u05d9\u05d5\u05e4\u05e7 \u05d3\u05d5\u05d7 \u05d9\u05d5\u05de\u05d9 \u05d0\u05d5\u05d8\u05d5\u05de\u05d8\u05d9).</div>';
+        var pick = selDate ? rows.filter(function (x) { return x.report_date === selDate; })[0] : rows[0];
+        renderList(pick ? pick.report_date : null);
+        if (pick) showReport(pick, 'דוח מ-' + pick.report_date + ' · נשמר ' + new Date(pick.created_at).toLocaleString('he-IL'));
+        else body.innerHTML = '<div class="muted" style="font-size:12.5px">אין עדיין דוחות שמורים. לחצו "צור לטווח הנוכחי" לדוח הראשון (הוא יישמר, ומחר יופק דוח יומי אוטומטי).</div>';
       }, function () { });
     }
     function gen() {
-      btn.disabled = true; btn.textContent = '\u05de\u05e4\u05d9\u05e7\u2026'; body.innerHTML = '<div class="ai-empty">\u05de\u05e4\u05d9\u05e7 \u05d3\u05d5\u05d7 \u05d0\u05d9\u05de\u05d5\u05df (\u05e2\u05d3 ~20 \u05e9\u05e0\u05d9\u05d5\u05ea)\u2026</div>';
+      btn.disabled = true; btn.textContent = 'מפיק…'; body.innerHTML = '<div class="ai-empty">מפיק דוח אימון (עד ~20 שניות)…</div>';
       db.functions.invoke('call-report', { body: { since: rng.since, until: rng.until, label: lbl } }).then(function (r) {
-        btn.disabled = false; btn.textContent = '\u2728 \u05e6\u05d5\u05e8 \u05dc\u05d8\u05d5\u05d5\u05d7 \u05d4\u05e0\u05d5\u05db\u05d7\u05d9';
+        btn.disabled = false; btn.textContent = '✨ צור לטווח הנוכחי';
         var d = (r && r.data) || {};
-        if (d.error || !d.report) { body.innerHTML = '<div class="ai-empty">' + (d.empty ? '\u05d0\u05d9\u05df \u05e0\u05ea\u05d5\u05e0\u05d9\u05dd \u05d1\u05d8\u05d5\u05d5\u05d7.' : '\u05e9\u05d2\u05d9\u05d0\u05d4: ' + esc(d.error || '\u05dc\u05d0 \u05d9\u05d3\u05d5\u05e2\u05d4')) + '</div>'; return; }
-        showReport(d, '\u05e0\u05d5\u05e6\u05e8 \u05e2\u05db\u05e9\u05d9\u05d5 \u00b7 \u05e0\u05e9\u05de\u05e8 \u05dc-' + d.report_date); loadHist(d.report_date);
-      }, function () { btn.disabled = false; btn.textContent = '\u2728 \u05e6\u05d5\u05e8 \u05dc\u05d8\u05d5\u05d5\u05d7 \u05d4\u05e0\u05d5\u05db\u05d7\u05d9'; body.innerHTML = '<div class="ai-empty">\u05e9\u05d2\u05d9\u05d0\u05d4 \u05d1\u05d4\u05e4\u05e7\u05d4</div>'; });
+        if (d.error || !d.report) { body.innerHTML = '<div class="ai-empty">' + (d.empty ? 'אין נתונים בטווח.' : 'שגיאה: ' + esc(d.error || 'לא ידועה')) + '</div>'; return; }
+        showReport(d, 'נוצר עכשיו · נשמר ל-' + d.report_date); loadHist(d.report_date);
+      }, function () { btn.disabled = false; btn.textContent = '✨ צור לטווח הנוכחי'; body.innerHTML = '<div class="ai-empty">שגיאה בהפקה</div>'; });
     }
-    if (hist) hist.addEventListener('change', function () { var v = this.value; if (!v) return; var rec = rows.filter(function (x) { return x.report_date === v; })[0]; if (rec) showReport(rec, '\u05d3\u05d5\u05d7 \u05de-' + rec.report_date + ' \u00b7 \u05e0\u05e9\u05de\u05e8 ' + new Date(rec.created_at).toLocaleString('he-IL')); });
     btn.addEventListener('click', gen);
     loadHist();
   }
@@ -1759,7 +1769,7 @@
     }).join('');
 
     view('<div class="card">' + head +
-      '<div class="card cl-sub" style="margin-bottom:14px"><div class="row-between" style="flex-wrap:wrap;gap:8px;align-items:center"><h3 class="cl-h" style="margin:0">🧑‍🏫 אימון מנהלים (AI)</h3><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><select class="inp" id="mgrHist" style="width:210px"></select><button class="btn btn-sm" id="mgrGen">✨ צור לטווח הנוכחי</button></div></div><div id="mgrBody" style="margin-top:12px"></div></div>' +
+      '<div class="card cl-sub" style="margin-bottom:14px"><div class="row-between" style="flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px"><h3 class="cl-h" style="margin:0">🧑‍🏫 אימון מנהלים (AI)</h3><button class="btn btn-sm" id="mgrGen">✨ צור לטווח הנוכחי</button></div><div class="mgr-layout"><div class="mgr-list" id="mgrList"></div><div id="mgrBody" class="mgr-main"></div></div></div>' +
       '<div class="cards" style="margin-bottom:16px">' +
         stat('שיחות מנותחות', az.length, null, 'analyzed') +
         stat('ציון צוות ממוצע', teamScore, null, null, teamScore >= 70 ? 'טוב' : teamScore >= 40 ? 'בינוני' : 'דורש שיפור') +
