@@ -568,6 +568,18 @@
     db.from('leads').select('id', { count: 'exact', head: true }).is('deleted_at', null).then(function (r) { if (r.count != null) $('bLeads').textContent = r.count; });
     db.from('tasks').select('id', { count: 'exact', head: true }).eq('done', false).then(function (r) { if (r.count != null) $('bTasks').textContent = r.count; }).catch(function () {});
     loadBell();
+    refreshAlertBadge();
+  }
+  //  מונה התראות חדשות שלא נפתחו: שיחות שנותחו מאז הפעם האחרונה שנכנסת
+  //  ל"התראות", שיש בהן דגל אדום / ציון נמוך / סנטימנט שלילי / רצון לבטל.
+  //  ה-RLS כבר מסנן לפי המשתמש, אז נציג יראה רק את ההתראות שלו.
+  function refreshAlertBadge() {
+    var seen = '2000-01-01T00:00:00Z'; try { seen = localStorage.getItem('fdAlertsSeen') || seen; } catch (e) { }
+    db.from('calls').select('crm_analysis').or(CALL_AGENT_OR).gt('crm_at', seen).not('crm_analysis', 'is', null).limit(500).then(function (r) {
+      var n = 0;
+      (r.data || []).forEach(function (c) { var a = c.crm_analysis; if (!a) return; if ((a.red_flags && a.red_flags.length) || (typeof a.score === 'number' && a.score < 40) || a.sentiment === 'שלילי' || a.status_suggestion === 'lost') n++; });
+      var el = $('bAlerts'); if (el) { el.textContent = n; el.classList.toggle('hidden', n === 0); }
+    }, function () { });
   }
 
   // ---------- global search ----------
@@ -1248,6 +1260,8 @@
 
   function renderCalls(sub) {
     sub = sub || 'overview';
+    //  כניסה ל"התראות" מסמנת אותן כנקראו — מאפסת את מונה ההתראות בתפריט.
+    if (sub === 'alerts') { try { localStorage.setItem('fdAlertsSeen', new Date().toISOString()); } catch (e) { } var _ab = $('bAlerts'); if (_ab) { _ab.textContent = '0'; _ab.classList.add('hidden'); } }
     loading();
     var rng = callRange();
     Promise.all([
