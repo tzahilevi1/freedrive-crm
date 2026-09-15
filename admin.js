@@ -1617,11 +1617,20 @@
       analysis = '<div class="ai-empty">הניתוח יופק אחרי התמלול.</div>';
     }
 
-    //  ---- הקלטה ----
-    var rec;
-    if (c.recording_path) rec = '<span data-recplay="' + esc(c.recording_path) + '" class="muted" style="font-size:12px">טוען הקלטה…</span>';
-    else if (c.recording_url) rec = '<a class="btn btn-ghost btn-sm" href="' + esc(c.recording_url) + '" target="_blank" rel="noopener">🎧 האזן ב-Voicenter</a>';
-    else rec = '<span class="muted">אין הקלטה</span>';
+    //  ---- הקלטה: בלוק נגן בולט שיושב בראש כרטיס השיחה, כדי שאפשר
+    //  יהיה להאזין ישירות מעמוד השיחה. שיחה שלא נענתה — אין לה הקלטה.
+    var recBlock;
+    if (c.recording_path)
+      recBlock = '<div class="cv-rec"><span class="cv-rec-lbl">🎧 הקלטת השיחה</span>' +
+        '<span data-recplay="' + esc(c.recording_path) + '" class="muted" style="font-size:12px">טוען הקלטה…</span></div>';
+    else if (c.answered === false)
+      recBlock = '<div class="cv-rec cv-rec-none">☎️ השיחה לא נענתה — אין הקלטה</div>';
+    else if (c.recording_url)
+      recBlock = '<div class="cv-rec"><span class="cv-rec-lbl">🎧 הקלטת השיחה</span>' +
+        '<a class="btn btn-ghost btn-sm" href="' + esc(c.recording_url) + '" target="_blank" rel="noopener">האזן ב-Voicenter</a>' +
+        '<span class="muted" style="font-size:11px">ההקלטה יורדת למערכת ותופיע כאן בקרוב</span></div>';
+    else
+      recBlock = '<div class="cv-rec cv-rec-none">אין הקלטה זמינה לשיחה זו</div>';
 
     var det = [
       ['נציג', (c.agent_name || '—') + (c.agent_ext ? ' · שלוחה ' + c.agent_ext : '')],
@@ -1641,10 +1650,10 @@
         '<span class="cl-dir ' + dirCls + '">' + dir + '</span>' +
         (c.answered === false ? '<span class="cl-no">✗ לא נענתה</span>' : '') +
         (c._lead ? '<a href="#" class="btn btn-ghost btn-sm" data-golead="' + esc(c.lead_id) + '">👤 ' + esc(c._lead.name) + '</a>' : '') +
-      '</div><div>' + rec + '</div></div>' +
+      '</div></div>' +
 
       '<div class="cv-grid">' +
-        '<div class="card"><h3 style="margin:0 0 12px">💬 מהלך השיחה</h3><div class="cv-convo">' + convo + '</div></div>' +
+        '<div class="card"><h3 style="margin:0 0 12px">💬 מהלך השיחה</h3>' + recBlock + '<div class="cv-convo">' + convo + '</div></div>' +
         '<div>' +
           '<div class="card"><h3 style="margin:0 0 12px">🤖 ניתוח השיחה</h3>' + analysis + '</div>' +
           '<div class="card" style="margin-top:14px"><h3 style="margin:0 0 10px">פרטי השיחה</h3>' +
@@ -1670,10 +1679,16 @@
         });
       });
     });
-    var rel = $('view').querySelector('[data-recplay]');
-    if (rel) db.storage.from('call-recordings').createSignedUrl(rel.dataset.recplay, 3600).then(function (r) {
-      swapPlayer(rel, r && r.data && r.data.signedUrl, 'cl-wide');
-    }, function () {});
+    var recEls = $('view').querySelectorAll('[data-recplay]');
+    if (recEls.length) {
+      var rpaths = [];
+      recEls.forEach(function (el) { if (rpaths.indexOf(el.dataset.recplay) < 0) rpaths.push(el.dataset.recplay); });
+      db.storage.from('call-recordings').createSignedUrls(rpaths, 3600).then(function (sr) {
+        var rmap = {};
+        ((sr && sr.data) || []).forEach(function (s) { if (s && s.signedUrl) rmap[s.path] = s.signedUrl; });
+        recEls.forEach(function (el) { swapPlayer(el, rmap[el.dataset.recplay], 'cl-wide'); });
+      }, function () {});
+    }
   }
 
   //  פתיחת שיחה מלאה: טוענים אותה טרייה מהמסד (התמלול/ניתוח מתעדכנים
