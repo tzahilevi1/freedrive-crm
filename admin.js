@@ -483,7 +483,8 @@
       ['calls:list', '\ud83d\udccb כל השיחות'], 
       ['calls:agents', '\ud83d\udc65 ביצועי נציגים'], 
       ['calls:todo', '\u26a0\ufe0f דורש חזרה'], 
-      ['calls:ai', '\ud83e\udd16 ניתוח שיחות']
+      ['calls:ai', '\ud83e\udd16 ניתוח שיחות'],
+      ['calls:reports', '📈 דוחות תקופתיים']
     ],
     settings: [
       ['settings', '\ud83d\udccb רשימות ובחירות'],
@@ -1243,6 +1244,7 @@
       else if (sub === 'agents') paintAgents(all, head);
       else if (sub === 'todo') paintTodo(all, head);
       else if (sub === 'ai') paintAi(all, head);
+      else if (sub === 'reports') paintReports(all, head);
       else paintOverview(all, head);
 
       if ($('clDays')) $('clDays').addEventListener('change', function () {
@@ -1437,6 +1439,143 @@
         '<th>נציג</th><th>שיחות</th><th>יוצאות</th><th>נכנסות</th><th>שיעור מענה</th>' +
         '<th>משך ממוצע</th><th>ציון ממוצע</th><th>סנטימנט</th><th>התראות</th><th>תוצאה נפוצה</th><th>מחלקה</th>' +
       '</tr></thead><tbody>' + (rows || '<tr><td colspan="11" class="empty">אין נתונים</td></tr>') + '</tbody></table></div></div>');
+  }
+
+  // ---------- דוחות תקופתיים ----------
+  //  אגרגציה מצטברת על כל השיחות בטווח — ביצועי נציגים, התנגדויות,
+  //  דגלים אדומים ומיקוד אימון. בסגנון הדוחות התקופתיים של Nivision,
+  //  מחושב מנתוני ה-crm_analysis של כל שיחה (בלי עלות AI נוספת).
+  function avg(arr) { return arr.length ? Math.round(arr.reduce(function (a, b) { return a + b; }, 0) / arr.length) : null; }
+
+  function paintReports(all, head) {
+    var az = all.filter(function (c) { return c.crm_analysis && typeof c.crm_analysis.score === 'number'; });
+    if (!az.length) {
+      return view('<div class="card">' + head + '<div class="ai-empty">אין עדיין שיחות מנותחות בטווח שנבחר.<br>הדוח יתמלא ברגע שיהיו ניתוחים.</div></div>');
+    }
+
+    //  אגרגציות צוותיות
+    var teamScore = avg(az.map(function (c) { return c.crm_analysis.score; }));
+    var won = all.filter(function (c) { return c.crm_analysis && c.crm_analysis.status_suggestion === 'won'; }).length;
+    var objs = [], flags = [], acts = [];
+    var teamSk = { objection_handling: [], empathy: [], clarity: [], needs_discovery: [] };
+    var teamEn = { confidence: [], courtesy: [], patience: [], initiative: [], optimism: [] };
+    az.forEach(function (c) {
+      var a = c.crm_analysis;
+      (a.objections_detailed || []).forEach(function (o) { objs.push({ o: o, agent: c.agent_name || '—', call: c.id }); });
+      (a.red_flags || []).forEach(function (f) { flags.push({ f: f, agent: c.agent_name || '—', call: c.id }); });
+      (a.action_items || []).forEach(function (t) { acts.push({ t: t, agent: c.agent_name || '—', call: c.id }); });
+      var s = a.agent_skills || {}; Object.keys(teamSk).forEach(function (k) { if (typeof s[k] === 'number') teamSk[k].push(s[k]); });
+      var e = a.agent_energy || {}; Object.keys(teamEn).forEach(function (k) { if (typeof e[k] === 'number') teamEn[k].push(e[k]); });
+    });
+    var objRes = objs.filter(function (x) { return /טופל/.test(x.o.status || ''); }).length;
+    var flagsHot = flags.filter(function (x) { return /חם|גבוה/.test(x.f.severity || ''); }).length;
+    var objByDiff = { 'קלה': 0, 'בינונית': 0, 'גבוהה': 0 };
+    objs.forEach(function (x) { var d = x.o.difficulty || ''; Object.keys(objByDiff).forEach(function (k) { if (d.indexOf(k) >= 0) objByDiff[k]++; }); });
+
+    //  אגרגציה פר-נציג
+    var byAg = {};
+    az.forEach(function (c) {
+      var k = c.agent_name || 'ללא נציג', a = c.crm_analysis;
+      var o = byAg[k] || (byAg[k] = { calls: 0, scores: [], sk: { objection_handling: [], empathy: [], clarity: [], needs_discovery: [] }, objs: 0, objRes: 0, flags: 0, sent: { 'חיובי': 0, 'ניטרלי': 0, 'שלילי': 0 }, weak: {}, sugg: {} });
+      o.calls++; o.scores.push(a.score);
+      var s = a.agent_skills || {}; Object.keys(o.sk).forEach(function (k2) { if (typeof s[k2] === 'number') o.sk[k2].push(s[k2]); });
+      (a.objections_detailed || []).forEach(function (ob) { o.objs++; if (/טופל/.test(ob.status || '')) o.objRes++; });
+      o.flags += (a.red_flags || []).length;
+      if (o.sent[a.sentiment] !== undefined) o.sent[a.sentiment]++;
+      (a.agent_weaknesses || []).forEach(function (w) { o.weak[w] = (o.weak[w] || 0) + 1; });
+      if (a.status_suggestion) o.sugg[a.status_suggestion] = (o.sugg[a.status_suggestion] || 0) + 1;
+    });
+    var agents = Object.keys(byAg).map(function (k) {
+      var o = byAg[k];
+      return {
+        name: k, calls: o.calls, score: avg(o.scores),
+        oh: avg(o.sk.objection_handling), emp: avg(o.sk.empathy), clr: avg(o.sk.clarity), nd: avg(o.sk.needs_discovery),
+        objs: o.objs, objPct: o.objs ? Math.round(o.objRes / o.objs * 100) : null, flags: o.flags,
+        topSent: ['חיובי', 'ניטרלי', 'שלילי'].sort(function (a, b) { return o.sent[b] - o.sent[a]; })[0],
+        topSentN: 0, topSugg: Object.keys(o.sugg).sort(function (a, b) { return o.sugg[b] - o.sugg[a]; })[0],
+        topWeak: Object.keys(o.weak).sort(function (a, b) { return o.weak[b] - o.weak[a]; })[0], sent: o.sent
+      };
+    }).sort(function (a, b) { return (b.score || 0) - (a.score || 0); });
+
+    //  מיקוד אימון: נציגים בציון הנמוך ביותר
+    var focus = agents.slice().filter(function (a) { return a.score != null; }).sort(function (a, b) { return a.score - b.score; }).slice(0, 3);
+
+    var A = function (k, txt) { return clickable('data-go=\'{"agent":"' + esc(k) + '"}\'', txt); };
+
+    //  ---- טבלת ביצועי נציגים ----
+    var agRows = agents.map(function (a) {
+      return '<tr><td><b>' + A(a.name, esc(a.name)) + '</b></td>' +
+        '<td>' + A(a.name, a.calls) + '</td>' +
+        '<td>' + (a.score != null ? scoreChip(a.score) : '—') + '</td>' +
+        '<td>' + (a.oh != null ? a.oh : '—') + '</td>' +
+        '<td>' + (a.emp != null ? a.emp : '—') + '</td>' +
+        '<td>' + (a.clr != null ? a.clr : '—') + '</td>' +
+        '<td>' + (a.nd != null ? a.nd : '—') + '</td>' +
+        '<td>' + (a.objs ? a.objs + ' · ' + a.objPct + '%' : '0') + '</td>' +
+        '<td>' + (a.flags ? '<span style="color:var(--danger);font-weight:700">' + a.flags + '</span>' : '0') + '</td>' +
+        '<td>' + (a.topSugg ? badgeFor(a.topSugg, '') : '—') + '</td></tr>';
+    }).join('');
+
+    //  ---- מפת כישורים צוותית ----
+    var skillMap = skillBar('טיפול בהתנגדויות', avg(teamSk.objection_handling) || 0) +
+      skillBar('אמפתיה', avg(teamSk.empathy) || 0) + skillBar('בהירות תקשורת', avg(teamSk.clarity) || 0) +
+      skillBar('גילוי צרכים', avg(teamSk.needs_discovery) || 0);
+    var energyMap = skillBar('ביטחון', avg(teamEn.confidence) || 0) + skillBar('אדיבות', avg(teamEn.courtesy) || 0) +
+      skillBar('סבלנות', avg(teamEn.patience) || 0) + skillBar('יוזמה', avg(teamEn.initiative) || 0) + skillBar('אופטימיות', avg(teamEn.optimism) || 0);
+
+    //  ---- דגלים אדומים ----
+    var flagRows = flags.filter(function (x) { return /חם|גבוה/.test(x.f.severity || ''); }).slice(0, 12).map(function (x) {
+      return '<tr data-callinfo="' + esc(x.call) + '" style="cursor:pointer" title="פתח שיחה">' +
+        '<td>🔴 ' + esc(x.f.title || '') + '</td><td>' + esc(x.agent) + '</td>' +
+        '<td class="muted">' + esc(x.f.action || '') + '</td></tr>';
+    }).join('');
+
+    //  ---- התנגדויות: דגימות אחרונות ----
+    var objRows = objs.filter(function (x) { return !/טופל/.test(x.o.status || ''); }).slice(0, 10).map(function (x) {
+      return '<tr data-callinfo="' + esc(x.call) + '" style="cursor:pointer" title="פתח שיחה">' +
+        '<td class="cl-sum" style="max-width:340px">"' + esc(x.o.quote || '') + '"</td>' +
+        '<td>' + esc(x.agent) + '</td>' +
+        '<td>' + (x.o.difficulty ? '<span class="tag muted">' + esc(x.o.difficulty) + '</span>' : '—') + '</td></tr>';
+    }).join('');
+
+    //  ---- מיקוד אימון ----
+    var focusCards = focus.map(function (a) {
+      return '<div class="card cl-sub" style="margin:0"><div style="display:flex;align-items:center;justify-content:space-between;gap:8px">' +
+        '<b>' + A(a.name, esc(a.name)) + '</b>' + (a.score != null ? scoreChip(a.score) : '') + '</div>' +
+        (a.topWeak ? '<div class="muted" style="font-size:12.5px;margin-top:6px;line-height:1.6">לתרגל: ' + esc(a.topWeak) + '</div>' : '') +
+        '<div class="muted" style="font-size:11.5px;margin-top:4px">' + a.calls + ' שיחות · ' + (a.objPct != null ? 'טיפול התנגדויות ' + a.objPct + '%' : '') + '</div></div>';
+    }).join('');
+
+    view('<div class="card">' + head +
+      '<div class="cards" style="margin-bottom:16px">' +
+        stat('שיחות מנותחות', az.length, null, 'analyzed') +
+        stat('ציון צוות ממוצע', teamScore, null, null, teamScore >= 70 ? 'טוב' : teamScore >= 40 ? 'בינוני' : 'דורש שיפור') +
+        stat('סה"כ התנגדויות', objs.length, null, null, objs.length ? Math.round(objRes / objs.length * 100) + '% טופלו' : '') +
+        stat('דגלים אדומים', flags.length, null, 'alerts', flagsHot + ' חמים') +
+        stat('עסקאות (המלצה)', won, null, null) +
+      '</div>' +
+
+      (focusCards ? '<div class="card cl-sub" style="margin-bottom:14px"><h3 class="cl-h">🎯 מיקוד אימון — 3 נציגים לשבוע</h3>' +
+        '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px">' + focusCards + '</div></div>' : '') +
+
+      '<div class="grid2" style="gap:14px">' +
+        '<div class="card cl-sub"><h3 class="cl-h">💪 מפת כישורים צוותית</h3><div class="skill-list">' + skillMap + '</div></div>' +
+        '<div class="card cl-sub"><h3 class="cl-h">⚡ אנרגיה צוותית ממוצעת</h3><div class="skill-list">' + energyMap + '</div></div>' +
+      '</div>' +
+
+      '<div class="card cl-sub" style="margin-top:14px"><h3 class="cl-h">👥 ביצועי נציגים</h3>' +
+        '<p class="muted" style="font-size:12px;margin:0 0 10px">כישורים בסקאלה 0-100, ממוצע על כל שיחות הנציג. לחצו על שם לסינון.</p>' +
+        '<div class="table-scroll"><table><thead><tr><th>נציג</th><th>שיחות</th><th>ציון</th><th>התנגדויות</th><th>אמפתיה</th><th>בהירות</th><th>גילוי צרכים</th><th>התנגדויות (טופל)</th><th>דגלים</th><th>תוצאה נפוצה</th></tr></thead>' +
+        '<tbody>' + agRows + '</tbody></table></div></div>' +
+
+      (objRows ? '<div class="card cl-sub" style="margin-top:14px"><h3 class="cl-h">⚠️ התנגדויות פתוחות · ' + objs.length + ' סה"כ · ' + (objs.length ? Math.round(objRes / objs.length * 100) : 0) + '% טופלו</h3>' +
+        '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">' +
+          '<span class="tag">קלה: ' + objByDiff['קלה'] + '</span><span class="tag">בינונית: ' + objByDiff['בינונית'] + '</span><span class="tag">גבוהה: ' + objByDiff['גבוהה'] + '</span></div>' +
+        '<div class="table-scroll"><table><thead><tr><th>ציטוט הלקוח</th><th>נציג</th><th>קושי</th></tr></thead><tbody>' + objRows + '</tbody></table></div></div>' : '') +
+
+      (flagRows ? '<div class="card cl-sub" style="margin-top:14px"><h3 class="cl-h">🚩 דגלים אדומים חמים · ' + flagsHot + '</h3>' +
+        '<div class="table-scroll"><table><thead><tr><th>דגל</th><th>נציג</th><th>פעולה נדרשת</th></tr></thead><tbody>' + flagRows + '</tbody></table></div></div>' : '') +
+      '</div>');
   }
 
   // ---------- דורש חזרה ----------
