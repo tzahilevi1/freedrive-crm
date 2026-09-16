@@ -576,6 +576,7 @@
     settings: [
       ['settings', '\ud83d\udccb רשימות ובחירות'],
       ['settings:integrations', '\ud83d\udd0c חיבורים'],
+      ['settings:connections', '🔗 חיבורי פלטפורמה'],
       ['settings:brands', '\ud83c\udff7\ufe0f מותגים'],
       ['settings:quick', '\ud83d\udcac הודעות מהירות'],
       ['settings:phone', '\u260e\ufe0f טלפוניה'],
@@ -6370,6 +6371,58 @@
   //  המסך החזיק שבע קבוצות בגלילה אחת ארוכה. כל אחת מוצגת
   //  עכשיו בלשונית משלה, ורק המרנדר הרלוונטי רץ — מסך הטלפוניה
   //  לא מושך נתונים כשמסתכלים על רשימות.
+  //  מסך חיבורי פלטפורמה פר-ארגון: כל עסק מזין את חשבונות ה-Voicenter/
+  //  פייסבוק/WhatsApp שלו. הנתונים מבודדים (org_integrations, RLS למנהל).
+  //  שדות סוד מוצגים ממוסכים ונשמרים רק אם הוזנו מחדש.
+  var CONN_PLATFORMS = [
+    { key: 'voicenter', icon: '📞', title: 'Voicenter — שיחות והקלטות', desc: 'קליטת שיחות והקלטות אוטומטית מחשבון ה-Voicenter של העסק.',
+      fields: [{ k: 'user', l: 'שם משתמש Voicenter' }, { k: 'password', l: 'סיסמה / טוקן', s: true }, { k: 'dids', l: 'מספרי DID (מופרדים בפסיק)' }], hook: '/voicenter-cdr' },
+    { key: 'facebook', icon: '📘', title: 'פייסבוק — לידים ממודעות', desc: 'קליטת לידים אוטומטית מטפסי מודעות של דף הפייסבוק.',
+      fields: [{ k: 'page_token', l: 'Page Access Token', s: true }, { k: 'page_ids', l: 'מזהי דפים/טפסים (מופרדים בפסיק)' }], hook: '/fb-forms' },
+    { key: 'whatsapp', icon: '💬', title: 'WhatsApp (Heyy)', desc: 'שליחה וקבלה של הודעות WhatsApp דרך Heyy.',
+      fields: [{ k: 'api_key', l: 'Heyy API Key', s: true }, { k: 'number', l: 'מספר WhatsApp / מזהה' }], hook: '/wa-webhook' }
+  ];
+  function renderConnections() {
+    var host = $('connBox'); if (!host) return;
+    if (!(window.C2B.role === 'admin' || window.C2B.isSuper)) { host.innerHTML = '<div class="card"><div class="sec-note">רק מנהל מערכת של הארגון מגדיר חיבורים.</div></div>'; return; }
+    var oid = window.C2B.orgId || 1;
+    var base = 'https://gfwopgoydfqiouratcpc.supabase.co/functions/v1';
+    host.innerHTML = '<div class="ai-empty">טוען חיבורים…</div>';
+    db.from('org_integrations').select('platform,config,connected').then(function (r) {
+      if (r && r.error) { host.innerHTML = '<div class="card"><div class="sec-note">שגיאה: ' + esc(r.error.message) + '</div></div>'; return; }
+      var by = {}; ((r && r.data) || []).forEach(function (x) { by[x.platform] = x; });
+      host.innerHTML = '<p class="muted" style="font-size:12.5px;margin:0 0 14px;line-height:1.7">כל עסק מחבר את החשבונות שלו בנפרד. הפרטים מבודדים לארגון שלך ונגישים רק למנהל. אחרי שמירה — יש להגדיר את כתובת ה-Webhook בפלטפורמה עצמה.</p>' +
+        CONN_PLATFORMS.map(function (p) {
+          var st = by[p.key] || {}, cfg = st.config || {};
+          var fh = p.fields.map(function (fd) {
+            if (fd.s) return '<div class="field" style="margin:0 0 8px"><label>' + esc(fd.l) + '</label><input class="inp ltr" data-cf="' + p.key + ':' + fd.k + '" type="password" placeholder="' + (cfg[fd.k] ? 'מוגדר ✓ — הזן מחדש להחלפה' : '') + '"></div>';
+            return '<div class="field" style="margin:0 0 8px"><label>' + esc(fd.l) + '</label><input class="inp ltr" data-cf="' + p.key + ':' + fd.k + '" value="' + esc(cfg[fd.k] || '') + '"></div>';
+          }).join('');
+          var badge = st.connected ? '<span class="cl-yes">מחובר ✓</span>' : '<span class="cl-no">לא מחובר</span>';
+          return '<div class="card cl-sub" style="margin-bottom:14px"><div class="row-between" style="align-items:center"><h3 class="cl-h" style="margin:0">' + p.icon + ' ' + esc(p.title) + '</h3>' + badge + '</div>' +
+            '<p class="muted" style="font-size:12.5px;margin:6px 0 12px">' + esc(p.desc) + '</p>' + fh +
+            '<div class="field" style="margin:8px 0 0"><label>כתובת Webhook להגדרה בפלטפורמה</label><input class="inp ltr" readonly value="' + esc(base + p.hook + '?org=' + oid) + '" onclick="this.select()"></div>' +
+            '<div style="margin-top:12px"><button class="btn btn-sm" data-connsave="' + p.key + '">💾 שמור חיבור</button> <span data-cm="' + p.key + '" style="font-size:12px;margin-inline-start:8px"></span></div></div>';
+        }).join('');
+      host.querySelectorAll('[data-connsave]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var key = btn.dataset.connsave, plat = CONN_PLATFORMS.filter(function (x) { return x.key === key; })[0];
+          var cfg = Object.assign({}, (by[key] && by[key].config) || {});
+          host.querySelectorAll('[data-cf^="' + key + ':"]').forEach(function (inp) {
+            var fk = inp.dataset.cf.split(':')[1], v = inp.value.trim();
+            var fd = plat.fields.filter(function (x) { return x.k === fk; })[0];
+            if (fd && fd.s) { if (v) cfg[fk] = v; } else cfg[fk] = v;   // סוד: מעדכנים רק אם הוזן מחדש
+          });
+          var msg = host.querySelector('[data-cm="' + key + '"]'); msg.style.color = 'var(--muted)'; msg.textContent = 'שומר…';
+          db.from('org_integrations').upsert({ org_id: oid, platform: key, config: cfg, connected: true, updated_at: new Date().toISOString() }, { onConflict: 'org_id,platform' }).then(function (u) {
+            if (u.error) { msg.style.color = 'var(--danger)'; msg.textContent = 'שגיאה: ' + u.error.message; return; }
+            msg.style.color = 'var(--ok)'; msg.textContent = '✔ נשמר'; by[key] = { platform: key, config: cfg, connected: true };
+          });
+        });
+      });
+    }, function (e) { host.innerHTML = '<div class="card"><div class="sec-note">שגיאה: ' + esc((e && e.message) || e) + '</div></div>'; });
+  }
+
   function renderSettings(sec) {
     sec = sec || 'lists';
     loading();
@@ -6391,6 +6444,7 @@
         brands: ['\ud83c\udff7\ufe0f מותגים', 'שיוך כל מותג לחברת השיווק שלו.'],
         quick: ['\ud83d\udcac הודעות מהירות', 'תבניות לשליחה מהירה מכרטיס הליד.'],
         phone: ['\u260e\ufe0f טלפוניה וווטסאפ', 'חיוג מהמערכת, וכל החיבור של Hey · WhatsApp.'],
+        connections: ['🔗 חיבורי פלטפורמה', 'חבר את החשבונות החיצוניים של הארגון — Voicenter, פייסבוק, WhatsApp. כל עסק בנפרד.'],
         actions: ['\u26a1 פעולות', 'סרגל הפעולות שמופיע בכרטיס הליד.']
       };
       var hd = HEAD[sec] || HEAD.lists, mid = '';
@@ -6400,6 +6454,7 @@
       else if (sec === 'quick') mid = '<div id="quickMsgCard"></div>';
       else if (sec === 'phone') mid = '<div id="telephonyCard"></div><div id="heyCard"></div>';
       else if (sec === 'hours') mid = '<div id="officeCard"></div>';
+      else if (sec === 'connections') mid = '<div id="connBox"></div>';
       else if (sec === 'actions') mid = actionEditorCard();
       view('<h2 style="margin:0 0 4px">' + hd[0] + '</h2>' +
         '<p class="muted" style="font-size:13px;margin-bottom:14px">' + hd[1] + '</p>' + mid);
@@ -6409,6 +6464,7 @@
       if (sec === 'quick') renderQuickMsgs();
       if (sec === 'phone') { renderTelephony(); renderHeyCfg(); }
       if (sec === 'hours') renderOffice();
+      if (sec === 'connections') renderConnections();
       // מחיקת צ'יפ במקום — בלי לרענן את כל הדף
       function bindDel(bEl) {
         bEl.addEventListener('click', function () {
