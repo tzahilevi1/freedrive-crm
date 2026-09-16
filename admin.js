@@ -2469,34 +2469,66 @@
   }
 
   // ---------- ניתוח שיחות ----------
-  function paintAi(all, head) {
-    var withRec = all.filter(function (c) { return !!c.recording_url; }).length;
-    var local = all.filter(function (c) { return !!c.recording_path; }).length;
-    var withTr = all.filter(function (c) { return !!c.transcript; }).length;
-    var withAn = all.filter(function (c) { return c.crm_analysis && (c.crm_analysis.summary || typeof c.crm_analysis.score === 'number'); }).length;
-    var pendDl = all.filter(function (c) { return c.recording_url && !c.recording_path && !c.recording_err; }).length;
-    var step = function (done, title, body) {
-      return '<div style="display:flex;gap:10px;padding:11px 0;border-bottom:1px solid var(--line)">' +
-        '<div style="font-size:17px;line-height:1.2">' + (done ? '✅' : '⏳') + '</div>' +
-        '<div><b style="font-size:13.5px">' + title + '</b>' +
-        '<div class="muted" style="font-size:12.5px;margin-top:3px;line-height:1.65">' + body + '</div></div></div>';
+  //  בונה תקציר קומפקטי של השיחות (כבר מסונן RLS: נציג=שלו, מנהל=הארגון)
+  //  שנשלח לסוכן ה-AI. סטטיסטיקה + ביצועי נציגים + דגימת שיחות אחרונות.
+  function callsDigest(all) {
+    var az = all.filter(function (c) { return c.crm_analysis && typeof c.crm_analysis.score === 'number'; });
+    var sent = { 'חיובי': 0, 'ניטרלי': 0, 'שלילי': 0 }, types = {}, statuses = {}, objCats = {}, byAgent = {}, scores = [];
+    var avg = function (a) { return a.length ? Math.round(a.reduce(function (x, y) { return x + y; }, 0) / a.length) : null; };
+    az.forEach(function (c) {
+      var a = c.crm_analysis; scores.push(a.score);
+      if (sent[a.sentiment] != null) sent[a.sentiment]++;
+      if (a.call_type) types[a.call_type] = (types[a.call_type] || 0) + 1;
+      if (a.status_suggestion) statuses[a.status_suggestion] = (statuses[a.status_suggestion] || 0) + 1;
+      (a.objections_detailed || []).forEach(function (o) { if (o.category) objCats[o.category] = (objCats[o.category] || 0) + 1; });
+      var k = agentOf(c), o = byAgent[k] || (byAgent[k] = { n: 0, s: [] }); o.n++; o.s.push(a.score);
+    });
+    return {
+      stats: { total: all.length, answered: all.filter(function (c) { return c.answered === true; }).length, analyzed: az.length, avgScore: avg(scores), sentiment: sent, types: types, statuses: statuses, top_objections: objCats },
+      agents: Object.keys(byAgent).map(function (k) { return { name: k, calls: byAgent[k].n, avgScore: avg(byAgent[k].s) }; }),
+      recent: all.slice(0, 35).map(function (c) {
+        var a = c.crm_analysis || {};
+        return { date: String(c.started_at || '').slice(0, 10), agent: agentOf(c), answered: c.answered === true, score: a.score, sentiment: a.sentiment, type: a.call_type, status: a.status_suggestion, summary: String(a.summary || '').slice(0, 220), objections: (a.objections_detailed || []).map(function (o) { return o.category; }).filter(Boolean) };
+      })
     };
+  }
+  function paintAi(all, head) {
+    var digest = callsDigest(all);
+    var isMgr = window.C2B.role === 'admin' || window.C2B.role === 'branch' || window.C2B.isSuper;
+    var sugg = isMgr
+      ? ['איך הביצועים של הצוות?', 'מי הנציג החזק ומי צריך חיזוק?', 'מה ההתנגדויות הכי נפוצות ואיך לשפר?', 'אילו שיחות דורשות מעקב דחוף?']
+      : ['איך הביצועים שלי?', 'מה ההתנגדויות שהכי קשה לי?', 'במה כדאי לי להשתפר?', 'אילו שיחות שלי דורשות מעקב?'];
     view('<div class="card">' + head +
-      '<div class="cards" style="margin-bottom:16px">' +
-        stat('שיחות עם הקלטה', withRec, null, 'rec') +
-        stat('הקלטות אצלנו', local, null, 'all') +
-        stat('תמלולים', withTr, null, 'all') +
-        stat('ניתוחי AI', withAn, null, 'all') +
-      '</div>' +
-      '<h3 style="margin:0 0 4px;font-size:14px">מצב צינור התמלול והניתוח</h3>' +
-      '<p class="muted" style="font-size:12.5px;margin:0 0 8px;line-height:1.7">' +
-      'הצינור פעיל ורץ אוטומטית: שיחה שנכנסת יורדת, מתומללת (gpt-4o-transcribe) ומנותחת (GPT-4.1) תוך כדקה. ' +
-      'הסיכום, הציון, הסנטימנט וסוג השיחה נכתבים לכרטיס השיחה ולציר הזמן של הליד.</p>' +
-      step(true, 'קליטת שיחות מ-Voicenter', all.length + ' שיחות נקלטו בטווח שנבחר, עם מספר, נציג, מחלקה, משך ומענה.') +
-      step(local > 0, 'הורדת ההקלטה לאחסון', local + ' מתוך ' + withRec + ' הקלטות הורדו.' + (pendDl ? ' ' + pendDl + ' ממתינות להורדה.' : '')) +
-      step(withTr > 0, 'תמלול (gpt-4o-transcribe)', withTr + ' שיחות תומללו לעברית, כדיאלוג נציג/לקוח עם תיקון שגיאות כתיב.') +
-      step(withAn > 0, 'ניתוח (GPT-4.1)', withAn + ' שיחות נותחו: סיכום, ציון, סנטימנט, סוג שיחה, התנגדויות והמלצת סטטוס.') +
+      '<div class="cl-ai" style="margin-bottom:12px"><b>🤖 סוכן AI לשיחות</b><div class="muted" style="font-size:12.5px;margin-top:4px">שאלו כל שאלה על השיחות ' + (isMgr ? 'של הצוות' : 'שלכם') + ' בטווח שנבחר — ביצועים, התנגדויות, מגמות והמלצות. מבוסס על ' + digest.stats.analyzed + ' שיחות מנותחות.</div></div>' +
+      '<div id="caiChat" style="min-height:120px;max-height:52vh;overflow:auto;display:flex;flex-direction:column;gap:10px;margin-bottom:12px"></div>' +
+      '<div id="caiSug" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">' + sugg.map(function (s) { return '<button class="btn btn-ghost btn-sm" data-caisug="' + esc(s) + '">' + esc(s) + '</button>'; }).join('') + '</div>' +
+      '<div style="display:flex;gap:8px"><input class="inp" id="caiQ" placeholder="שאלו את הסוכן…" style="flex:1"><button class="btn" id="caiAsk">שאל</button></div>' +
       '</div>');
+    var chat = $('caiChat');
+    chat.innerHTML = '<div class="ai-empty">שאלו שאלה או בחרו הצעה כדי להתחיל.</div>';
+    function bubble(role, txt) {
+      var wrap = document.createElement('div'); wrap.style.cssText = 'max-width:90%;' + (role === 'me' ? 'align-self:flex-start' : 'align-self:flex-end');
+      var b = document.createElement('div');
+      b.style.cssText = 'border-radius:12px;padding:10px 13px;font-size:14px;line-height:1.7;white-space:pre-wrap;border:1px solid var(--line);' + (role === 'me' ? 'background:var(--surface-2)' : 'background:var(--brand-soft)');
+      b.textContent = txt; wrap.appendChild(b); return wrap;
+    }
+    function ask(qtext) {
+      var q = (qtext || $('caiQ').value || '').trim(); if (!q) return;
+      var e = chat.querySelector('.ai-empty'); if (e) chat.innerHTML = '';
+      $('caiQ').value = '';
+      chat.appendChild(bubble('me', q));
+      var pend = bubble('ai', 'חושב…'); chat.appendChild(pend); chat.scrollTop = chat.scrollHeight;
+      $('caiAsk').disabled = true;
+      db.functions.invoke('call-ai', { body: { question: q, digest: digest, range: callRangeLabel(), role: (isMgr ? 'מנהל' : 'נציג') } }).then(function (r) {
+        $('caiAsk').disabled = false;
+        var d = (r && r.data) || {};
+        pend.querySelector('div').textContent = d.answer || ('שגיאה: ' + (d.error || 'לא התקבלה תשובה'));
+        chat.scrollTop = chat.scrollHeight;
+      }, function () { $('caiAsk').disabled = false; pend.querySelector('div').textContent = 'שגיאה בקבלת תשובה. נסו שוב.'; });
+    }
+    $('caiAsk').addEventListener('click', function () { ask(); });
+    $('caiQ').addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); ask(); } });
+    $('view').querySelectorAll('[data-caisug]').forEach(function (b) { b.addEventListener('click', function () { ask(b.dataset.caisug); }); });
   }
 
   // ---------- רשימת כל השיחות ----------
