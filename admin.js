@@ -6503,6 +6503,8 @@
   //  פייסבוק/WhatsApp שלו. הנתונים מבודדים (org_integrations, RLS למנהל).
   //  שדות סוד מוצגים ממוסכים ונשמרים רק אם הוזנו מחדש.
   var CONN_PLATFORMS = [
+    { key: 'resend', icon: '📧', title: 'מיילים (Resend)', desc: 'כתובת השולח של הארגון. מרגע שמוגדרת — כל המיילים היוצאים (הזמנות, אוטומציות, התראות) נשלחים ממנה. הדומיין חייב להיות מאומת בחשבון ה-Resend.',
+      fields: [{ k: 'from_name', l: 'שם השולח (למשל: סנטר ליס)' }, { k: 'from_email', l: 'כתובת שולח (דומיין מאומת)' }, { k: 'api_key', l: 'Resend API Key (של חשבון הארגון)', s: true }] },
     { key: 'voicenter', icon: '📞', title: 'Voicenter — שיחות והקלטות', desc: 'קליטת שיחות והקלטות אוטומטית מחשבון ה-Voicenter של העסק.',
       fields: [{ k: 'user', l: 'שם משתמש Voicenter' }, { k: 'password', l: 'סיסמה / טוקן', s: true }, { k: 'dids', l: 'מספרי DID (מופרדים בפסיק)' }], hook: '/voicenter-cdr' },
     { key: 'facebook', icon: '📘', title: 'פייסבוק — לידים ממודעות', desc: 'קליטת לידים אוטומטית מטפסי מודעות של דף הפייסבוק.',
@@ -6529,7 +6531,7 @@
           var badge = st.connected ? '<span class="cl-yes">מחובר ✓</span>' : '<span class="cl-no">לא מחובר</span>';
           return '<div class="card cl-sub" style="margin-bottom:14px"><div class="row-between" style="align-items:center"><h3 class="cl-h" style="margin:0">' + p.icon + ' ' + esc(p.title) + '</h3>' + badge + '</div>' +
             '<p class="muted" style="font-size:12.5px;margin:6px 0 12px">' + esc(p.desc) + '</p>' + fh +
-            '<div class="field" style="margin:8px 0 0"><label>כתובת Webhook להגדרה בפלטפורמה</label><input class="inp ltr" readonly value="' + esc(base + p.hook + '?org=' + oid) + '" onclick="this.select()"></div>' +
+            (p.hook ? '<div class="field" style="margin:8px 0 0"><label>כתובת Webhook להגדרה בפלטפורמה</label><input class="inp ltr" readonly value="' + esc(base + p.hook + '?org=' + oid) + '" onclick="this.select()"></div>' : '') +
             '<div style="margin-top:12px"><button class="btn btn-sm" data-connsave="' + p.key + '">💾 שמור חיבור</button> <span data-cm="' + p.key + '" style="font-size:12px;margin-inline-start:8px"></span></div></div>';
         }).join('');
       host.querySelectorAll('[data-connsave]').forEach(function (btn) {
