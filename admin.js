@@ -384,7 +384,7 @@
     $('ohSave').addEventListener('click', function () {
       var val = { fromDow: +$('ohFromD').value, fromTime: $('ohFromT').value, toDow: +$('ohToD').value, toTime: $('ohToT').value };
       var msg = $('ohMsg'); msg.style.color = 'var(--muted)'; msg.textContent = 'שומר…';
-      db.from('app_config').upsert({ key: 'office_hours', value: val, updated_at: new Date().toISOString() }, { onConflict: 'key' })
+      db.from('app_config').upsert({ org_id: window.C2B.orgId, key: 'office_hours', value: val, updated_at: new Date().toISOString() }, { onConflict: 'org_id,key' })
         .then(function (u) {
           if (u.error) { msg.style.color = 'var(--danger)'; msg.textContent = 'שגיאה: ' + u.error.message; return; }
           window.C2B.office = val; msg.style.color = 'var(--ok)'; msg.textContent = '✔ נשמר';
@@ -1923,7 +1923,7 @@
   function alertOn(key) { var s = window.C2B.alertSettings || {}; return s[key] !== false; }
   function alertSet(key, v) {
     var s = Object.assign({}, window.C2B.alertSettings || {}); s[key] = !!v; window.C2B.alertSettings = s;
-    db.from('app_config').upsert({ key: 'alert_settings', value: s, updated_at: new Date().toISOString() }, { onConflict: 'key' }).then(function () { refreshAlertBadge(); }, function () { });
+    db.from('app_config').upsert({ org_id: window.C2B.orgId, key: 'alert_settings', value: s, updated_at: new Date().toISOString() }, { onConflict: 'org_id,key' }).then(function () { refreshAlertBadge(); }, function () { });
   }
 
   function callAlerts(all) {
@@ -6736,7 +6736,7 @@
       $('telSave').addEventListener('click', function () {
         var val = { mode: $('telMode').value, sip_domain: $('telSip').value.trim(), webhook_url: $('telHook').value.trim(), country: $('telCountry').value.trim() || '972' };
         var msg = $('telMsg'); msg.style.color = 'var(--muted)'; msg.textContent = 'שומר…';
-        db.from('app_config').update({ value: val, updated_at: new Date().toISOString() }).eq('key', 'telephony').then(function (u) {
+        db.from('app_config').upsert({ org_id: window.C2B.orgId, key: 'telephony', value: val, updated_at: new Date().toISOString() }, { onConflict: 'org_id,key' }).then(function (u) {
           if (u.error) { msg.style.color = 'var(--danger)'; msg.textContent = 'שגיאה: ' + u.error.message; return; }
           window.C2B.tel = val; msg.style.color = 'var(--ok)'; msg.textContent = '✔ נשמר';
         });
@@ -6780,7 +6780,7 @@
         var val = { fromDow: +$('ohFromD').value, fromTime: $('ohFromT').value,
                     toDow: +$('ohToD').value, toTime: $('ohToT').value };
         var msg = $('ohMsg'); msg.style.color = 'var(--muted)'; msg.textContent = 'שומר…';
-        db.from('app_config').upsert({ key: 'office_hours', value: val, updated_at: new Date().toISOString() }, { onConflict: 'key' })
+        db.from('app_config').upsert({ org_id: window.C2B.orgId, key: 'office_hours', value: val, updated_at: new Date().toISOString() }, { onConflict: 'org_id,key' })
           .then(function (u) {
             if (u.error) { msg.style.color = 'var(--danger)'; msg.textContent = 'שגיאה: ' + u.error.message; return; }
             window.C2B.office = val; msg.style.color = 'var(--ok)'; msg.textContent = '\u2714 נשמר';
@@ -6976,7 +6976,7 @@
         var tok = $('mcToken').value.trim(), msg = $('mcMsg');
         if (!tok) { msg.style.color = 'var(--danger)'; msg.textContent = 'הדביקו טוקן'; return; }
         var b = this; b.disabled = true; msg.style.color = 'var(--muted)'; msg.textContent = 'שומר…';
-        db.from('admin_config').upsert({ key: 'manychat', value: { token: tok }, updated_at: new Date().toISOString() }, { onConflict: 'key' }).then(function (u) {
+        db.from('admin_config').upsert({ org_id: window.C2B.orgId, key: 'manychat', value: { token: tok }, updated_at: new Date().toISOString() }, { onConflict: 'org_id,key' }).then(function (u) {
           b.disabled = false;
           if (u.error) { msg.style.color = 'var(--danger)'; msg.textContent = 'שגיאה: ' + u.error.message; return; }
           msg.style.color = 'var(--ok)'; msg.textContent = '✔ נשמר'; renderManychat();
