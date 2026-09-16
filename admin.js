@@ -1,13 +1,13 @@
 /* ============================================================
-   פרי דרייב — CRM shell: auth, sidebar routing, theme, global search,
+   __BRAND_NAME__ — CRM shell: auth, sidebar routing, theme, global search,
    side drawer, and the cars/appointments/tasks/analytics screens.
    Dashboard, leads table and lead drawer live in admin-crm.js.
    Public anon key only; all access gated by Supabase Auth + RLS.
    ============================================================ */
 (function () {
   'use strict';
-  var SUPABASE_URL = 'https://gfwopgoydfqiouratcpc.supabase.co';
-  var SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdmd29wZ295ZGZxaW91cmF0Y3BjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc2NDg0NTUsImV4cCI6MjEwMzIyNDQ1NX0.ukPDUGS7KjYgD7jAhzSqAEKo_eJ8gQwsHMqTBGXeux8';
+  var SUPABASE_URL = '__SUPABASE_URL__';
+  var SUPABASE_ANON_KEY = '__SUPABASE_ANON_KEY__';
   // ---------- דיווח שגיאות מרכזי ----------
   // מתוך 164 קריאות למסד, כ-60% לא בדקו r.error — כלומר כשל ברשת או הרשאה
   // פשוט לא קרה כלום והמשתמש לא ידע. במקום לתקן 164 מקומות, מיירטים כאן:
@@ -433,7 +433,7 @@
   //  ומוצאים את הצבע הרווח והרווי ביותר; deep = גרסה כהה שלו.
   function extractLogoColor(rawUrl, cb) {
     var url = logoUrl(rawUrl); if (!url) { cb(null); return; }
-    var prox = 'https://gfwopgoydfqiouratcpc.supabase.co/functions/v1/img-proxy?u=' + encodeURIComponent(url);
+    var prox = '__SUPABASE_URL__/functions/v1/img-proxy?u=' + encodeURIComponent(url);
     var im = new Image(); im.crossOrigin = 'anonymous';
     im.onload = function () {
       try {
@@ -603,7 +603,7 @@
   //  מסכים שפתוחים גם למנהל סניף. "משתמשים והרשאות" נפתח לו לצפייה בלבד:
   //  RLS מרשה לכל אנשי הצוות לקרוא פרופילים אבל רק למנהל מערכת לכתוב,
   //  ולכן כפתורי העריכה מוסתרים ממנו במקום להיכשל בשקט.
-  var SENIOR_VIEWS = { users: 1, agents: 1 };
+  var SENIOR_VIEWS = { users: 1, agents: 1, nurture: 1 };
   function navAllowed(nav, role) {
     //  לשוניות משנה ("settings:phone") יורשות את ההרשאה של המסך
     if (nav && nav.indexOf(':') > 0) nav = nav.split(':')[0];
@@ -640,7 +640,7 @@
     e.preventDefault();
     var em = $('email').value.trim();
     if (!em) { $('loginErr').style.color = 'var(--danger)'; $('loginErr').textContent = 'הזינו אימייל למעלה ואז לחצו "שכחתי סיסמה".'; return; }
-    var redirect = 'https://crm.freedrive.co.il/reset.html';
+    var redirect = '__CRM_BASE_URL__/reset.html';
     db.auth.resetPasswordForEmail(em, { redirectTo: redirect }).then(function (r) {
       $('loginErr').style.color = r.error ? 'var(--danger)' : 'var(--ok)';
       $('loginErr').textContent = r.error ? ('שגיאה: ' + r.error.message) : 'נשלח מייל לאיפוס סיסמה (אם החשבון קיים). בדקו את תיבת הדואר.';
@@ -726,6 +726,7 @@
     if (nav !== 'heyy') waUnwatch();
     if (nav === 'heyy') { waWatch(); setActive(nav); if (window.innerWidth <= 820) { $('side').classList.remove('open'); $('overlay').classList.remove('open'); } return renderHeyy(); }
     if (nav === 'agents') { setActive(nav); if (window.innerWidth <= 820) { $('side').classList.remove('open'); $('overlay').classList.remove('open'); } return renderAgents(); }
+    if (nav === 'nurture') { setActive(nav); if (window.innerWidth <= 820) { $('side').classList.remove('open'); $('overlay').classList.remove('open'); } return renderNurture(); }
     setActive(nav, opts.status);
     if (window.innerWidth <= 820) { $('side').classList.remove('open'); $('overlay').classList.remove('open'); }
     if (nav === 'dashboard') return window.C2B_renderDashboard && window.C2B_renderDashboard();
@@ -3938,7 +3939,7 @@
       }
       var dealSources = sourcesPanel('deals'), leadSources = sourcesPanel('leads');
 
-      //  ROAS מול ההכנסה הכוללת הוא מספר משקר: ההכנסה של פרי דרייב הגיעה
+      //  ROAS מול ההכנסה הכוללת הוא מספר משקר: ההכנסה של __BRAND_NAME__ הגיעה
       //  עד כה משותף עסקי ולא מהמודעות, וחלוקה שלה בהוצאת הפרסום החזירה
       //  198x. לכן דוח המנהל משווה הוצאה מול ההכנסה **המיוחסת לפרסום**
       //  בלבד, ואת ההכנסה הכוללת מציג בנפרד.
@@ -4412,6 +4413,72 @@
   //  לכן התצוגה הראשית היא מטריצה של נציג מול סטטוס, ותת-התצוגה של כל
   //  נציג פורסת את הלידים שלו לפי אותם סטטוסים בדיוק.
   var agentTab = 'all';
+  // ---------- דיוור והחזרה (nurture) ----------
+  function renderNurture() {
+    loading();
+    var orgId = window.C2B.orgId;
+    Promise.all([
+      db.from('leads').select('id,email').eq('status', 'lost').is('deleted_at', null),
+      db.from('nurture_state').select('lead_id,last_sent_at,unsubscribed,reengaged_at')
+    ]).then(function (res) {
+      if (res[0].error) return errBox(res[0].error.message);
+      var lost = res[0].data || [], states = res[1].data || [];
+      var stBy = {}; states.forEach(function (s) { stBy[s.lead_id] = s; });
+      var withEmail = lost.filter(function (l) { return l.email && String(l.email).indexOf('@') > 0; });
+      var sent = 0, unsub = 0, pending = 0, reeng = 0;
+      withEmail.forEach(function (l) {
+        var s = stBy[l.id];
+        if (s && s.unsubscribed) { unsub++; return; }
+        if (s && s.last_sent_at) sent++; else pending++;
+      });
+      states.forEach(function (s) { if (s.reengaged_at) reeng++; });
+      var brandName = (window.C2B.brand && window.C2B.brand.name) || 'הארגון';
+      var batch = Math.min(pending, 25);
+
+      view('<div class="head"><h1>📧 דיוור והחזרה</h1><div class="muted">החזרת לידים שסומנו "לא רלוונטי" באמצעות מייל ממותג עם כפתור "אשמח שנציג יחזור אליי". לחיצה מחזירה את הליד אוטומטית לחלוקה, עם ייחוס מלא (מקור: ליד חוזר · דיוור).</div></div>'
+        + '<div class="kpis">'
+        + stat('לידים לא-רלוונטי', String(lost.length), null, null, 'סה״כ במערכת')
+        + stat('עם כתובת מייל', String(withEmail.length), null, null, 'ניתנים לדיוור')
+        + stat('ממתינים לשליחה', String(pending), null, null, 'עוד לא קיבלו מייל')
+        + stat('נשלחו', String(sent), null, null, 'מייל החזרה יצא')
+        + stat('חזרו למעגל', String(reeng), reeng ? true : null, null, 'לחצו "שיחזרו אליי"')
+        + stat('הוסרו מהדיוור', String(unsub), null, null, 'ביקשו הסרה')
+        + '</div>'
+        + '<div class="card" style="margin-top:14px"><div style="display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between">'
+        + '<div><b>סבב שליחה</b><div class="muted" style="font-size:13px;margin-top:3px;max-width:520px">כל סבב שולח עד 25 מיילים מ-<b>' + esc(brandName) + '</b> ללידים שעוד לא קיבלו. כל ליד מקבל את מייל ההחזרה פעם אחת. אפשר להריץ כמה סבבים עד שהתור מתרוקן.</div></div>'
+        + '<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-ghost" id="nuPreview">👁 תצוגה מקדימה</button>'
+        + '<button class="btn btn-primary" id="nuSend"' + (batch ? '' : ' disabled') + '>📤 שלח סבב (' + batch + ')</button></div>'
+        + '</div><div id="nuResult" style="margin-top:12px"></div></div>');
+
+      $('nuPreview').addEventListener('click', function () {
+        openDrawer('<h3 style="margin:0 0 10px">👁 תצוגה מקדימה</h3><div class="muted" style="font-size:13px">טוען…</div>');
+        db.functions.invoke('nurture-run', { body: { org: orgId, preview: true } }).then(function (r) {
+          var d = r && r.data;
+          if (!d || !d.html) { openDrawer('<p class="err">שגיאה בתצוגה מקדימה</p>'); return; }
+          openDrawer('<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><h3 style="margin:0">👁 תצוגה מקדימה</h3><button class="btn btn-ghost btn-sm" onclick="window.C2B.closeDrawer()">✕ סגור</button></div>'
+            + '<div class="muted" style="font-size:12.5px;margin-bottom:10px">מאת: ' + esc(d.from || '') + ' · נושא: ' + esc(d.subject || '') + '</div>'
+            + '<div id="nuFrameWrap" style="border:1px solid var(--line);border-radius:12px;overflow:hidden;height:72vh"></div>');
+          var fr = document.createElement('iframe'); fr.style.cssText = 'width:100%;height:100%;border:0;background:#fff'; fr.srcdoc = d.html;
+          $('nuFrameWrap').appendChild(fr);
+        }, function () { openDrawer('<p class="err">שגיאה בתצוגה מקדימה</p>'); });
+      });
+
+      var sendBtn = $('nuSend');
+      if (sendBtn) sendBtn.addEventListener('click', function () {
+        var btn = this;
+        if (!confirm('לשלוח מייל החזרה עד 25 לידים לא-רלוונטי? הפעולה שולחת מיילים אמיתיים ללקוחות.')) return;
+        btn.disabled = true; btn.textContent = 'שולח…';
+        $('nuResult').innerHTML = '<div class="muted">שולח…</div>';
+        db.functions.invoke('nurture-run', { body: { org: orgId, limit: 25 } }).then(function (r) {
+          var d = r && r.data;
+          if (!d || d.error) { $('nuResult').innerHTML = '<p class="err">שגיאה: ' + esc((d && d.error) || 'לא ידועה') + '</p>'; btn.disabled = false; btn.textContent = '📤 שלח סבב'; return; }
+          $('nuResult').innerHTML = '<div style="background:var(--brand-soft);border-radius:10px;padding:11px 13px;font-weight:600">✅ נשלחו ' + d.sent + ' מיילים' + (d.failed ? (' · נכשלו ' + d.failed) : '') + ' · נותרו ' + d.remaining + ' ממתינים.</div>';
+          setTimeout(renderNurture, 1400);
+        }, function () { $('nuResult').innerHTML = '<p class="err">שגיאה בשליחה</p>'; btn.disabled = false; btn.textContent = '📤 שלח סבב'; });
+      });
+    }, function () { errBox('שגיאה בטעינת נתוני הדיוור'); });
+  }
+
   function renderAgents() {
     loading();
     Promise.all([
@@ -4659,7 +4726,7 @@
     L.push('\u2705 עד 100% מימון');
     L.push('');
     L.push('אשמח לענות על כל שאלה \ud83d\ude42');
-    L.push('_' + (brandName || 'פרי דרייב') + '_');
+    L.push('_' + (brandName || '__BRAND_NAME__') + '_');
     return L.join('\n');
   }
 
@@ -4699,7 +4766,7 @@
     L.push('\u2705 אספקה מהירה \ud83d\ude9a');
     L.push('\u2705 עד 40% הנחה בביטוח חובה ומקיף \ud83d\udee1\ufe0f');
     L.push('\u2705 אגרת רישוי ראשונה כלולה \ud83e\uddfe');
-    L.push('\u2705 פתיחת תיק ב-פרי דרייב \ud83d\udcc2');
+    L.push('\u2705 פתיחת תיק ב-__BRAND_NAME__ \ud83d\udcc2');
     L.push('\u2705 איש מימון צמוד שידאג להשיג עבורך את הריביות הנמוכות ביותר \ud83e\udd1d');
     L.push('\u2705 אביזרים ומיגונים בהתאם לדרישות חברת הביטוח \ud83e\uddf0');
     L.push('\u2705 מערכת איתור לרכב \ud83d\udce1');
@@ -4756,7 +4823,7 @@
     return '<div class="q-doc">' +
       (c.img ? '<img class="q-img" src="' + esc(carImg(c.img)) + '" alt="">' : '') +
       '<div class="q-body">' + body + '</div>' +
-      '<div class="q-foot">פרי דרייב</div></div>';
+      '<div class="q-foot">__BRAND_NAME__</div></div>';
   }
 
   //  ---------- עוזר המכירות ----------
@@ -5180,7 +5247,7 @@
     db.from('leads').insert({
       name: t.contact_name || '\u05e4\u05d5\u05e0\u05d4 \u05d1\u05d5\u05d5\u05d8\u05e1\u05d0\u05e4', phone: phone,
       source: '\u05d5\u05d5\u05d0\u05d8\u05e1\u05d0\u05e4', status: 'new',
-      brand: 'פרי דרייב', marketing_company: '\u05e9\u05d9\u05d5\u05d5\u05e7 \u05e4\u05e0\u05d9\u05de\u05d9',
+      brand: '__BRAND_NAME__', marketing_company: '\u05e9\u05d9\u05d5\u05d5\u05e7 \u05e4\u05e0\u05d9\u05de\u05d9',
       utm_source: 'whatsapp', utm_medium: 'seo',
     }).select('id,status,name,car').single().then(function (r) {
       if (r.error) return cb(null, r.error.message);
@@ -6077,7 +6144,7 @@
       // password reset for a user
       $('view').querySelectorAll('button[data-reset]').forEach(function (b) {
         b.addEventListener('click', function () {
-          var email = b.dataset.reset, redirect = 'https://crm.freedrive.co.il/reset.html';
+          var email = b.dataset.reset, redirect = '__CRM_BASE_URL__/reset.html';
           db.auth.resetPasswordForEmail(email, { redirectTo: redirect }).then(function (r) { alert(r.error ? ('שגיאה: ' + r.error.message) : ('נשלח מייל לאיפוס סיסמה אל ' + email)); });
         });
       });
@@ -6171,7 +6238,7 @@
   //
   //  הערה על פרטיות: ההקשר נבנה מהנתונים שהמשתמש רשאי לקרוא. RLS כבר מגביל
   //  סוכן ללידים שלו בלבד, ולכן "כל הלידים" עבורו = הלידים שלו.
-  var AI_BASE = 'אתה עוזר AI בתוך מערכת CRM של סוכנות רכב ישראלית בשם פרי דרייב ' +
+  var AI_BASE = 'אתה עוזר AI בתוך מערכת CRM של סוכנות רכב ישראלית בשם __BRAND_NAME__ ' +
     '(ליסינג מימוני פרטי, עבודה מול כל היבואנים, מימון עד 100%, טרייד-אין, מעטפת מלאה). ' +
     'ענה תמיד בעברית תקנית, תמציתי וברור, ומבוסס אך ורק על הנתונים שקיבלת. ' +
     'אם נתון חסר או לא ניתן להסיק אותו — אמור זאת במפורש ואל תמציא מספרים. דיוק לפני הכל. ' +
@@ -6303,7 +6370,7 @@
       var cold = openLeads.filter(function (l) { return days(l.status_changed_at || l.created_at) >= 7; })
                           .sort(function (a, b) { return new Date(a.status_changed_at || a.created_at) - new Date(b.status_changed_at || b.created_at); });
       var overdue = tasks.filter(function (t) { return !t.done && t.due_at && new Date(t.due_at) < now; });
-      var head = 'נתוני פרי דרייב · ' + new Date().toLocaleDateString('he-IL') + ' · 90 הימים האחרונים' + '\n';
+      var head = 'נתוני __BRAND_NAME__ · ' + new Date().toLocaleDateString('he-IL') + ' · 90 הימים האחרונים' + '\n';
 
       var ctx;
       if (role === 'sales') {
@@ -6608,7 +6675,7 @@
     var host = $('connBox'); if (!host) return;
     if (!(window.C2B.role === 'admin' || window.C2B.isSuper)) { host.innerHTML = '<div class="card"><div class="sec-note">רק מנהל מערכת של הארגון מגדיר חיבורים.</div></div>'; return; }
     var oid = window.C2B.orgId || 1;
-    var base = 'https://gfwopgoydfqiouratcpc.supabase.co/functions/v1';
+    var base = '__SUPABASE_URL__/functions/v1';
     host.innerHTML = '<div class="ai-empty">טוען חיבורים…</div>';
     Promise.all([
       db.from('org_integrations').select('platform,config,connected'),

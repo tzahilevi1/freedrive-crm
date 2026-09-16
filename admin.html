@@ -8,7 +8,7 @@
       בעמוד עליון, כך שגם דפדפן שיחסום את הניווט לא יציג את התוכן. -->
 <style id="af">html{display:none!important}</style>
 <script>(function(){try{if(self===top){var e=document.getElementById('af');e&&e.parentNode.removeChild(e);}else{top.location.replace(self.location.href);}}catch(x){top.location.replace(self.location.href);}})();</script>
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://gfwopgoydfqiouratcpc.supabase.co wss://gfwopgoydfqiouratcpc.supabase.co https://data.gov.il https://api.ipify.org; media-src 'self' https://gfwopgoydfqiouratcpc.supabase.co; frame-src https://www.youtube.com https://www.youtube-nocookie.com https://gfwopgoydfqiouratcpc.supabase.co; object-src 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://__SUPABASE_REF__.supabase.co wss://__SUPABASE_REF__.supabase.co https://data.gov.il https://api.ipify.org; media-src 'self' https://__SUPABASE_REF__.supabase.co; frame-src https://www.youtube.com https://www.youtube-nocookie.com https://__SUPABASE_REF__.supabase.co; object-src 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests">
 <meta name="referrer" content="strict-origin-when-cross-origin">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="robots" content="noindex, nofollow">
@@ -16,18 +16,18 @@
 <link rel="icon" type="image/png" sizes="512x512" href="favicon-512.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <meta name="theme-color" content="#0B0B0B">
-<title>פרי דרייב · CRM</title>
+<title>__BRAND_NAME__ · CRM</title>
 <!-- פתיחת החיבורים מראש: DNS+TLS לשלושת המארחים החיצוניים נעשה במקביל
      לניתוח ה-HTML במקום להתחיל רק כשהמשאב מתבקש. הראשון בתור הוא Supabase,
      כי אליו הולכות כל שאילתות הפתיחה. -->
-<link rel="preconnect" href="https://gfwopgoydfqiouratcpc.supabase.co" crossorigin>
+<link rel="preconnect" href="https://__SUPABASE_REF__.supabase.co" crossorigin>
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
 <style>
   :root{
-    --brand:#6E8B10; --brand-deep:#4F6608; --brand-soft:rgba(110,139,16,.12);--brand-hi:#D9F243;--brand-ink:#14180A;
+    --brand:__BRAND_COLOR__; --brand-deep:__BRAND_COLOR_DEEP__; --brand-soft:rgba(110,139,16,.12);--brand-hi:#D9F243;--brand-ink:#14180A;
     --bg:#f4f5f7; --surface:#ffffff; --surface-2:#f0f1f4; --line:#e5e7eb;
     --txt:#1c2430; --muted:#7b8494; --shadow:0 1px 2px rgba(16,24,40,.06),0 4px 16px rgba(16,24,40,.06);
     --ok:#16a34a; --warn:#f59e0b; --danger:#e2555a; --radius:16px;
@@ -652,7 +652,7 @@
 <!-- ===== LOGIN ===== -->
 <div id="login">
   <form class="login-card" id="loginForm">
-    <h1 style="display:flex;align-items:center;justify-content:center;gap:10px;margin:0"><img src="logo.png" alt="פרי דרייב" style="height:44px;width:auto;display:block"><span style="font-size:15px;color:var(--muted);font-weight:600">CRM</span></h1>
+    <h1 style="display:flex;align-items:center;justify-content:center;gap:10px;margin:0"><img src="logo.png" alt="__BRAND_NAME__" style="height:44px;width:auto;display:block"><span style="font-size:15px;color:var(--muted);font-weight:600">CRM</span></h1>
     <p>כניסת מנהל בלבד</p>
     <div class="field"><label for="email">אימייל</label><input type="email" id="email" autocomplete="username" required></div>
     <div class="field"><label for="password">סיסמה</label><input type="password" id="password" autocomplete="current-password" required></div>
@@ -665,7 +665,7 @@
 <!-- ===== APP ===== -->
 <div id="app" class="hidden">
   <aside class="side" id="side">
-    <div class="side-brand" style="display:flex;align-items:center;gap:8px"><img src="logo.png" alt="פרי דרייב" style="height:30px;width:auto;display:block"><span style="font-size:12px;color:var(--side-muted);font-weight:600">CRM</span></div>
+    <div class="side-brand" style="display:flex;align-items:center;gap:8px"><img src="logo.png" alt="__BRAND_NAME__" style="height:30px;width:auto;display:block"><span style="font-size:12px;color:var(--side-muted);font-weight:600">CRM</span></div>
     <nav class="side-nav" id="nav">
       <div class="nav-item active" data-nav="dashboard"><span class="ic">🏠</span> דשבורד</div>
       <div class="nav-item" data-nav="leads" data-expand="leadSub"><span class="ic">👥</span> לידים <span class="badge" id="bLeads">0</span></div>
@@ -688,6 +688,7 @@
       <div class="nav-item" data-nav="tasks"><span class="ic">✅</span> משימות <span class="badge" id="bTasks">0</span></div>
       <div class="nav-item" data-nav="analytics"><span class="ic">📊</span> אנליטיקס</div>
       <div class="nav-item" data-nav="reports"><span class="ic">📈</span> דוחות</div>
+      <div class="nav-item" data-nav="nurture" data-senior="1"><span class="ic">📧</span> דיוור והחזרה</div>
       <div class="nav-item" data-nav="agents"><span class="ic">🧑‍💼</span> נציגים</div>
       <div class="nav-item" data-nav="ai"><span class="ic">🤖</span> עוזר AI</div>
       <div class="nav-group-label">תקשורת ומערכת</div>
@@ -728,8 +729,8 @@
 <div id="drawer"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js" integrity="sha384-0w2KAL2YHP6wKOkUDzkCDGgVvfmHnj02DHeQ6XcHOgTfFsGyonKOpShMH1x6nk9o" crossorigin="anonymous"></script>
-<script src="admin.js?v=202609161147"></script>
-<script src="admin-crm.js?v=202609161147"></script>
-<script src="admin-modules.js?v=202609161147"></script>
+<script src="admin.js?v=20260730f"></script>
+<script src="admin-crm.js?v=20260730f"></script>
+<script src="admin-modules.js?v=20260716x"></script>
 </body>
 </html>
