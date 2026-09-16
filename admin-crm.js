@@ -1734,7 +1734,9 @@
       '<div id="dlCancelRow" style="margin-top:8px;font-size:12.5px">' + (deal.cancel_reason ? '<b style="color:#ef4444">סיבת ביטול:</b> ' + esc(deal.cancel_reason) : '') + '</div>' +
       '<hr style="border:none;border-top:1px solid var(--line);margin:16px 0">' +
       '<div class="row-between"><h3 style="margin:0">📁 מסמכי הלקוח</h3>' + (lead.id ? '<label class="btn btn-sm" style="cursor:pointer">⬆ העלה מסמכים<input type="file" id="dlDocUp" multiple style="display:none"></label>' : '') + '</div><p class="muted" style="font-size:12px;margin:4px 0 10px">ת"ז (שני צדדים + ספח) · רישיון נהיגה · אישור ניהול חשבון בנק · כרטיס אשראי (שני צדדים) · כל פורמט · אפשר לגרור קבצים לכאן</p><div id="dlDocs">' + (lead.id ? 'טוען…' : 'שמרו את התיק תחילה כדי לצרף מסמכים') + '</div></div>';
-    var paymentsCard = '<div class="card"><h3>תשלומים / קבלות / חשבוניות</h3><div id="dlPayList">' + (deal.id ? 'טוען…' : '<p class="muted">שמרו את העסקה כדי לנהל תשלומים</p>') + '</div>' +
+    var paymentsCard = '<div class="card"><h3>תשלומים / קבלות / חשבוניות</h3>' +
+      (deal.id ? '<div id="dlStages" style="margin-bottom:14px"></div>' : '') +
+      '<div id="dlPayList">' + (deal.id ? 'טוען…' : '<p class="muted">שמרו את העסקה כדי לנהל תשלומים</p>') + '</div>' +
       (deal.id ? '<form id="dlPayForm" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px"><select class="inp" name="kind"><option value="payment">תשלום</option><option value="receipt">קבלה</option><option value="invoice">חשבונית</option></select><input class="inp" name="amount" type="number" placeholder="סכום ₪" style="width:120px"><select class="inp" name="method" style="width:160px"><option value="">אמצעי תשלום…</option><option>אשראי</option><option>העברה בנקאית</option><option>מזומן</option><option>צ׳ק</option><option>הוראת קבע</option><option>ביט</option><option>אחר</option></select><input class="inp" name="ref" placeholder="אסמכתא" style="width:130px"><button class="btn btn-sm">+ הוסף</button></form>' : '') +
       //  סליקת אשראי דרך iCredit — יצירת לינק תשלום + חשבונית אוטומטית
       (deal.id ? '<div style="margin-top:12px;border-top:1px dashed var(--line);padding-top:10px">' +
@@ -2024,11 +2026,39 @@
         db.from('payments').select('*').eq('deal_id', deal.id).order('created_at', { ascending: false }).then(function (r) {
           var ps = r.data || [];
           var paid = ps.filter(function (p) { return p.kind !== 'invoice'; }).reduce(function (a, p) { return a + (+p.amount || 0); }, 0);
+          //  ---- מסלול מסמכי העסקה (4 שלבים לפי סדר העבודה) ----
+          if ($('dlStages')) {
+            var doneN = ACCT_DOC_STAGES.filter(function (s) { return ps.some(function (x) { return x.purpose === s.k; }); }).length;
+            $('dlStages').innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><b style="font-size:13px">📋 מסלול מסמכי העסקה</b><span class="muted" style="font-size:12px">' + doneN + '/' + ACCT_DOC_STAGES.length + ' הופקו</span></div>' +
+              ACCT_DOC_STAGES.map(function (s, i) {
+                var p = ps.filter(function (x) { return x.purpose === s.k; })[0];
+                if (p) return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--line)"><span style="color:var(--ok);font-weight:600">✅ ' + esc(s.label) + '</span><span class="muted" style="font-size:12px;display:flex;align-items:center;gap:6px">' + nis(p.amount) + (p.ref_no ? ' · ' + esc(p.ref_no) : '') + ' · ' + fmt(p.paid_at) + '<button class="btn btn-ghost btn-sm" data-stagedel="' + p.id + '" title="בטל מסמך">🗑</button></span></div>';
+                return '<div style="display:flex;justify-content:space-between;align-items:center;gap:6px;padding:6px 0;border-bottom:1px solid var(--line);flex-wrap:wrap"><span style="color:var(--muted)">' + (i + 1) + '. ' + esc(s.label) + '</span><span style="display:flex;gap:5px;align-items:center"><input class="inp" data-stageamt="' + s.k + '" type="number" placeholder="סכום ₪" style="width:95px;font-size:12px"><input class="inp" data-stageref="' + s.k + '" placeholder="מס׳ מסמך" style="width:100px;font-size:12px"><button class="btn btn-sm" data-stagedone="' + s.k + '">סמן ✓</button></span></div>';
+              }).join('');
+          }
           $('dlPayList').innerHTML = (ps.length ? ps.map(function (p) { return '<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--line)"><span>' + (KIND[p.kind] || p.kind) + (p.method ? ' · ' + esc(p.method) : '') + (p.ref_no ? ' · ' + esc(p.ref_no) : '') + '</span><b>' + nis(p.amount) + '</b></div>'; }).join('') : '<p class="muted">אין תשלומים</p>') +
             '<div style="display:flex;justify-content:space-between;padding:8px 0;font-weight:800"><span>סה"כ שולם</span><span style="color:var(--ok)">' + nis(paid) + '</span></div>';
         });
       };
       loadPayments();
+      //  פעולות מסלול המסמכים (האזנה אחת על המיכל היציב)
+      if ($('dlStages')) $('dlStages').addEventListener('click', function (e) {
+        var done = e.target.closest('[data-stagedone]');
+        if (done) {
+          var k = done.dataset.stagedone, stage = ACCT_DOC_STAGES.filter(function (s) { return s.k === k; })[0];
+          var amtEl = $('dlStages').querySelector('[data-stageamt="' + k + '"]'), refEl = $('dlStages').querySelector('[data-stageref="' + k + '"]');
+          var amt = parseFloat(amtEl && amtEl.value) || 0, ref = ((refEl && refEl.value) || '').trim();
+          if (!amt) { alert('הזן סכום'); if (amtEl) amtEl.focus(); return; }
+          done.disabled = true;
+          db.from('payments').insert({ deal_id: deal.id, lead_id: lead.id, kind: stage.kind, purpose: k, amount: amt, ref_no: ref, paid_at: new Date().toISOString().slice(0, 10) }).then(function (rr) {
+            if (rr.error) { alert('שגיאה: ' + rr.error.message); done.disabled = false; return; }
+            logActivity(lead.id, 'system', 'הופק ' + stage.label + ': ' + nis(amt)); loadPayments();
+          });
+          return;
+        }
+        var del = e.target.closest('[data-stagedel]');
+        if (del) { if (!confirm('לבטל את המסמך הזה מהמסלול?')) return; db.from('payments').delete().eq('id', del.dataset.stagedel).then(function () { loadPayments(); }); }
+      });
 
       // ---- סליקת אשראי iCredit ----
       var IC_ST = { pending: { t: 'ממתין לתשלום', c: 'var(--muted)' }, paid: { t: 'שולם ✓', c: 'var(--ok)' }, failed: { t: 'נכשל', c: 'var(--danger)' }, canceled: { t: 'בוטל', c: 'var(--muted)' } };
@@ -2108,6 +2138,16 @@
     return Math.round((+d.commission || 0) * MGR.pct);
   }
   function mgrComm(d) { return mgrModel1(d) + mgrModel2(d); }
+
+  //  ---- מסלול מסמכי הנהלת חשבונות לכל עסקה ----
+  //  4 שלבים לפי סדר העבודה של מנהלת החשבונות. כל שלב נרשם כתשלום
+  //  ב-payments עם purpose=מפתח השלב, כדי שהכול יישב על אותו ledger.
+  var ACCT_DOC_STAGES = [
+    { k: 'deposit1', label: 'קבלה — מקדמה ראשונית', kind: 'receipt' },
+    { k: 'deposit2', label: 'קבלה — השלמת מקדמה', kind: 'receipt' },
+    { k: 'invoice', label: 'חשבונית — מלוא הסכום', kind: 'invoice' },
+    { k: 'profit', label: 'קבלה — רווח (אחרי קבלת כל הכסף)', kind: 'receipt' }
+  ];
   var ACCT_COLS = [
     { key: 'order', label: '#', fixed: true, cell: function (d) { return '<td><b>#' + esc(d.order_no) + '</b></td>'; } },
     { key: 'client', label: 'לקוח', fixed: true, cell: function (d) { return '<td>' + esc(d.client_name) + (d.has_signature ? ' <span style="color:var(--ok)" title="נחתם">✅</span>' : '') + '</td>'; } },
@@ -2120,6 +2160,11 @@
     { key: 'commission', label: 'עמלה', cell: function (d) { return '<td style="color:var(--ok);font-weight:700">' + nis(d.commission) + '</td>'; } },
     { key: 'mgr_comm', label: 'עמלת מנהלת תיקים', cell: function (d) { var m1 = mgrModel1(d), m2 = mgrModel2(d), t = m1 + m2; return '<td style="color:var(--brand);font-weight:700" title="חתימה: ' + nis(m1) + (m1 === MGR.sameDay ? ' (אותו יום)' : m1 === MGR.later ? ' (עבר יום)' : '') + ' · 3% מעמלת סוכן: ' + nis(m2) + '">' + (t ? nis(t) : '—') + '</td>'; } },
     { key: 'acct_status', label: 'סטטוס', cell: function (d) { return '<td>' + acctStatusSel(d.id, d.acct_status) + '</td>'; } },
+    { key: 'docs', label: 'מסמכים', cell: function (d) {
+        var done = d._docs || {}, n = 0;
+        var dots = ACCT_DOC_STAGES.map(function (s) { if (done[s.k]) n++; return '<span title="' + s.label + (done[s.k] ? ' ✓' : ' (טרם הופק)') + '" style="display:inline-block;width:11px;height:11px;border-radius:50%;margin:0 1px;background:' + (done[s.k] ? 'var(--ok)' : 'var(--line)') + '"></span>'; }).join('');
+        return '<td style="white-space:nowrap" title="' + n + ' מתוך ' + ACCT_DOC_STAGES.length + ' מסמכים הופקו">' + dots + ' <span class="muted" style="font-size:11px">' + n + '/' + ACCT_DOC_STAGES.length + '</span></td>';
+      } },
     { key: 'brand', label: 'מותג', def: false, cell: function (d) { return '<td>' + esc(d.brand || '—') + '</td>'; } },
     { key: 'phone', label: 'טלפון', def: false, cell: function (d) { return '<td>' + esc(d.client_phone || '—') + '</td>'; } },
     //  שאר שדות העסקה. לא נכללים שדות פנימיים (טוקן חתימה, HTML של
@@ -2170,6 +2215,9 @@
   function acctStatusSel(id, cur) { return '<select class="inp acct-st" data-acct="' + id + '" style="width:auto;font-size:12.5px">' + ACCT_STATUSES.map(function (s) { return '<option value="' + s.k + '"' + ((cur || 'pending') === s.k ? ' selected' : '') + '>' + esc(s.label) + '</option>'; }).join('') + '</select>'; }
   function acctWorkspace(deals, pays, prof, lname, docs, urls) {
     var paidByDeal = {}; pays.forEach(function (p) { if (p.kind !== 'invoice') paidByDeal[p.deal_id] = (paidByDeal[p.deal_id] || 0) + (+p.amount || 0); });
+    //  אילו משלבי המסמכים כבר הופקו לכל עסקה (לפי purpose)
+    var docsByDeal = {}; pays.forEach(function (p) { if (p.purpose) { (docsByDeal[p.deal_id] = docsByDeal[p.deal_id] || {})[p.purpose] = true; } });
+    deals.forEach(function (d) { d._docs = docsByDeal[d.id] || {}; });
     //  עסקה שבוטלה נשארת ברשימה — הנהלת חשבונות צריכה לטפל בהחזר או
     //  בזיכוי — אבל היא לא הכנסה ולא עמלה, ולכן אינה נספרת בסיכומים.
     //  קודם היא נספרה, והמסך הציג הכנסה שלא קיימת.
