@@ -1,13 +1,13 @@
 /* ============================================================
-   __BRAND_NAME__ — CRM shell: auth, sidebar routing, theme, global search,
+   פרי דרייב — CRM shell: auth, sidebar routing, theme, global search,
    side drawer, and the cars/appointments/tasks/analytics screens.
    Dashboard, leads table and lead drawer live in admin-crm.js.
    Public anon key only; all access gated by Supabase Auth + RLS.
    ============================================================ */
 (function () {
   'use strict';
-  var SUPABASE_URL = '__SUPABASE_URL__';
-  var SUPABASE_ANON_KEY = '__SUPABASE_ANON_KEY__';
+  var SUPABASE_URL = 'https://gfwopgoydfqiouratcpc.supabase.co';
+  var SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdmd29wZ295ZGZxaW91cmF0Y3BjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc2NDg0NTUsImV4cCI6MjEwMzIyNDQ1NX0.ukPDUGS7KjYgD7jAhzSqAEKo_eJ8gQwsHMqTBGXeux8';
   // ---------- דיווח שגיאות מרכזי ----------
   // מתוך 164 קריאות למסד, כ-60% לא בדקו r.error — כלומר כשל ברשת או הרשאה
   // פשוט לא קרה כלום והמשתמש לא ידע. במקום לתקן 164 מקומות, מיירטים כאן:
@@ -433,7 +433,7 @@
   //  ומוצאים את הצבע הרווח והרווי ביותר; deep = גרסה כהה שלו.
   function extractLogoColor(rawUrl, cb) {
     var url = logoUrl(rawUrl); if (!url) { cb(null); return; }
-    var prox = '__SUPABASE_URL__/functions/v1/img-proxy?u=' + encodeURIComponent(url);
+    var prox = 'https://gfwopgoydfqiouratcpc.supabase.co/functions/v1/img-proxy?u=' + encodeURIComponent(url);
     var im = new Image(); im.crossOrigin = 'anonymous';
     im.onload = function () {
       try {
@@ -640,7 +640,7 @@
     e.preventDefault();
     var em = $('email').value.trim();
     if (!em) { $('loginErr').style.color = 'var(--danger)'; $('loginErr').textContent = 'הזינו אימייל למעלה ואז לחצו "שכחתי סיסמה".'; return; }
-    var redirect = '__CRM_BASE_URL__/reset.html';
+    var redirect = 'https://crm.freedrive.co.il/reset.html';
     db.auth.resetPasswordForEmail(em, { redirectTo: redirect }).then(function (r) {
       $('loginErr').style.color = r.error ? 'var(--danger)' : 'var(--ok)';
       $('loginErr').textContent = r.error ? ('שגיאה: ' + r.error.message) : 'נשלח מייל לאיפוס סיסמה (אם החשבון קיים). בדקו את תיבת הדואר.';
@@ -3939,7 +3939,7 @@
       }
       var dealSources = sourcesPanel('deals'), leadSources = sourcesPanel('leads');
 
-      //  ROAS מול ההכנסה הכוללת הוא מספר משקר: ההכנסה של __BRAND_NAME__ הגיעה
+      //  ROAS מול ההכנסה הכוללת הוא מספר משקר: ההכנסה של פרי דרייב הגיעה
       //  עד כה משותף עסקי ולא מהמודעות, וחלוקה שלה בהוצאת הפרסום החזירה
       //  198x. לכן דוח המנהל משווה הוצאה מול ההכנסה **המיוחסת לפרסום**
       //  בלבד, ואת ההכנסה הכוללת מציג בנפרד.
@@ -4726,7 +4726,7 @@
     L.push('\u2705 עד 100% מימון');
     L.push('');
     L.push('אשמח לענות על כל שאלה \ud83d\ude42');
-    L.push('_' + (brandName || '__BRAND_NAME__') + '_');
+    L.push('_' + (brandName || 'פרי דרייב') + '_');
     return L.join('\n');
   }
 
@@ -4766,7 +4766,7 @@
     L.push('\u2705 אספקה מהירה \ud83d\ude9a');
     L.push('\u2705 עד 40% הנחה בביטוח חובה ומקיף \ud83d\udee1\ufe0f');
     L.push('\u2705 אגרת רישוי ראשונה כלולה \ud83e\uddfe');
-    L.push('\u2705 פתיחת תיק ב-__BRAND_NAME__ \ud83d\udcc2');
+    L.push('\u2705 פתיחת תיק ב-פרי דרייב \ud83d\udcc2');
     L.push('\u2705 איש מימון צמוד שידאג להשיג עבורך את הריביות הנמוכות ביותר \ud83e\udd1d');
     L.push('\u2705 אביזרים ומיגונים בהתאם לדרישות חברת הביטוח \ud83e\uddf0');
     L.push('\u2705 מערכת איתור לרכב \ud83d\udce1');
@@ -4823,7 +4823,7 @@
     return '<div class="q-doc">' +
       (c.img ? '<img class="q-img" src="' + esc(carImg(c.img)) + '" alt="">' : '') +
       '<div class="q-body">' + body + '</div>' +
-      '<div class="q-foot">__BRAND_NAME__</div></div>';
+      '<div class="q-foot">פרי דרייב</div></div>';
   }
 
   //  ---------- עוזר המכירות ----------
@@ -5247,7 +5247,7 @@
     db.from('leads').insert({
       name: t.contact_name || '\u05e4\u05d5\u05e0\u05d4 \u05d1\u05d5\u05d5\u05d8\u05e1\u05d0\u05e4', phone: phone,
       source: '\u05d5\u05d5\u05d0\u05d8\u05e1\u05d0\u05e4', status: 'new',
-      brand: '__BRAND_NAME__', marketing_company: '\u05e9\u05d9\u05d5\u05d5\u05e7 \u05e4\u05e0\u05d9\u05de\u05d9',
+      brand: 'פרי דרייב', marketing_company: '\u05e9\u05d9\u05d5\u05d5\u05e7 \u05e4\u05e0\u05d9\u05de\u05d9',
       utm_source: 'whatsapp', utm_medium: 'seo',
     }).select('id,status,name,car').single().then(function (r) {
       if (r.error) return cb(null, r.error.message);
@@ -6144,7 +6144,7 @@
       // password reset for a user
       $('view').querySelectorAll('button[data-reset]').forEach(function (b) {
         b.addEventListener('click', function () {
-          var email = b.dataset.reset, redirect = '__CRM_BASE_URL__/reset.html';
+          var email = b.dataset.reset, redirect = 'https://crm.freedrive.co.il/reset.html';
           db.auth.resetPasswordForEmail(email, { redirectTo: redirect }).then(function (r) { alert(r.error ? ('שגיאה: ' + r.error.message) : ('נשלח מייל לאיפוס סיסמה אל ' + email)); });
         });
       });
@@ -6238,7 +6238,7 @@
   //
   //  הערה על פרטיות: ההקשר נבנה מהנתונים שהמשתמש רשאי לקרוא. RLS כבר מגביל
   //  סוכן ללידים שלו בלבד, ולכן "כל הלידים" עבורו = הלידים שלו.
-  var AI_BASE = 'אתה עוזר AI בתוך מערכת CRM של סוכנות רכב ישראלית בשם __BRAND_NAME__ ' +
+  var AI_BASE = 'אתה עוזר AI בתוך מערכת CRM של סוכנות רכב ישראלית בשם פרי דרייב ' +
     '(ליסינג מימוני פרטי, עבודה מול כל היבואנים, מימון עד 100%, טרייד-אין, מעטפת מלאה). ' +
     'ענה תמיד בעברית תקנית, תמציתי וברור, ומבוסס אך ורק על הנתונים שקיבלת. ' +
     'אם נתון חסר או לא ניתן להסיק אותו — אמור זאת במפורש ואל תמציא מספרים. דיוק לפני הכל. ' +
@@ -6370,7 +6370,7 @@
       var cold = openLeads.filter(function (l) { return days(l.status_changed_at || l.created_at) >= 7; })
                           .sort(function (a, b) { return new Date(a.status_changed_at || a.created_at) - new Date(b.status_changed_at || b.created_at); });
       var overdue = tasks.filter(function (t) { return !t.done && t.due_at && new Date(t.due_at) < now; });
-      var head = 'נתוני __BRAND_NAME__ · ' + new Date().toLocaleDateString('he-IL') + ' · 90 הימים האחרונים' + '\n';
+      var head = 'נתוני פרי דרייב · ' + new Date().toLocaleDateString('he-IL') + ' · 90 הימים האחרונים' + '\n';
 
       var ctx;
       if (role === 'sales') {
@@ -6675,7 +6675,7 @@
     var host = $('connBox'); if (!host) return;
     if (!(window.C2B.role === 'admin' || window.C2B.isSuper)) { host.innerHTML = '<div class="card"><div class="sec-note">רק מנהל מערכת של הארגון מגדיר חיבורים.</div></div>'; return; }
     var oid = window.C2B.orgId || 1;
-    var base = '__SUPABASE_URL__/functions/v1';
+    var base = 'https://gfwopgoydfqiouratcpc.supabase.co/functions/v1';
     host.innerHTML = '<div class="ai-empty">טוען חיבורים…</div>';
     Promise.all([
       db.from('org_integrations').select('platform,config,connected'),
