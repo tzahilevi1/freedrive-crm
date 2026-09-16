@@ -6610,17 +6610,34 @@
     var oid = window.C2B.orgId || 1;
     var base = 'https://gfwopgoydfqiouratcpc.supabase.co/functions/v1';
     host.innerHTML = '<div class="ai-empty">טוען חיבורים…</div>';
-    db.from('org_integrations').select('platform,config,connected').then(function (r) {
+    Promise.all([
+      db.from('org_integrations').select('platform,config,connected'),
+      db.from('calls').select('id', { count: 'exact', head: true }).not('crm_analysis', 'is', null),
+      db.from('calls').select('id', { count: 'exact', head: true }).not('recording_path', 'is', null),
+      db.from('wa_messages').select('id', { count: 'exact', head: true }),
+      db.from('leads').select('id', { count: 'exact', head: true }).not('form_id', 'is', null),
+      db.from('scheduled_emails').select('id', { count: 'exact', head: true })
+    ]).then(function (res) {
+      var r = res[0];
       if (r && r.error) { host.innerHTML = '<div class="card"><div class="sec-note">שגיאה: ' + esc(r.error.message) + '</div></div>'; return; }
       var by = {}; ((r && r.data) || []).forEach(function (x) { by[x.platform] = x; });
-      host.innerHTML = '<p class="muted" style="font-size:12.5px;margin:0 0 14px;line-height:1.7">כל עסק מחבר את החשבונות שלו בנפרד. הפרטים מבודדים לארגון שלך ונגישים רק למנהל. אחרי שמירה — יש להגדיר את כתובת ה-Webhook בפלטפורמה עצמה.</p>' +
+      var cnt = function (i) { return (res[i] && res[i].count) || 0; };
+      //  סטטוס אוטומטי — "מחובר" כשיש הגדרה שמורה או פעילות אמיתית בפועל (RLS מסנן לארגון).
+      var live = {
+        resend: !!(by.resend && by.resend.config && by.resend.config.from_email) || cnt(5) > 0,
+        openai: !!(by.openai && by.openai.config && by.openai.config.api_key) || cnt(1) > 0,
+        voicenter: !!(by.voicenter && by.voicenter.connected) || cnt(2) > 0,
+        facebook: !!(by.facebook && by.facebook.connected) || cnt(4) > 0,
+        whatsapp: !!(by.whatsapp && by.whatsapp.connected) || cnt(3) > 0
+      };
+      host.innerHTML = '<p class="muted" style="font-size:12.5px;margin:0 0 14px;line-height:1.7">כל עסק מחבר את החשבונות שלו בנפרד. הסטטוס מתעדכן אוטומטית — "מחובר" מופיע ברגע שיש פעילות אמיתית (שיחות, הודעות, מיילים) או הגדרה שמורה.</p>' +
         CONN_PLATFORMS.map(function (p) {
           var st = by[p.key] || {}, cfg = st.config || {};
           var fh = p.fields.map(function (fd) {
             if (fd.s) return '<div class="field" style="margin:0 0 8px"><label>' + esc(fd.l) + '</label><input class="inp ltr" data-cf="' + p.key + ':' + fd.k + '" type="password" placeholder="' + (cfg[fd.k] ? 'מוגדר ✓ — הזן מחדש להחלפה' : '') + '"></div>';
             return '<div class="field" style="margin:0 0 8px"><label>' + esc(fd.l) + '</label><input class="inp ltr" data-cf="' + p.key + ':' + fd.k + '" value="' + esc(cfg[fd.k] || '') + '"></div>';
           }).join('');
-          var badge = st.connected ? '<span class="cl-yes">מחובר ✓</span>' : '<span class="cl-no">לא מחובר</span>';
+          var badge = live[p.key] ? '<span class="cl-yes">מחובר ✓</span>' : '<span class="cl-no">לא מחובר</span>';
           return '<div class="card cl-sub" style="margin-bottom:14px"><div class="row-between" style="align-items:center"><h3 class="cl-h" style="margin:0">' + p.icon + ' ' + esc(p.title) + '</h3>' + badge + '</div>' +
             '<p class="muted" style="font-size:12.5px;margin:6px 0 12px">' + esc(p.desc) + '</p>' + fh +
             (p.hook ? '<div class="field" style="margin:8px 0 0"><label>כתובת Webhook להגדרה בפלטפורמה</label><input class="inp ltr" readonly value="' + esc(base + p.hook + '?org=' + oid) + '" onclick="this.select()"></div>' : '') +
@@ -6639,6 +6656,7 @@
           db.from('org_integrations').upsert({ org_id: oid, platform: key, config: cfg, connected: true, updated_at: new Date().toISOString() }, { onConflict: 'org_id,platform' }).then(function (u) {
             if (u.error) { msg.style.color = 'var(--danger)'; msg.textContent = 'שגיאה: ' + u.error.message; return; }
             msg.style.color = 'var(--ok)'; msg.textContent = '✔ נשמר'; by[key] = { platform: key, config: cfg, connected: true };
+            setTimeout(renderConnections, 700);   // רענון הסטטוס
           });
         });
       });
