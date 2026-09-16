@@ -243,7 +243,7 @@
     loadLists();
     loadConfig();
     loadBrandCompanies();
-    db.from('profiles').select('role,full_name,views,active,sip_ext,phone,agent_phone,is_super').eq('user_id', session.user.id).single().then(function (r) {
+    db.from('profiles').select('role,full_name,views,active,sip_ext,phone,agent_phone,is_super,org_id').eq('user_id', session.user.id).single().then(function (r) {
       window.C2B.userSip = (r.data && r.data.sip_ext) || '';
       //  השם המלא משמש בהודעות המהירות של הווטסאפ ({{נציג}})
       window.C2B.fullName = (r.data && r.data.full_name) || '';
@@ -259,6 +259,12 @@
       window.C2B.role = (r.data && r.data.role) || 'sales';
       //  סופר-אדמין = בעל הפלטפורמה (גישה חוצה-ארגונים + פתיחת ארגונים). נטען מ-profiles.is_super.
       window.C2B.isSuper = !!(r.data && r.data.is_super);
+      //  מיתוג בזמן ריצה: כל ארגון רואה את השם/הצבע/הלוגו שלו (orgs.branding),
+      //  במקום המיתוג המוטמע בבנייה. org 1 (פרי דרייב) נשאר כברירת מחדל.
+      window.C2B.orgId = (r.data && r.data.org_id) || 1;
+      db.from('orgs').select('name,branding').eq('id', window.C2B.orgId).maybeSingle().then(function (o) {
+        if (o && o.data) { var br = o.data.branding || {}; window.C2B.brand = { name: o.data.name, color: br.color, colorDeep: br.color_deep, logo: br.logo }; applyBranding(); }
+      }, function () {});
       window.C2B.views = (r.data && r.data.views && r.data.views.length) ? r.data.views : (DEFAULT_VIEWS[window.C2B.role] || ['dashboard']);
       // מסך ניהול חדש שנוסף בקוד לא מופיע אצל מי שרשימת המסכים שלו כבר
       // שמורה במסד — והיא נשמרת לכל משתמש שנערך אי פעם. מנהל מערכת
@@ -407,6 +413,27 @@
     document.body.appendChild(t);
     setTimeout(function () { t.style.transition = 'opacity .4s'; t.style.opacity = '0'; setTimeout(function () { t.remove(); }, 420); }, 2600);
   };
+  //  מיישם את מיתוג הארגון בזמן ריצה: כותרת הדף, צבע המותג, ולוגו/שם
+  //  בסיידבר. ארגון 1 (פרי דרייב) עם מיתוג ריק → נשאר כמו שהוטמע בבנייה.
+  function applyBranding() {
+    var b = window.C2B.brand || {};
+    if (b.name) { try { document.title = b.name + ' · CRM'; } catch (e) { } }
+    var root = document.documentElement;
+    if (b.color) root.style.setProperty('--brand', b.color);
+    if (b.colorDeep) root.style.setProperty('--brand-deep', b.colorDeep);
+    var sb = document.querySelector('.side-brand');
+    if (sb) {
+      var img = sb.querySelector('img');
+      if (b.logo) { if (img) { img.src = b.logo; img.style.display = ''; } }
+      else if (window.C2B.orgId && window.C2B.orgId !== 1) {
+        //  ארגון שאינו פרי דרייב ובלי לוגו משלו — מציגים את שמו במקום לוגו פרי דרייב
+        if (img) img.style.display = 'none';
+        var nm = sb.querySelector('.brand-nm');
+        if (!nm) { nm = document.createElement('span'); nm.className = 'brand-nm'; nm.style.cssText = 'font-weight:900;font-size:18px;color:var(--brand)'; sb.insertBefore(nm, sb.firstChild); }
+        nm.textContent = b.name || 'CRM';
+      }
+    }
+  }
   function normPhone(p) {
     var d = String(p || '').replace(/[^\d+]/g, '');
     if (!d) return '';
