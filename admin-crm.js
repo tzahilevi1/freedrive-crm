@@ -2122,22 +2122,27 @@
   //  מודל 2: 3% מעמלת הסוכן, רק אם אותו סוכן חתם ≥5 עסקאות באותו חודש.
   //  (הסכום פר-עסקה מסתכם בדיוק ל-3% מסך העמלה החודשית של הסוכן.)
   //  הערכים מרוכזים כאן לשינוי קל.
-  var MGR = { sameDay: 200, later: 100, minDeals: 5, pct: 0.03 };
-  var mgrMonthCount = {};   // מפתח: "סוכן|YYYY-MM" → מספר עסקאות חתומות (לא מבוטלות)
+  //  מודל 2 מדורג לפי סך ההחתמות של המנהלת באותו חודש:
+  //  <30 → 0% (כלום) · ≥30 → 3% · ≥35 → 5% · ≥40 → 8%.
+  //  האחוז חל על עמלת הסוכן ו**יורד ממנה** (נטו לסוכן, ברוטו למנהלת).
+  var MGR = { sameDay: 200, later: 100, tiers: [{ min: 40, pct: 0.08 }, { min: 35, pct: 0.05 }, { min: 30, pct: 0.03 }] };
+  var mgrMonthCount = {};   // "סוכן|YYYY-MM" → מספר עסקאות חתומות (לתצוגה)
+  var mgrMonthTotal = {};   // "YYYY-MM" → סך כל ההחתמות בחודש (קובע את המדרגה)
   function mgrCancelled(d) { return d.status === 'cancelled' || d.stage === 'cancelled'; }
   function mgrMonth(d) { var t = d.signed_at || d.created_at; return t ? String(t).slice(0, 7) : ''; }
+  function mgrRate(n) { for (var i = 0; i < MGR.tiers.length; i++) if (n >= MGR.tiers[i].min) return MGR.tiers[i].pct; return 0; }
   function mgrModel1(d) {
     if (mgrCancelled(d) || !d.has_signature || !d.signed_at) return 0;
     var sd = String(d.signed_at).slice(0, 10), cd = String(d.created_at || '').slice(0, 10);
     return (cd && sd === cd) ? MGR.sameDay : MGR.later;
   }
+  //  קיזוז מעמלת הסוכן (=עמלת המנהלת ממודל 2)
   function mgrModel2(d) {
     if (mgrCancelled(d)) return 0;
-    var key = (d.salesperson || 'לא שויך') + '|' + mgrMonth(d);
-    if ((mgrMonthCount[key] || 0) < MGR.minDeals) return 0;
-    return Math.round((+d.commission || 0) * MGR.pct);
+    return Math.round((+d.commission || 0) * mgrRate(mgrMonthTotal[mgrMonth(d)] || 0));
   }
   function mgrComm(d) { return mgrModel1(d) + mgrModel2(d); }
+  function agentNetComm(d) { return (+d.commission || 0) - mgrModel2(d); }   // עמלת הסוכן נטו
 
   //  ---- מסלול מסמכי הנהלת חשבונות לכל עסקה ----
   //  4 שלבים לפי סדר העבודה של מנהלת החשבונות. כל שלב נרשם כתשלום
@@ -2158,6 +2163,7 @@
     { key: 'balance', label: 'יתרה', cell: function (d) { return '<td style="color:' + (d._bal > 0 ? 'var(--danger)' : 'var(--ok)') + '">' + nis(d._bal) + '</td>'; } },
     { key: 'salesperson', label: 'סוכן', cell: function (d) { return '<td>' + esc(d.salesperson || '—') + '</td>'; } },
     { key: 'purchase_price', label: 'מחיר קניית רכב', cell: function (d) { return '<td><input class="inp pp-edit" data-pp="' + d.id + '" type="number" value="' + (d.purchase_price == null ? '' : d.purchase_price) + '" placeholder="₪ עלות" style="width:115px;font-size:12.5px' + (d.purchase_price == null ? ';border-color:var(--warn)' : '') + '"></td>'; } },
+    { key: 'profit', label: 'רווח (מכירה−קנייה)', cell: function (d) { if (d.purchase_price == null) return '<td class="muted">—</td>'; var p = (+d._tot || 0) - (+d.purchase_price || 0); return '<td style="font-weight:700;color:' + (p >= 0 ? 'var(--ok)' : 'var(--danger)') + '" title="מכירה ' + nis(d._tot) + ' − קנייה ' + nis(d.purchase_price) + '">' + nis(p) + '</td>'; } },
     { key: 'commission', label: 'עמלה', cell: function (d) { return '<td style="color:var(--ok);font-weight:700">' + nis(d.commission) + '</td>'; } },
     { key: 'mgr_comm', label: 'עמלת מנהלת תיקים', cell: function (d) { var m1 = mgrModel1(d), m2 = mgrModel2(d), t = m1 + m2; return '<td style="color:var(--brand);font-weight:700" title="חתימה: ' + nis(m1) + (m1 === MGR.sameDay ? ' (אותו יום)' : m1 === MGR.later ? ' (עבר יום)' : '') + ' · 3% מעמלת סוכן: ' + nis(m2) + '">' + (t ? nis(t) : '—') + '</td>'; } },
     { key: 'acct_status', label: 'סטטוס', cell: function (d) { return '<td>' + acctStatusSel(d.id, d.acct_status) + '</td>'; } },
@@ -2230,9 +2236,9 @@
       revenue += tot; collected += paid; open += Math.max(0, tot - paid); commTotal += (+d.commission || 0);
     });
 
-    //  מונה עסקאות חתומות פר-סוכן-לחודש — לזכאות מודל 2 (≥5 עסקאות/חודש)
-    mgrMonthCount = {};
-    deals.forEach(function (d) { if (mgrCancelled(d)) return; var k = (d.salesperson || 'לא שויך') + '|' + mgrMonth(d); mgrMonthCount[k] = (mgrMonthCount[k] || 0) + 1; });
+    //  מוני החתמות: פר-סוכן-לחודש (תצוגה) + סך חודשי (קובע את מדרגת מודל 2)
+    mgrMonthCount = {}; mgrMonthTotal = {};
+    deals.forEach(function (d) { if (mgrCancelled(d)) return; var mon = mgrMonth(d); mgrMonthCount[(d.salesperson || 'לא שויך') + '|' + mon] = (mgrMonthCount[(d.salesperson || 'לא שויך') + '|' + mon] || 0) + 1; mgrMonthTotal[mon] = (mgrMonthTotal[mon] || 0) + 1; });
 
     // TAB 1 — deals + receipts (what bought, invoice name, balance, commission, status, issue)
     if (!acctCols) acctCols = C.colPicker('accounting', ACCT_COLS, function () { window.C2B_renderAccounting(); }, { sortable: true });
@@ -2246,15 +2252,18 @@
     // TAB 2 — commission per agent (frozen values)
     var byAgent = {}; deals.forEach(function (d) { var a = d.salesperson || 'לא שויך'; byAgent[a] = byAgent[a] || { n: 0, comm: 0, total: 0 }; byAgent[a].n++; byAgent[a].comm += (+d.commission || 0); byAgent[a].total += (+d.total || 0); });
     var agents = Object.keys(byAgent).sort(function (a, b) { return byAgent[b].comm - byAgent[a].comm; });
-    var commPanel = '<div class="cards">' + C.stat('סה"כ עמלות לתשלום', nis(commTotal), true) + C.stat('מספר סוכנים', agents.length) + '</div>' +
-      '<div class="card"><h3>💸 עמלות סוכנים <span class="muted" style="font-size:12px">(לחצו על סוכן לפירוט העסקאות · אפשר לעדכן עמלה חסרה)</span></h3>' +
+    var mgrCutTotal = 0; deals.forEach(function (d) { mgrCutTotal += mgrModel2(d); });
+    var commPanel = '<div class="cards">' + C.stat('עמלות ברוטו', nis(commTotal), true) + C.stat('קיזוז למנהלת (מודל 2)', nis(mgrCutTotal)) + C.stat('נטו לסוכנים', nis(commTotal - mgrCutTotal)) + '</div>' +
+      (mgrCutTotal ? '<p class="muted" style="font-size:12px;margin:-2px 0 10px">💡 קיזוז המנהלת (3-8% לפי מדרגת ההחתמות החודשית) יורד מעמלת הסוכן — מוצג להלן כ"נטו".</p>' : '') +
+      '<div class="card"><h3>💸 עמלות סוכנים <span class="muted" style="font-size:12px">(לחצו על סוכן לפירוט · אפשר לעדכן עמלה חסרה)</span></h3>' +
         (agents.length ? agents.map(function (a) {
           var o = byAgent[a], aDeals = deals.filter(function (d) { return (d.salesperson || 'לא שויך') === a; });
           var noComm = aDeals.filter(function (d) { return !(+d.commission); }).length;
+          var aCut = aDeals.reduce(function (s, d) { return s + mgrModel2(d); }, 0), aNet = o.comm - aCut;
           return '<details style="border:1px solid var(--line);border-radius:10px;padding:8px 12px;margin:6px 0">' +
-            '<summary style="cursor:pointer;display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap"><b>' + esc(a) + '</b><span class="muted" style="font-size:12.5px">' + o.n + ' עסקאות · ' + nis(o.total) + ' · <b style="color:var(--ok)">עמלה ' + nis(o.comm) + '</b>' + (noComm ? ' · <span style="color:var(--warn)">' + noComm + ' ללא עמלה</span>' : '') + '</span></summary>' +
-            '<div class="table-scroll" style="margin-top:8px"><table><thead><tr><th>#</th><th>לקוח</th><th>רכב</th><th>סכום</th><th>עמלה ₪</th></tr></thead><tbody>' +
-              aDeals.map(function (d) { return '<tr><td><b>#' + esc(d.order_no || '—') + '</b></td><td>' + esc(d.client_name || '—') + '</td><td>' + esc(((d.car_make || '') + ' ' + (d.car_model || '')).trim() || '—') + '</td><td>' + nis(d.total) + '</td><td><input class="inp comm-edit" data-comm="' + d.id + '" type="number" value="' + (d.commission == null ? '' : d.commission) + '" placeholder="0" style="width:110px;font-weight:700' + (!(+d.commission) ? ';border-color:var(--warn)' : '') + '"></td></tr>'; }).join('') +
+            '<summary style="cursor:pointer;display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap"><b>' + esc(a) + '</b><span class="muted" style="font-size:12.5px">' + o.n + ' עסקאות · ברוטו <b>' + nis(o.comm) + '</b>' + (aCut ? ' · <span style="color:var(--danger)">קיזוז ' + nis(aCut) + '</span>' : '') + ' · <b style="color:var(--ok)">נטו ' + nis(aNet) + '</b>' + (noComm ? ' · <span style="color:var(--warn)">' + noComm + ' ללא עמלה</span>' : '') + '</span></summary>' +
+            '<div class="table-scroll" style="margin-top:8px"><table><thead><tr><th>#</th><th>לקוח</th><th>רכב</th><th>סכום</th><th>עמלה ברוטו ₪</th><th>קיזוז</th><th>נטו</th></tr></thead><tbody>' +
+              aDeals.map(function (d) { var cut = mgrModel2(d); return '<tr><td><b>#' + esc(d.order_no || '—') + '</b></td><td>' + esc(d.client_name || '—') + '</td><td>' + esc(((d.car_make || '') + ' ' + (d.car_model || '')).trim() || '—') + '</td><td>' + nis(d.total) + '</td><td><input class="inp comm-edit" data-comm="' + d.id + '" type="number" value="' + (d.commission == null ? '' : d.commission) + '" placeholder="0" style="width:100px;font-weight:700' + (!(+d.commission) ? ';border-color:var(--warn)' : '') + '"></td><td class="muted">' + (cut ? '−' + nis(cut) : '—') + '</td><td style="color:var(--ok);font-weight:700">' + nis(agentNetComm(d)) + '</td></tr>'; }).join('') +
             '</tbody></table></div></details>';
         }).join('') : '<p class="empty">אין נתונים</p>') +
       '</div>';
@@ -2274,20 +2283,30 @@
       return '<tr><td><b>#' + esc(d.order_no || '—') + '</b></td><td>' + esc(d.client_name || '—') + '</td><td class="muted">' + fmt(d.created_at) + '</td><td class="muted">' + fmt(d.signed_at) + '</td><td>' + (same ? '<span style="color:var(--ok);font-weight:700">אותו יום</span>' : '<span style="color:var(--warn)">עבר יום</span>') + '</td><td style="font-weight:700;color:var(--brand)">' + nis(m1) + '</td></tr>';
     }).join('');
     var byAM = {}; deals.forEach(function (d) { if (mgrCancelled(d)) return; var k = (d.salesperson || 'לא שויך') + '|' + mgrMonth(d); byAM[k] = byAM[k] || { agent: d.salesperson || 'לא שויך', mon: mgrMonth(d), n: 0, comm: 0 }; byAM[k].n++; byAM[k].comm += (+d.commission || 0); });
-    var m2Rows = Object.keys(byAM).map(function (k) { return byAM[k]; }).filter(function (o) { return o.n >= MGR.minDeals; }).sort(function (a, b) { return b.mon.localeCompare(a.mon) || b.comm - a.comm; }).map(function (o) {
-      return '<tr><td><b>' + esc(o.agent) + '</b></td><td class="muted">' + esc(o.mon) + '</td><td>' + o.n + '</td><td>' + nis(o.comm) + '</td><td style="font-weight:700;color:var(--brand)">' + nis(Math.round(o.comm * MGR.pct)) + '</td></tr>';
+    var m2Rows = Object.keys(byAM).map(function (k) { return byAM[k]; }).filter(function (o) { return mgrRate(mgrMonthTotal[o.mon] || 0) > 0; }).sort(function (a, b) { return b.mon.localeCompare(a.mon) || b.comm - a.comm; }).map(function (o) {
+      var rate = mgrRate(mgrMonthTotal[o.mon] || 0);
+      return '<tr><td><b>' + esc(o.agent) + '</b></td><td class="muted">' + esc(o.mon) + '</td><td>' + (mgrMonthTotal[o.mon] || 0) + '</td><td style="font-weight:700">' + Math.round(rate * 100) + '%</td><td>' + nis(o.comm) + '</td><td style="font-weight:700;color:var(--brand)">' + nis(Math.round(o.comm * rate)) + '</td></tr>';
     }).join('');
-    var mgrPanel = '<div class="cards">' + C.stat('בונוס חתימה', nis(mgrTot1)) + C.stat('3% מעמלות סוכנים', nis(mgrTot2)) + C.stat('סה"כ למנהלת', nis(mgrTot1 + mgrTot2), true) + '</div>' +
+    var mgrPanel = '<div class="cards">' + C.stat('בונוס חתימה', nis(mgrTot1)) + C.stat('קיזוז מעמלות (מדורג)', nis(mgrTot2)) + C.stat('סה"כ למנהלת', nis(mgrTot1 + mgrTot2), true) + '</div>' +
       '<div class="card"><h3>🖊️ בונוס חתימה <span class="muted" style="font-size:12px">(₪' + MGR.sameDay + ' חתימה באותו יום · ₪' + MGR.later + ' אם עבר יום)</span></h3><div class="table-scroll"><table><thead><tr><th>#</th><th>לקוח</th><th>נוצר</th><th>נחתם</th><th>עיתוי</th><th>בונוס</th></tr></thead><tbody>' + (m1Rows || '<tr><td colspan="6" class="empty">אין</td></tr>') + '</tbody></table></div></div>' +
-      '<div class="card"><h3>📊 3% מעמלת סוכן <span class="muted" style="font-size:12px">(רק סוכן עם ' + MGR.minDeals + '+ עסקאות באותו חודש)</span></h3><div class="table-scroll"><table><thead><tr><th>סוכן</th><th>חודש</th><th>עסקאות</th><th>עמלת הסוכן</th><th>3% למנהלת</th></tr></thead><tbody>' + (m2Rows || '<tr><td colspan="5" class="empty">אף סוכן לא הגיע ל-' + MGR.minDeals + ' עסקאות בחודש</td></tr>') + '</tbody></table></div></div>';
+      '<div class="card"><h3>📊 קיזוז מעמלת סוכנים <span class="muted" style="font-size:12px">(מדרגה לפי סך ההחתמות בחודש: 30→3% · 35→5% · 40→8% · מתחת ל-30 → 0)</span></h3><div class="table-scroll"><table><thead><tr><th>סוכן</th><th>חודש</th><th>החתמות בחודש</th><th>אחוז</th><th>עמלת הסוכן</th><th>למנהלת</th></tr></thead><tbody>' + (m2Rows || '<tr><td colspan="6" class="empty">אף חודש לא הגיע ל-30 החתמות — אין קיזוז</td></tr>') + '</tbody></table></div></div>';
 
-    var panels = { deals: dealsPanel, commissions: commPanel, mgr: mgrPanel, documents: docsPanel };
+    // TAB — ביטולים (עסקאות מבוטלות + החזרים ללקוח)
+    var cancelDeals = deals.filter(isCancelled), refundTotal = 0;
+    var cancelRows = cancelDeals.sort(function (a, b) { return String(b.updated_at || b.created_at || '').localeCompare(String(a.updated_at || a.created_at || '')); }).map(function (d) {
+      var paid = paidByDeal[d.id] || 0; if (paid > 0) refundTotal += paid;
+      return '<tr data-lead="' + (d.lead_id || '') + '" style="cursor:pointer"><td><b>#' + esc(d.order_no || '—') + '</b></td><td>' + esc(d.client_name || '—') + '</td><td>' + esc(((d.car_make || '') + ' ' + (d.car_model || '')).trim() || '—') + '</td><td>' + nis(d._tot || d.total) + '</td><td style="color:var(--ok);font-weight:700">' + nis(paid) + '</td><td>' + (paid > 0 ? '<span style="color:var(--danger);font-weight:800">להחזיר ' + nis(paid) + '</span>' : '<span class="muted">אין החזר</span>') + '</td><td class="muted">' + esc(d.cancel_reason || '—') + '</td></tr>';
+    }).join('');
+    var cancelPanel = '<div class="cards">' + C.stat('עסקאות שבוטלו', cancelDeals.length) + C.stat('שווי מבוטל', nis(cancelSum)) + C.stat('סה"כ להחזר ללקוחות', nis(refundTotal), true) + '</div>' +
+      '<div class="card"><h3>🚫 עסקאות שבוטלו <span class="muted" style="font-size:12px">(לחצו על שורה לפתיחת התיק · "להחזיר" = הלקוח כבר שילם וצריך זיכוי)</span></h3><div class="table-scroll"><table><thead><tr><th>#</th><th>לקוח</th><th>רכב</th><th>סכום עסקה</th><th>שולם</th><th>החזר נדרש</th><th>סיבת ביטול</th></tr></thead><tbody>' + (cancelRows || '<tr><td colspan="7" class="empty">אין עסקאות מבוטלות 🎉</td></tr>') + '</tbody></table></div></div>';
+
+    var panels = { deals: dealsPanel, commissions: commPanel, mgr: mgrPanel, cancel: cancelPanel, documents: docsPanel };
     function tab(k, l) { return '<button data-atab="' + k + '"' + (acctTab === k ? ' class="active"' : '') + '>' + l + '</button>'; }
     view('<h2 style="margin:0 0 12px">🧮 מרכז הנהלת חשבונות</h2>' +
       '<div class="cards">' + C.stat('שווי עסקאות', nis(revenue), true) + C.stat('נגבה בפועל', nis(collected)) + C.stat('יתרה פתוחה', nis(open)) + C.stat('סה"כ עמלות סוכנים', nis(commTotal)) +
         //  המבוטלות לא נעלמות מהעין — הן פשוט לא נספרות כהכנסה
         (cancelN ? C.stat('בוטלו · לא נספרות', cancelN + ' · ' + nis(cancelSum)) : '') + '</div>' +
-      '<nav class="tabs" id="acctTabs" style="margin-bottom:14px;flex-wrap:wrap">' + tab('deals', '🧾 עסקאות וקבלות') + tab('commissions', '💸 עמלות סוכנים') + tab('mgr', '🗂️ עמלות מנהלת תיקים') + tab('documents', '📁 מסמכים') + '</nav><div id="acctPanel">' + panels[acctTab] + '</div>');
+      '<nav class="tabs" id="acctTabs" style="margin-bottom:14px;flex-wrap:wrap">' + tab('deals', '🧾 עסקאות וקבלות') + tab('commissions', '💸 עמלות סוכנים') + tab('mgr', '🗂️ עמלות מנהלת תיקים') + tab('cancel', '🚫 ביטולים') + tab('documents', '📁 מסמכים') + '</nav><div id="acctPanel">' + panels[acctTab] + '</div>');
 
     function bindPanel() {
       var P = C.$('acctPanel');
