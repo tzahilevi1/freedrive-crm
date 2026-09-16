@@ -1705,7 +1705,7 @@
     var formCard = '<div class="card"><h3>בחירת טופס</h3>' + grid(G('סוג טופס', 'form_type', defFormType) + statusSel + brandField + ownSel + G('מנהל מכירות / נציג משוייך', 'salesperson', defSalesperson)) + '</div>';
     var carCard = '<div class="card"><h3>🚗 פרטי הרכב המוזמן</h3>' +
       '<div class="ac-box" style="margin-bottom:10px"><input class="inp" id="dl_carSearch" placeholder="🔎 חפש רכב מהקטלוג (עברית/אנגלית) — ימלא אוטומטית" style="width:100%"><div class="ac-res hidden" id="dl_carRes"></div></div>' +
-      grid(G('יצרן', 'car_make', deal.car_make) + G('דגם', 'car_model', deal.car_model) + G('שנת ייצור', 'car_year', deal.car_year || 2026, 'number') + G('רמת גימור', 'car_trim', deal.car_trim) + G('נפח מנוע', 'car_engine', deal.car_engine) + G('מחיר הרכב ₪', 'car_price', deal.car_price, 'number') + G('החזר חודשי משוער ₪', 'monthly', deal.monthly, 'number') + '<div class="field" style="margin:0"><label>עמלת סוכן ₪ (אוטומטי · קריאה בלבד)</label><input class="inp" id="dl_commission" type="number" value="' + esc(deal.commission == null ? '' : deal.commission) + '" readonly tabindex="-1" style="width:100%;background:var(--surface-2);cursor:not-allowed;color:var(--muted)"></div>') +
+      grid(G('יצרן', 'car_make', deal.car_make) + G('דגם', 'car_model', deal.car_model) + G('שנת ייצור', 'car_year', deal.car_year || 2026, 'number') + G('רמת גימור', 'car_trim', deal.car_trim) + G('נפח מנוע', 'car_engine', deal.car_engine) + G('מחיר הרכב ₪', 'car_price', deal.car_price, 'number') + G('מחיר קניית רכב ₪ (עלות · הנה"ח)', 'purchase_price', deal.purchase_price, 'number') + G('החזר חודשי משוער ₪', 'monthly', deal.monthly, 'number') + '<div class="field" style="margin:0"><label>עמלת סוכן ₪ (אוטומטי · קריאה בלבד)</label><input class="inp" id="dl_commission" type="number" value="' + esc(deal.commission == null ? '' : deal.commission) + '" readonly tabindex="-1" style="width:100%;background:var(--surface-2);cursor:not-allowed;color:var(--muted)"></div>') +
       '<div style="border-top:1px dashed var(--line);margin:14px 0 10px;padding-top:12px"><div style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:8px">✍ למילוי הסוכן</div>' +
       grid(G('צבע מבוקש', 'car_color', deal.car_color) + gearboxSel(deal.car_gearbox)) + '</div>' + '</div>';
     var specCard = '<div class="card"><h3>מפרט / הערות</h3><textarea class="inp" id="dl_spec" rows="5" style="width:100%" placeholder="מפרט / הערות לחוזה…">' + esc(deal.spec || '') + '</textarea></div>';
@@ -1718,7 +1718,7 @@
       '<div class="field" style="margin-top:6px"><label>סכום תוספות ₪</label><input class="inp" id="dl_addons_amount" type="number" value="' + esc(ad.addons_amount == null ? '' : ad.addons_amount) + '" style="width:100%"></div></div>';
     var summaryCard = '<div class="card"><h3>סיכום הזמנה ורווחיות</h3>' + grid(G('הנחה (%)', 'discount_pct', deal.discount_pct, 'number') + G('הנחה (סכום) ₪', 'discount_amt', deal.discount_amt, 'number') + G('שולם ₪', 'paid', deal.paid, 'number')) +
       '<label style="display:flex;gap:8px;align-items:center;padding:8px 0"><input type="checkbox" id="dl_vat"' + (deal.vat_included !== false ? ' checked' : '') + '> כולל מע"מ</label><div id="dlSummary" style="margin-top:8px"></div></div>';
-    var finCard = '<div class="card"><h3>🏦 מקטע מימון</h3>' + grid(G('גובה מימון מבוקש ₪', 'fin_amount', fin.amount, 'number') + G('מימון מאושר ₪', 'fin_approved', fin.approved, 'number') + G('מספר תשלומים', 'fin_payments', fin.payments, 'number') + G('החזר חודשי ₪', 'fin_monthly', fin.monthly, 'number') + G('מסלול / סוג עסקת מימון', 'fin_track', fin.track) + G('מספר הצעה', 'fin_offer', fin.offer) + G('יתרת בלון ₪', 'fin_balloon', fin.balloon, 'number') + G('סטטוס מימון', 'fin_status', fin.status)) +
+    var finCard = '<div class="card"><h3>🏦 מקטע מימון</h3>' + grid(G('גובה מימון מבוקש ₪', 'fin_amount', fin.amount, 'number') + G('מימון מאושר ₪', 'fin_approved', fin.approved, 'number') + G('מספר תשלומים', 'fin_payments', fin.payments, 'number') + G('החזר חודשי ₪', 'fin_monthly', fin.monthly, 'number') + G('מסלול / סוג עסקת מימון', 'fin_track', fin.track) + G('מספר הצעה', 'fin_offer', fin.offer) + G('יתרת בלון ₪', 'fin_balloon', fin.balloon, 'number') + G('דמי ניהול תיק מימון ₪', 'fin_mgmt_fee', fin.mgmt_fee, 'number') + G('סטטוס מימון', 'fin_status', fin.status)) +
       '<label style="display:flex;gap:8px;align-items:center;padding:8px 0"><input type="checkbox" id="dl_fin_transferred"' + (fin.transferred ? ' checked' : '') + '> עברו כספים מגוף המימון</label></div>';
     var tradeCard = '<div class="card"><h3>🔁 מקטע טרייד-אין</h3>' +
       '<div class="ac-box" style="box-shadow:none;border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:14px;background:var(--brand-soft)">' +
@@ -1936,11 +1936,11 @@
         lead_id: lead.id, form_type: $('dl_form_type').value, status: $('dl_status').value, salesperson: $('dl_salesperson').value, brand: $('dl_brand') ? $('dl_brand').value : null,
         client_name: $('dl_client_name').value, client_phone: $('dl_client_phone').value, client_email: $('dl_client_email').value, client_address: $('dl_client_address').value, client_id: $('dl_client_id').value, invoice_name: $('dl_invoice_name').value,
         car_make: $('dl_car_make').value, car_model: $('dl_car_model').value, car_year: num('dl_car_year') || null, car_trim: $('dl_car_trim').value, car_engine: $('dl_car_engine').value, car_gearbox: $('dl_car_gearbox').value, car_color: $('dl_car_color').value,
-        car_price: num('dl_car_price'), commission: num('dl_commission') || null, down_total: num('dl_down_total'), down_initial: num('dl_down_initial'), down_balance: c.downBal, monthly: num('dl_monthly'), delivery_days: num('dl_delivery_days') || null, balance_to_pay: c.balPay,
+        car_price: num('dl_car_price'), purchase_price: num('dl_purchase_price') || null, commission: num('dl_commission') || null, down_total: num('dl_down_total'), down_initial: num('dl_down_initial'), down_balance: c.downBal, monthly: num('dl_monthly'), delivery_days: num('dl_delivery_days') || null, balance_to_pay: c.balPay,
         addons: { charging: $('dl_charging').checked, armor: $('dl_armor').checked, accessories: $('dl_accessories').checked, insurance: $('dl_insurance').checked, addons_amount: num('dl_addons_amount') },
         vat_included: $('dl_vat').checked, discount_pct: num('dl_discount_pct') || null, discount_amt: c.disc, total: c.total, paid: num('dl_paid') || null, spec: $('dl_spec').value,
         stage: curStage, checklist: checklist, cancel_reason: (curStage === 'cancelled' ? (deal.cancel_reason || null) : null), contract_type: deal.contract_type || 'car2buy',
-        financing: { amount: num('dl_fin_amount') || null, approved: num('dl_fin_approved') || null, payments: num('dl_fin_payments') || null, monthly: num('dl_fin_monthly') || null, track: $('dl_fin_track').value, offer: $('dl_fin_offer').value, balloon: num('dl_fin_balloon') || null, status: $('dl_fin_status').value, transferred: $('dl_fin_transferred').checked },
+        financing: { amount: num('dl_fin_amount') || null, approved: num('dl_fin_approved') || null, payments: num('dl_fin_payments') || null, monthly: num('dl_fin_monthly') || null, track: $('dl_fin_track').value, offer: $('dl_fin_offer').value, balloon: num('dl_fin_balloon') || null, mgmt_fee: num('dl_fin_mgmt_fee') || null, status: $('dl_fin_status').value, transferred: $('dl_fin_transferred').checked },
         tradein: { plate: $('dl_ti_plate') ? $('dl_ti_plate').value : null, make: $('dl_ti_make').value, model: $('dl_ti_model').value, trim: $('dl_ti_trim').value, year: num('dl_ti_year') || null, hand: $('dl_ti_hand').value, color: $('dl_ti_color') ? $('dl_ti_color').value : null, fuel: $('dl_ti_fuel') ? $('dl_ti_fuel').value : null, vin: $('dl_ti_vin') ? $('dl_ti_vin').value : null, list: num('dl_ti_list') || null, buy: num('dl_ti_buy') || null, lien: num('dl_ti_lien') || null, holder: $('dl_ti_holder').value, delivery: $('dl_ti_delivery').value || null, liened: $('dl_ti_liened').checked }
       };
     }
@@ -2157,6 +2157,7 @@
     { key: 'paid', label: 'שולם', cell: function (d) { return '<td>' + nis(d._paid) + '</td>'; } },
     { key: 'balance', label: 'יתרה', cell: function (d) { return '<td style="color:' + (d._bal > 0 ? 'var(--danger)' : 'var(--ok)') + '">' + nis(d._bal) + '</td>'; } },
     { key: 'salesperson', label: 'סוכן', cell: function (d) { return '<td>' + esc(d.salesperson || '—') + '</td>'; } },
+    { key: 'purchase_price', label: 'מחיר קניית רכב', cell: function (d) { return '<td><input class="inp pp-edit" data-pp="' + d.id + '" type="number" value="' + (d.purchase_price == null ? '' : d.purchase_price) + '" placeholder="₪ עלות" style="width:115px;font-size:12.5px' + (d.purchase_price == null ? ';border-color:var(--warn)' : '') + '"></td>'; } },
     { key: 'commission', label: 'עמלה', cell: function (d) { return '<td style="color:var(--ok);font-weight:700">' + nis(d.commission) + '</td>'; } },
     { key: 'mgr_comm', label: 'עמלת מנהלת תיקים', cell: function (d) { var m1 = mgrModel1(d), m2 = mgrModel2(d), t = m1 + m2; return '<td style="color:var(--brand);font-weight:700" title="חתימה: ' + nis(m1) + (m1 === MGR.sameDay ? ' (אותו יום)' : m1 === MGR.later ? ' (עבר יום)' : '') + ' · 3% מעמלת סוכן: ' + nis(m2) + '">' + (t ? nis(t) : '—') + '</td>'; } },
     { key: 'acct_status', label: 'סטטוס', cell: function (d) { return '<td>' + acctStatusSel(d.id, d.acct_status) + '</td>'; } },
@@ -2195,7 +2196,7 @@
     selectedAcct = {};
     loading();
     Promise.all([
-      db.from('deals').select('id,lead_id,order_no,brand,stage,status,client_name,client_phone,car_make,car_model,total,commission,salesperson,created_at,updated_at,signed_at,checklist,cancel_reason,acct_status,has_contract,has_signature').eq('has_signature', true).is('deleted_at', null).order('created_at', { ascending: false }).limit(2000),   // הנהלת חשבונות רק עסקאות חתומות
+      db.from('deals').select('id,lead_id,order_no,brand,stage,status,client_name,client_phone,car_make,car_model,total,car_price,purchase_price,commission,salesperson,created_at,updated_at,signed_at,checklist,cancel_reason,acct_status,has_contract,has_signature').eq('has_signature', true).is('deleted_at', null).order('created_at', { ascending: false }).limit(2000),   // הנהלת חשבונות רק עסקאות חתומות
       db.from('payments').select('*'),
       db.from('profiles').select('user_id,full_name'),
       db.from('lead_documents').select('*').order('created_at', { ascending: false }).limit(500),
@@ -2245,14 +2246,7 @@
     // TAB 2 — commission per agent (frozen values)
     var byAgent = {}; deals.forEach(function (d) { var a = d.salesperson || 'לא שויך'; byAgent[a] = byAgent[a] || { n: 0, comm: 0, total: 0 }; byAgent[a].n++; byAgent[a].comm += (+d.commission || 0); byAgent[a].total += (+d.total || 0); });
     var agents = Object.keys(byAgent).sort(function (a, b) { return byAgent[b].comm - byAgent[a].comm; });
-    //  סיכום עמלת מנהלת תיקי לקוחות (שני המודלים) על העסקאות בתצוגה
-    var mgrTot1 = 0, mgrTot2 = 0; deals.forEach(function (d) { mgrTot1 += mgrModel1(d); mgrTot2 += mgrModel2(d); });
-    var mgrCard = '<div class="card"><h3>🗂️ עמלת מנהלת תיקי לקוחות</h3><div class="cards">' +
-      C.stat('חתימות (₪' + MGR.sameDay + ' / ₪' + MGR.later + ')', nis(mgrTot1)) +
-      C.stat('3% מעמלת סוכנים (≥' + MGR.minDeals + '/חודש)', nis(mgrTot2)) +
-      C.stat('סה"כ למנהלת', nis(mgrTot1 + mgrTot2), true) + '</div>' +
-      '<p class="muted" style="font-size:12px;margin:8px 0 0">₪' + MGR.sameDay + ' לחתימה באותו יום שהעסקה נפתחה · ₪' + MGR.later + ' אם עבר יום. בנוסף 3% מעמלת כל סוכן שחתם ' + MGR.minDeals + '+ עסקאות באותו חודש.</p></div>';
-    var commPanel = '<div class="cards">' + C.stat('סה"כ עמלות לתשלום', nis(commTotal), true) + C.stat('מספר סוכנים', agents.length) + '</div>' + mgrCard +
+    var commPanel = '<div class="cards">' + C.stat('סה"כ עמלות לתשלום', nis(commTotal), true) + C.stat('מספר סוכנים', agents.length) + '</div>' +
       '<div class="card"><h3>💸 עמלות סוכנים <span class="muted" style="font-size:12px">(לחצו על סוכן לפירוט העסקאות · אפשר לעדכן עמלה חסרה)</span></h3>' +
         (agents.length ? agents.map(function (a) {
           var o = byAgent[a], aDeals = deals.filter(function (d) { return (d.salesperson || 'לא שויך') === a; });
@@ -2272,19 +2266,36 @@
     }).join('');
     var docsPanel = '<div class="card"><h3>📁 כל המסמכים (הסכמים חתומים ומסמכי לקוח)</h3><div class="table-scroll"><table><thead><tr><th>לקוח</th><th>מסמך</th><th>תאריך</th></tr></thead><tbody>' + (docRows || '<tr><td colspan="3" class="empty">אין מסמכים</td></tr>') + '</tbody></table></div></div>';
 
-    var panels = { deals: dealsPanel, commissions: commPanel, documents: docsPanel };
+    // TAB — עמלת מנהלת תיקי לקוחות (שני המודלים)
+    var mgrTot1 = 0, mgrTot2 = 0; deals.forEach(function (d) { mgrTot1 += mgrModel1(d); mgrTot2 += mgrModel2(d); });
+    var m1Deals = deals.filter(function (d) { return mgrModel1(d) > 0; }).sort(function (a, b) { return String(b.signed_at || '').localeCompare(String(a.signed_at || '')); });
+    var m1Rows = m1Deals.map(function (d) {
+      var m1 = mgrModel1(d), same = m1 === MGR.sameDay;
+      return '<tr><td><b>#' + esc(d.order_no || '—') + '</b></td><td>' + esc(d.client_name || '—') + '</td><td class="muted">' + fmt(d.created_at) + '</td><td class="muted">' + fmt(d.signed_at) + '</td><td>' + (same ? '<span style="color:var(--ok);font-weight:700">אותו יום</span>' : '<span style="color:var(--warn)">עבר יום</span>') + '</td><td style="font-weight:700;color:var(--brand)">' + nis(m1) + '</td></tr>';
+    }).join('');
+    var byAM = {}; deals.forEach(function (d) { if (mgrCancelled(d)) return; var k = (d.salesperson || 'לא שויך') + '|' + mgrMonth(d); byAM[k] = byAM[k] || { agent: d.salesperson || 'לא שויך', mon: mgrMonth(d), n: 0, comm: 0 }; byAM[k].n++; byAM[k].comm += (+d.commission || 0); });
+    var m2Rows = Object.keys(byAM).map(function (k) { return byAM[k]; }).filter(function (o) { return o.n >= MGR.minDeals; }).sort(function (a, b) { return b.mon.localeCompare(a.mon) || b.comm - a.comm; }).map(function (o) {
+      return '<tr><td><b>' + esc(o.agent) + '</b></td><td class="muted">' + esc(o.mon) + '</td><td>' + o.n + '</td><td>' + nis(o.comm) + '</td><td style="font-weight:700;color:var(--brand)">' + nis(Math.round(o.comm * MGR.pct)) + '</td></tr>';
+    }).join('');
+    var mgrPanel = '<div class="cards">' + C.stat('בונוס חתימה', nis(mgrTot1)) + C.stat('3% מעמלות סוכנים', nis(mgrTot2)) + C.stat('סה"כ למנהלת', nis(mgrTot1 + mgrTot2), true) + '</div>' +
+      '<div class="card"><h3>🖊️ בונוס חתימה <span class="muted" style="font-size:12px">(₪' + MGR.sameDay + ' חתימה באותו יום · ₪' + MGR.later + ' אם עבר יום)</span></h3><div class="table-scroll"><table><thead><tr><th>#</th><th>לקוח</th><th>נוצר</th><th>נחתם</th><th>עיתוי</th><th>בונוס</th></tr></thead><tbody>' + (m1Rows || '<tr><td colspan="6" class="empty">אין</td></tr>') + '</tbody></table></div></div>' +
+      '<div class="card"><h3>📊 3% מעמלת סוכן <span class="muted" style="font-size:12px">(רק סוכן עם ' + MGR.minDeals + '+ עסקאות באותו חודש)</span></h3><div class="table-scroll"><table><thead><tr><th>סוכן</th><th>חודש</th><th>עסקאות</th><th>עמלת הסוכן</th><th>3% למנהלת</th></tr></thead><tbody>' + (m2Rows || '<tr><td colspan="5" class="empty">אף סוכן לא הגיע ל-' + MGR.minDeals + ' עסקאות בחודש</td></tr>') + '</tbody></table></div></div>';
+
+    var panels = { deals: dealsPanel, commissions: commPanel, mgr: mgrPanel, documents: docsPanel };
     function tab(k, l) { return '<button data-atab="' + k + '"' + (acctTab === k ? ' class="active"' : '') + '>' + l + '</button>'; }
     view('<h2 style="margin:0 0 12px">🧮 מרכז הנהלת חשבונות</h2>' +
       '<div class="cards">' + C.stat('שווי עסקאות', nis(revenue), true) + C.stat('נגבה בפועל', nis(collected)) + C.stat('יתרה פתוחה', nis(open)) + C.stat('סה"כ עמלות סוכנים', nis(commTotal)) +
         //  המבוטלות לא נעלמות מהעין — הן פשוט לא נספרות כהכנסה
         (cancelN ? C.stat('בוטלו · לא נספרות', cancelN + ' · ' + nis(cancelSum)) : '') + '</div>' +
-      '<nav class="tabs" id="acctTabs" style="margin-bottom:14px;flex-wrap:wrap">' + tab('deals', '🧾 עסקאות וקבלות') + tab('commissions', '💸 עמלות סוכנים') + tab('documents', '📁 מסמכים') + '</nav><div id="acctPanel">' + panels[acctTab] + '</div>');
+      '<nav class="tabs" id="acctTabs" style="margin-bottom:14px;flex-wrap:wrap">' + tab('deals', '🧾 עסקאות וקבלות') + tab('commissions', '💸 עמלות סוכנים') + tab('mgr', '🗂️ עמלות מנהלת תיקים') + tab('documents', '📁 מסמכים') + '</nav><div id="acctPanel">' + panels[acctTab] + '</div>');
 
     function bindPanel() {
       var P = C.$('acctPanel');
       if (acctCols) acctCols.bind();   // column chooser (present only on the deals panel)
       P.querySelectorAll('tr[data-lead]').forEach(function (tr) { tr.addEventListener('click', function (e) { if (e.target.closest('select,button,a,input')) return; if (tr.dataset.lead) openAcctLeadView(tr.dataset.lead); }); });
       P.querySelectorAll('.acct-st').forEach(function (s) { s.addEventListener('change', function () { db.from('deals').update({ acct_status: s.value }).eq('id', s.dataset.acct).then(function () {}); }); });
+      //  עריכת מחיר קניית רכב ישירות מהרשימה (מחוץ לעסקה)
+      P.querySelectorAll('.pp-edit').forEach(function (inp) { inp.addEventListener('change', function () { var v = inp.value === '' ? null : (parseFloat(inp.value) || 0); inp.disabled = true; db.from('deals').update({ purchase_price: v }).eq('id', inp.dataset.pp).then(function (r) { inp.disabled = false; if (r.error) { alert('שגיאה: ' + r.error.message); return; } inp.style.borderColor = v == null ? 'var(--warn)' : 'var(--ok)'; setTimeout(function () { inp.style.borderColor = v == null ? 'var(--warn)' : ''; }, 900); }); }); });
       P.querySelectorAll('a[data-doc]').forEach(function (a) { a.addEventListener('click', function (e) { e.preventDefault(); C.viewDoc(a.dataset.doc, a.dataset.docname); }); });
       P.querySelectorAll('.comm-edit').forEach(function (inp) { inp.addEventListener('change', function () { var v = inp.value.trim() === '' ? null : (parseFloat(inp.value) || 0); db.from('deals').update({ commission: v }).eq('id', inp.dataset.comm).then(function (r) { if (r.error) alert('שמירת עמלה נכשלה: ' + r.error.message); else inp.style.borderColor = v ? '' : 'var(--warn)'; }); }); });
       // bulk selection + status change
@@ -2301,13 +2312,11 @@
   }
 
   // accounting manager's dedicated per-lead view (only what's critical for her)
-  var PAY_PURPOSES = [
-    { k: 'deposit1', label: 'מקדמה ראשונית' },
-    { k: 'deposit2', label: 'השלמת מקדמה' },
-    { k: 'purchase', label: 'תשלום רכישת הרכב' },
-    { k: 'other', label: 'אחר / התאמה' }
-  ];
-  function purposeLabel(k) { for (var i = 0; i < PAY_PURPOSES.length; i++) if (PAY_PURPOSES[i].k === k) return PAY_PURPOSES[i].label; return 'תשלום'; }
+  //  מקור אמת אחד: שלבי המסמכים (ACCT_DOC_STAGES) + "אחר". כך הצ'קליסט
+  //  בכרטיס העסקה ותצוגת הנהלת החשבונות מסונכרנים לאותם purpose.
+  var PAY_PURPOSES = ACCT_DOC_STAGES.map(function (s) { return { k: s.k, label: s.label }; }).concat([{ k: 'other', label: 'אחר / התאמה' }]);
+  var PURPOSE_LEGACY = { purchase: 'תשלום רכישת הרכב' };   // תוויות ישנות לרשומות קיימות
+  function purposeLabel(k) { for (var i = 0; i < PAY_PURPOSES.length; i++) if (PAY_PURPOSES[i].k === k) return PAY_PURPOSES[i].label; return PURPOSE_LEGACY[k] || 'תשלום'; }
   var PKIND = { payment: 'תשלום', receipt: 'קבלה', invoice: 'חשבונית' };
   function acctPayList(ps) {
     return ps.length ? ps.map(function (p) {
@@ -2351,11 +2360,14 @@
                 fld('דוא"ל', 'client_email', d.client_email || lead.email) +
                 fld('כתובת לחיוב', 'client_address', d.client_address, 'רחוב, עיר') +
                 fld('סכום לחיוב ₪', 'charge_amount', (d.charge_amount != null ? d.charge_amount : ''), 'ברירת מחדל: היתרה') +
+                fld('מחיר קניית רכב ₪ (עלות)', 'purchase_price', (d.purchase_price != null ? d.purchase_price : ''), 'עלות הרכב לחישוב רווח') +
                 '<button class="btn btn-sm" style="margin-top:6px">💾 שמור פרטי חשבונית</button></form>' +
               // סיכום כספי
               '<div class="lead-fields"><div class="muted" style="font-size:12px;font-weight:700;margin-bottom:4px">💰 סיכום כספי</div>' +
                 lf2('מה נקנה', esc(((d.car_make || '') + ' ' + (d.car_model || '')).trim())) +
                 lf2('מחיר הרכב', nis(d.car_price)) +
+                lf2('מחיר קניית רכב (עלות)', d.purchase_price != null ? nis(d.purchase_price) : '<span class="muted">— למילוי</span>') +
+                (d.purchase_price != null ? lf2('רווח גולמי (סכום − עלות)', '<b style="color:var(--brand)">' + nis((+tot || 0) - (+d.purchase_price || 0)) + '</b>') : '') +
                 lf2('מקדמה נדרשת', nis(d.down_total)) +
                 lf2('סכום העסקה', '<b>' + nis(tot) + '</b>') +
                 lf2('סכום לחיוב', '<b style="color:var(--brand)">' + nis(charge) + '</b>') +
@@ -2378,7 +2390,7 @@
         var $ = C.$;
         $('alBack').addEventListener('click', function () { window.C2B_renderAccounting(); });
         $('view').querySelectorAll('.acct-st').forEach(function (s) { s.addEventListener('change', function () { db.from('deals').update({ acct_status: s.value }).eq('id', s.dataset.acct).then(function () {}); }); });
-        $('view').querySelectorAll('.aef').forEach(function (f) { f.addEventListener('submit', function (e) { e.preventDefault(); var upd = { invoice_name: this.invoice_name.value.trim() || null, client_id: this.client_id.value.trim() || null, client_phone: this.client_phone.value.trim() || null, client_email: this.client_email.value.trim() || null, client_address: this.client_address.value.trim() || null, charge_amount: this.charge_amount.value === '' ? null : (parseFloat(this.charge_amount.value) || 0) }; var btn = this.querySelector('button'); btn.textContent = 'שומר…'; db.from('deals').update(upd).eq('id', this.dataset.deal).then(function (r) { if (r.error) { alert('שגיאה: ' + r.error.message); btn.textContent = '💾 שמור פרטי חשבונית'; return; } btn.textContent = '✅ נשמר'; setTimeout(function () { btn.textContent = '💾 שמור פרטי חשבונית'; }, 1500); }); }); });
+        $('view').querySelectorAll('.aef').forEach(function (f) { f.addEventListener('submit', function (e) { e.preventDefault(); var upd = { invoice_name: this.invoice_name.value.trim() || null, client_id: this.client_id.value.trim() || null, client_phone: this.client_phone.value.trim() || null, client_email: this.client_email.value.trim() || null, client_address: this.client_address.value.trim() || null, charge_amount: this.charge_amount.value === '' ? null : (parseFloat(this.charge_amount.value) || 0), purchase_price: this.purchase_price.value === '' ? null : (parseFloat(this.purchase_price.value) || 0) }; var btn = this.querySelector('button'); btn.textContent = 'שומר…'; db.from('deals').update(upd).eq('id', this.dataset.deal).then(function (r) { if (r.error) { alert('שגיאה: ' + r.error.message); btn.textContent = '💾 שמור פרטי חשבונית'; return; } btn.textContent = '✅ נשמר'; setTimeout(function () { btn.textContent = '💾 שמור פרטי חשבונית'; }, 1500); }); }); });
         $('view').querySelectorAll('[data-receipt]').forEach(function (b) { b.addEventListener('click', function () { db.from('deals').update({ acct_status: 'receipt' }).eq('id', b.dataset.receipt).then(function () { alert('סומן "הופקה קבלה". חיבור לחשבונית ירוקה יאפשר הפקה אוטומטית. 🧾'); openAcctLeadView(lead.id); }); }); });
         $('view').querySelectorAll('[data-invoice]').forEach(function (b) { b.addEventListener('click', function () { db.from('deals').update({ acct_status: 'invoice' }).eq('id', b.dataset.invoice).then(function () { alert('סומן "הופקה חשבונית". חיבור לחשבונית ירוקה יאפשר הפקה אוטומטית. 🧾'); openAcctLeadView(lead.id); }); }); });
         $('view').querySelectorAll('.apf').forEach(function (f) { f.addEventListener('submit', function (e) { e.preventDefault(); var amt = parseFloat(this.amount.value) || 0; if (!amt) return; db.from('payments').insert({ deal_id: this.dataset.deal, lead_id: lead.id, kind: this.kind.value, purpose: this.purpose.value, amount: amt, method: this.method.value, ref_no: this.ref.value, paid_at: new Date().toISOString().slice(0, 10) }).then(function (r) { if (r.error) { alert('שגיאה: ' + r.error.message); return; } logActivity(lead.id, 'system', 'נרשם ' + purposeLabel(f.purpose.value) + ': ' + nis(amt)); openAcctLeadView(lead.id); }); }); });
@@ -3099,6 +3111,12 @@
     { key: 'commission', label: 'עמלת סוכן', cell: function (d) { return '<td style="color:var(--ok);font-weight:700">' + nis(d.commission) + '</td>'; } },
     { key: 'stage', label: 'שלב', cell: function (d) { return '<td><span class="stage-click" data-stagesel="' + d.id + '" title="לחצו לשינוי שלב" style="cursor:pointer;display:inline-flex;align-items:center;gap:3px">' + stageBadge(d.stage || 'initial') + '<span class="muted" style="font-size:10px">▾</span></span></td>'; } },
     { key: 'checklist', label: 'צ\'קליסט', cell: function (d) { var chk = d.checklist || {}, done = FILE_CHECKLIST_ITEMS.filter(function (k) { return chk[k]; }).length, tot = FILE_CHECKLIST_ITEMS.length; return '<td><div class="bar" style="width:80px;display:inline-block;vertical-align:middle"><span style="width:' + Math.round(done / tot * 100) + '%"></span></div> ' + done + '/' + tot + '</td>'; } },
+    //  תאריך חתימה + חיווי אם נחתם תוך 24 שעות מפתיחת העסקה
+    { key: 'signed_at', label: 'תאריך חתימה', descFirst: true, sort: function (d) { return d.signed_at || ''; }, cell: function (d) {
+        if (!d.signed_at) return '<td class="muted">—</td>';
+        var within = d.created_at && (new Date(d.signed_at) - new Date(d.created_at)) <= 24 * 3600 * 1000;
+        return '<td style="white-space:nowrap"><span class="muted">' + fmt(d.signed_at) + '</span> ' + (within ? '<span style="color:var(--ok);font-weight:700" title="נחתם תוך 24 שעות">✓ 24ש׳</span>' : '<span style="color:var(--warn)" title="מעל 24 שעות מפתיחת העסקה">מעל 24ש׳</span>') + '</td>';
+      } },
     { key: 'salesperson', label: 'איש מכירות', def: false, cell: function (d) { return '<td>' + esc(d.salesperson || '—') + '</td>'; } },
     { key: 'brand', label: 'מותג', def: false, cell: function (d) { return '<td>' + esc(d.brand || '—') + '</td>'; } },
     { key: 'phone', label: 'טלפון', def: false, cell: function (d) { return '<td>' + esc(d.client_phone || '—') + '</td>'; } },
@@ -3133,7 +3151,7 @@
 
   window.C2B_renderFiles = function (stageFilter) {
     loading(); selectedDeals = {};
-    db.from('deals').select('id,lead_id,order_no,brand,stage,status,client_name,client_phone,car_make,car_model,total,commission,salesperson,created_at,updated_at,checklist,cancel_reason,acct_status,has_contract,has_signature').is('deleted_at', null).order('created_at', { ascending: false }).limit(2000).then(function (r) {
+    db.from('deals').select('id,lead_id,order_no,brand,stage,status,client_name,client_phone,car_make,car_model,total,commission,salesperson,created_at,updated_at,signed_at,checklist,cancel_reason,acct_status,has_contract,has_signature').is('deleted_at', null).order('created_at', { ascending: false }).limit(2000).then(function (r) {
       if (r.error) return errBox(r.error.message);
       //  עסקה מבוטלת שייכת לשלב "בוטל" גם אם השלב עצמו לא עודכן — כך
       //  עסקאות שבוטלו לפני התיקון לא נשארות תקועות בטאב הלא נכון.
