@@ -469,7 +469,19 @@
     var b = window.C2B.brand || {};
     if (b.name) { try { document.title = b.name + ' · CRM'; } catch (e) { } }
     var root = document.documentElement;
-    if (b.color) root.style.setProperty('--brand', b.color);
+    //  גוזרים את *כל* משתני המותג מצבע הארגון כדי שכל התצוגות ייצבעו לפיו
+    //  (לא רק כפתורים): --brand-hi (היילייט/אקטיב-נאב), --brand-soft (רקעים
+    //  רכים), --brand-ink (טקסט על רקע המותג, בניגודיות אוטומטית).
+    if (b.color) {
+      var hx = String(b.color).replace('#', '');
+      var rgb = hx.length >= 6 ? { r: parseInt(hx.slice(0, 2), 16), g: parseInt(hx.slice(2, 4), 16), b: parseInt(hx.slice(4, 6), 16) } : null;
+      var lum = rgb ? (0.299 * rgb.r + 0.587 * rgb.g + 0.114 * rgb.b) / 255 : 0.4;
+      root.style.setProperty('--brand-hi', b.color);
+      //  לכפתורים (טקסט לבן) — אם המותג בהיר מדי, משתמשים בגוון הכהה שלו
+      root.style.setProperty('--brand', (lum > 0.62 && b.colorDeep) ? b.colorDeep : b.color);
+      if (rgb) root.style.setProperty('--brand-soft', 'rgba(' + rgb.r + ',' + rgb.g + ',' + rgb.b + ',.12)');
+      root.style.setProperty('--brand-ink', lum > 0.55 ? '#14180A' : '#ffffff');
+    }
     if (b.colorDeep) root.style.setProperty('--brand-deep', b.colorDeep);
     var sb = document.querySelector('.side-brand'); if (!sb) return;
     var img = sb.querySelector('img'), isDefault = !window.C2B.orgId || window.C2B.orgId === 1;
