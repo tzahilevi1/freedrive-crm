@@ -484,20 +484,26 @@
     }
     if (b.colorDeep) root.style.setProperty('--brand-deep', b.colorDeep);
     var sb = document.querySelector('.side-brand'); if (!sb) return;
-    var img = sb.querySelector('img'), isDefault = !window.C2B.orgId || window.C2B.orgId === 1;
-    function showName() {
-      if (img) img.style.display = 'none';
+    var isDefault = !window.C2B.orgId || window.C2B.orgId === 1;
+    if (isDefault) return;   // פרי דרייב — נשאר כפי שהוטמע (logo.png + CRM)
+    var img = sb.querySelector('img'), crm = sb.querySelector('span:not(.brand-nm)');
+    //  שם הארגון ליד ה-CRM (לפניו), מוצג גם כשיש לוגו.
+    function ensureName() {
       var nm = sb.querySelector('.brand-nm');
-      if (!nm) { nm = document.createElement('span'); nm.className = 'brand-nm'; nm.style.cssText = 'font-weight:900;font-size:18px;color:var(--brand)'; sb.insertBefore(nm, sb.firstChild); }
-      nm.textContent = b.name || 'CRM';
+      if (!nm) { nm = document.createElement('span'); nm.className = 'brand-nm'; nm.style.cssText = 'font-weight:800;font-size:16px;color:var(--side-txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:150px'; if (crm) sb.insertBefore(nm, crm); else sb.appendChild(nm); }
+      nm.textContent = b.name || '';
     }
+    //  לוגו על צ'יפ לבן מעוגל — נראה נקי על הסיידבר הכהה, בגודל אחיד.
+    function niceLogo() { if (img) img.style.cssText = 'height:34px;width:auto;max-width:118px;object-fit:contain;background:#fff;border-radius:8px;padding:4px 6px;display:block'; }
     var url = logoUrl(b.logo);
     if (url && img) {
-      var nm0 = sb.querySelector('.brand-nm'); if (nm0) nm0.remove();
-      img.onerror = function () { showName(); };   // לוגו שלא נטען → נופלים לשם הארגון
-      img.src = url; img.style.display = '';
-    } else if (!isDefault) {
-      showName();   // ארגון שאינו פרי דרייב ובלי לוגו — מציגים את שמו
+      img.onerror = function () { img.style.display = 'none'; ensureName(); };  // לוגו שנכשל → שם בלבד
+      img.onload = niceLogo;
+      niceLogo(); img.src = url;
+      ensureName();
+    } else {
+      if (img) img.style.display = 'none';
+      ensureName();
     }
   }
   //  מחליף ארגונים בהדר — לסופר-אדמין בלבד. מציג את שם הארגון הנוכחי;
