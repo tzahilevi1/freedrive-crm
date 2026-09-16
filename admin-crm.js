@@ -1735,7 +1735,14 @@
       '<hr style="border:none;border-top:1px solid var(--line);margin:16px 0">' +
       '<div class="row-between"><h3 style="margin:0">📁 מסמכי הלקוח</h3>' + (lead.id ? '<label class="btn btn-sm" style="cursor:pointer">⬆ העלה מסמכים<input type="file" id="dlDocUp" multiple style="display:none"></label>' : '') + '</div><p class="muted" style="font-size:12px;margin:4px 0 10px">ת"ז (שני צדדים + ספח) · רישיון נהיגה · אישור ניהול חשבון בנק · כרטיס אשראי (שני צדדים) · כל פורמט · אפשר לגרור קבצים לכאן</p><div id="dlDocs">' + (lead.id ? 'טוען…' : 'שמרו את התיק תחילה כדי לצרף מסמכים') + '</div></div>';
     var paymentsCard = '<div class="card"><h3>תשלומים / קבלות / חשבוניות</h3><div id="dlPayList">' + (deal.id ? 'טוען…' : '<p class="muted">שמרו את העסקה כדי לנהל תשלומים</p>') + '</div>' +
-      (deal.id ? '<form id="dlPayForm" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px"><select class="inp" name="kind"><option value="payment">תשלום</option><option value="receipt">קבלה</option><option value="invoice">חשבונית</option></select><input class="inp" name="amount" type="number" placeholder="סכום ₪" style="width:120px"><select class="inp" name="method" style="width:160px"><option value="">אמצעי תשלום…</option><option>אשראי</option><option>העברה בנקאית</option><option>מזומן</option><option>צ׳ק</option><option>הוראת קבע</option><option>ביט</option><option>אחר</option></select><input class="inp" name="ref" placeholder="אסמכתא" style="width:130px"><button class="btn btn-sm">+ הוסף</button></form>' : '') + '</div>';
+      (deal.id ? '<form id="dlPayForm" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px"><select class="inp" name="kind"><option value="payment">תשלום</option><option value="receipt">קבלה</option><option value="invoice">חשבונית</option></select><input class="inp" name="amount" type="number" placeholder="סכום ₪" style="width:120px"><select class="inp" name="method" style="width:160px"><option value="">אמצעי תשלום…</option><option>אשראי</option><option>העברה בנקאית</option><option>מזומן</option><option>צ׳ק</option><option>הוראת קבע</option><option>ביט</option><option>אחר</option></select><input class="inp" name="ref" placeholder="אסמכתא" style="width:130px"><button class="btn btn-sm">+ הוסף</button></form>' : '') +
+      //  סליקת אשראי דרך iCredit — יצירת לינק תשלום + חשבונית אוטומטית
+      (deal.id ? '<div style="margin-top:12px;border-top:1px dashed var(--line);padding-top:10px">' +
+        '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><b style="font-size:13px">💳 סליקת אשראי (iCredit)</b>' +
+        '<input class="inp" id="icAmount" type="number" placeholder="סכום לחיוב ₪" style="width:150px" value="' + esc(String(deal.balance_to_pay || deal.charge_amount || '')) + '">' +
+        '<input class="inp" id="icPays" type="number" min="1" max="36" value="1" title="מספר תשלומים" style="width:90px">' +
+        '<button class="btn btn-sm" id="icCreate" type="button">צור לינק תשלום</button></div>' +
+        '<div id="icList" style="margin-top:8px"></div><div id="icResult" style="margin-top:8px"></div></div>' : '') + '</div>';
     // notes area for the file manager — write client notes to help manage leads from here
     var fileNotesCard = fileMode ? '<div class="card"><h3>📝 הערות על הלקוח</h3><textarea class="inp" id="dlClientNote" rows="3" placeholder="כתבי הערה על הלקוח / התיק (מתועדת עם תאריך)…" style="width:100%"></textarea><div style="display:flex;justify-content:flex-end;margin-top:8px"><button class="btn btn-sm" id="dlAddNote">➕ הוסף הערה</button></div><div id="dlNotesList" style="margin-top:12px">טוען הערות…</div></div>' : '';
     function dTab(k, label, active) { return '<button data-dtab="' + k + '"' + (active ? ' class="active"' : '') + '>' + label + '</button>'; }
@@ -2022,6 +2029,43 @@
         });
       };
       loadPayments();
+
+      // ---- סליקת אשראי iCredit ----
+      var IC_ST = { pending: { t: 'ממתין לתשלום', c: 'var(--muted)' }, paid: { t: 'שולם ✓', c: 'var(--ok)' }, failed: { t: 'נכשל', c: 'var(--danger)' }, canceled: { t: 'בוטל', c: 'var(--muted)' } };
+      var loadIcredit = function () {
+        if (!$('icList')) return;
+        db.from('icredit_sales').select('id,amount,status,pay_url,document_url,created_at').eq('deal_id', deal.id).order('created_at', { ascending: false }).limit(10).then(function (r) {
+          if (!$('icList')) return;
+          var rows = (r.data) || [];
+          $('icList').innerHTML = rows.length ? rows.map(function (s) {
+            var st = IC_ST[s.status] || { t: s.status, c: 'var(--muted)' };
+            return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid var(--line);font-size:12.5px">' +
+              '<span>' + nis(s.amount) + ' · <span style="color:' + st.c + ';font-weight:700">' + st.t + '</span></span>' +
+              '<span style="display:flex;gap:8px">' +
+              (s.status !== 'paid' && s.pay_url ? '<a href="' + esc(s.pay_url) + '" target="_blank" rel="noopener">🔗 לינק</a>' : '') +
+              (s.document_url ? '<a href="' + esc(s.document_url) + '" target="_blank" rel="noopener">🧾 חשבונית</a>' : '') +
+              '</span></div>';
+          }).join('') : '';
+        });
+      };
+      loadIcredit();
+      if ($('icCreate')) $('icCreate').addEventListener('click', function () {
+        var btn = this, amt = parseFloat($('icAmount').value) || 0, pays = parseInt($('icPays').value, 10) || 1;
+        if (!amt) { $('icResult').innerHTML = '<span style="color:var(--danger)">הזן סכום</span>'; return; }
+        btn.disabled = true; btn.textContent = 'יוצר…'; $('icResult').innerHTML = '<span class="muted">יוצר לינק תשלום…</span>';
+        db.functions.invoke('icredit-pay', { body: { deal_id: deal.id, lead_id: lead.id, amount: amt, payments: pays } }).then(function (r) {
+          btn.disabled = false; btn.textContent = 'צור לינק תשלום';
+          var d = r && r.data;
+          if (!d || d.error || !d.url) { $('icResult').innerHTML = '<span style="color:var(--danger)">שגיאה: ' + esc((d && d.error) || 'לא ידועה') + '</span>'; return; }
+          $('icResult').innerHTML = '<div style="background:var(--surface-2);border-radius:8px;padding:8px 10px">' +
+            '<div style="font-size:12px;color:var(--muted);margin-bottom:4px">לינק לתשלום (' + esc(d.mode === 'prod' ? 'חי' : 'בדיקה') + ') — שלחו ללקוח:</div>' +
+            '<input class="inp ltr" readonly value="' + esc(d.url) + '" onclick="this.select()" style="font-size:12px">' +
+            '<div style="margin-top:6px;display:flex;gap:8px"><a class="btn btn-sm btn-ghost" href="' + esc(d.url) + '" target="_blank" rel="noopener">↗ פתח</a>' +
+            '<a class="btn btn-sm btn-ghost" href="https://wa.me/?text=' + encodeURIComponent('לתשלום מאובטח: ' + d.url) + '" target="_blank" rel="noopener">💬 שלח בוואטסאפ</a></div></div>';
+          loadIcredit();
+        }, function () { btn.disabled = false; btn.textContent = 'צור לינק תשלום'; $('icResult').innerHTML = '<span style="color:var(--danger)">שגיאה בקריאה</span>'; });
+      });
+
       $('dlPayForm').addEventListener('submit', function (e) {
         e.preventDefault(); var amt = parseFloat(this.amount.value) || 0; if (!amt) return; var kind = this.kind.value;
         db.from('payments').insert({ deal_id: deal.id, lead_id: lead.id, kind: kind, amount: amt, method: this.method.value, ref_no: this.ref.value, paid_at: new Date().toISOString().slice(0, 10) }).then(function (r) {

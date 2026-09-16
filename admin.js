@@ -6702,7 +6702,9 @@
     { key: 'facebook', icon: '📘', title: 'פייסבוק — לידים ממודעות', desc: 'קליטת לידים אוטומטית מטפסי מודעות של דף הפייסבוק.',
       fields: [{ k: 'page_token', l: 'Page Access Token', s: true }, { k: 'page_ids', l: 'מזהי דפים/טפסים (מופרדים בפסיק)' }], hook: '/fb-forms' },
     { key: 'whatsapp', icon: '💬', title: 'WhatsApp (Heyy)', desc: 'שליחה וקבלה של הודעות WhatsApp דרך Heyy.',
-      fields: [{ k: 'api_key', l: 'Heyy API Key', s: true }, { k: 'number', l: 'מספר WhatsApp / מזהה' }], hook: '/wa-webhook' }
+      fields: [{ k: 'api_key', l: 'Heyy API Key', s: true }, { k: 'number', l: 'מספר WhatsApp / מזהה' }], hook: '/wa-webhook' },
+    { key: 'icredit', icon: '💳', title: 'iCredit (ריווחית) — סליקת אשראי', desc: 'יצירת לינקי תשלום לחיוב כרטיס אשראי והפקת חשבונית מס-קבלה אוטומטית בריווחית. הטוקן הפרטי (GroupPrivateToken) נשלח אליך במייל מ-iCredit. התחל ב-Test — עבור ל-prod רק אחרי בדיקה.',
+      fields: [{ k: 'group_token', l: 'GroupPrivateToken (מזהה קבוצה פרטי)', s: true }, { k: 'mode', l: 'סביבה — test או prod (ברירת מחדל: test)' }] }
   ];
   function renderConnections() {
     var host = $('connBox'); if (!host) return;
@@ -6728,7 +6730,8 @@
         openai: !!(by.openai && by.openai.config && by.openai.config.api_key) || cnt(1) > 0,
         voicenter: !!(by.voicenter && by.voicenter.connected) || cnt(2) > 0,
         facebook: !!(by.facebook && by.facebook.connected) || cnt(4) > 0,
-        whatsapp: !!(by.whatsapp && by.whatsapp.connected) || cnt(3) > 0
+        whatsapp: !!(by.whatsapp && by.whatsapp.connected) || cnt(3) > 0,
+        icredit: !!(by.icredit && by.icredit.config && by.icredit.config.group_token)
       };
       host.innerHTML = '<p class="muted" style="font-size:12.5px;margin:0 0 14px;line-height:1.7">כל עסק מחבר את החשבונות שלו בנפרד. הסטטוס מתעדכן אוטומטית — "מחובר" מופיע ברגע שיש פעילות אמיתית (שיחות, הודעות, מיילים) או הגדרה שמורה.</p>' +
         CONN_PLATFORMS.map(function (p) {
