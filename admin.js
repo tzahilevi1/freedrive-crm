@@ -6595,6 +6595,8 @@
   var CONN_PLATFORMS = [
     { key: 'resend', icon: '📧', title: 'מיילים (Resend)', desc: 'כתובת השולח של הארגון. מרגע שמוגדרת — כל המיילים היוצאים (הזמנות, אוטומציות, התראות) נשלחים ממנה. הדומיין חייב להיות מאומת בחשבון ה-Resend.',
       fields: [{ k: 'from_name', l: 'שם השולח (למשל: סנטר ליס)' }, { k: 'from_email', l: 'כתובת שולח (דומיין מאומת)' }, { k: 'api_key', l: 'Resend API Key (של חשבון הארגון)', s: true }] },
+    { key: 'openai', icon: '🧠', title: 'OpenAI — תמלול וניתוח AI', desc: 'מפתח ה-OpenAI של הארגון לתמלול השיחות, ניתוח AI וסוכן ה-AI. אם נשאר ריק — נעשה שימוש במפתח המשותף של המערכת.',
+      fields: [{ k: 'api_key', l: 'OpenAI API Key (sk-...)', s: true }] },
     { key: 'voicenter', icon: '📞', title: 'Voicenter — שיחות והקלטות', desc: 'קליטת שיחות והקלטות אוטומטית מחשבון ה-Voicenter של העסק.',
       fields: [{ k: 'user', l: 'שם משתמש Voicenter' }, { k: 'password', l: 'סיסמה / טוקן', s: true }, { k: 'dids', l: 'מספרי DID (מופרדים בפסיק)' }], hook: '/voicenter-cdr' },
     { key: 'facebook', icon: '📘', title: 'פייסבוק — לידים ממודעות', desc: 'קליטת לידים אוטומטית מטפסי מודעות של דף הפייסבוק.',
