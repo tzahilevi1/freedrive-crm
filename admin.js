@@ -384,12 +384,18 @@
 
   // ---------- Telephony (SIP / Click-to-Call) ----------
   window.C2B.tel = { mode: 'tel', sip_domain: '', webhook_url: '', country: '972' };
+  //  הגדרות ההתראות (אילו סוגים פעילים) נשמרות בצד-שרת כדי שיחולו על כל
+  //  הפרויקט — כל משתמש, המונה, ה-KPI והדוח — ולא רק על הדפדפן שבו הוגדרו.
+  window.C2B.alertSettings = {};
   function loadConfig() {
     db.from('app_config').select('value').eq('key', 'telephony').maybeSingle().then(function (r) {
       if (r && r.data && r.data.value) window.C2B.tel = Object.assign({ mode: 'tel', sip_domain: '', webhook_url: '', country: '972' }, r.data.value);
     }, function () {});
     db.from('app_config').select('value').eq('key', 'office_hours').maybeSingle().then(function (r) {
       if (r && r.data && r.data.value) window.C2B.office = Object.assign({}, window.C2B.office, r.data.value);
+    }, function () {});
+    db.from('app_config').select('value').eq('key', 'alert_settings').maybeSingle().then(function (r) {
+      if (r && r.data && r.data.value) { window.C2B.alertSettings = r.data.value; if (window.C2B.refreshBadges) refreshAlertBadge(); }
     }, function () {});
   }
   window.C2B.toast = function (msg, bad) {
@@ -627,12 +633,18 @@
     var seen = '2000-01-01T00:00:00Z'; try { seen = localStorage.getItem('fdAlertsSeen') || seen; } catch (e) { }
     //  שולפים רק את תתי-השדות הדרושים מתוך crm_analysis (jsonb כבד) ולא את
     //  כל האובייקט — מוריד את המטען מ-~1.15MB ל-~73KB ומאיץ את טעינת הדף.
-    db.from('calls').select('sc:crm_analysis->>score,se:crm_analysis->>sentiment,st:crm_analysis->>status_suggestion,rf:crm_analysis->red_flags').or(CALL_AGENT_OR).gt('crm_at', seen).not('crm_analysis', 'is', null).limit(500).then(function (r) {
+    db.from('calls').select('sc:crm_analysis->>score,se:crm_analysis->>sentiment,st:crm_analysis->>status_suggestion,rf:crm_analysis->red_flags,al:alert_sent_at').or(CALL_AGENT_OR).gt('crm_at', seen).not('crm_analysis', 'is', null).limit(500).then(function (r) {
       var n = 0;
       (r.data || []).forEach(function (c) {
         if (!c) return;
         var score = c.sc == null ? null : parseFloat(c.sc);
-        if ((Array.isArray(c.rf) && c.rf.length) || (score != null && !isNaN(score) && score < 40) || c.se === 'שלילי' || c.st === 'lost') n++;
+        //  סופרים רק סוגי התראה שפעילים בהגדרות (חל על כל הפרויקט).
+        var hit = (alertOn('redflag') && Array.isArray(c.rf) && c.rf.length) ||
+                  (alertOn('lowscore') && score != null && !isNaN(score) && score < 40) ||
+                  (alertOn('negsent') && c.se === 'שלילי') ||
+                  (alertOn('cancel') && c.st === 'lost') ||
+                  (alertOn('legal') && !!c.al);
+        if (hit) n++;
       });
       var el = $('bAlerts'); if (el) { el.textContent = n; el.classList.toggle('hidden', n === 0); }
     }, function () { });
@@ -1422,6 +1434,9 @@
     var az = all.filter(function (c) { return c.crm_analysis && typeof c.crm_analysis.score === 'number'; });
     var avgScore = az.length ? Math.round(az.reduce(function (a, c) { return a + c.crm_analysis.score; }, 0) / az.length) : null;
     var alerts = az.filter(function (c) { return c.crm_analysis.score < 40; }).sort(function (a, b) { return a.crm_analysis.score - b.crm_analysis.score; });
+    //  התראות פעילות לפי ההגדרות (אותו חישוב כמו עמוד ההתראות) — כדי שה-KPI
+    //  לא יסתור את העמוד כשמגבילים סוגי התראה.
+    var activeAlerts = callAlerts(all);
 
     var sent = { 'חיובי': 0, 'ניטרלי': 0, 'שלילי': 0 };
     az.forEach(function (c) { var s = c.crm_analysis.sentiment; if (sent[s] !== undefined) sent[s]++; });
@@ -1489,7 +1504,7 @@
         stat('שיעור מענה', pct(ans.length, all.length) + '%', null, 'ansOnly') +
         stat('משך שיחה ממוצע', ans.length ? mmss(talk / ans.length) : '—', null, 'ansOnly') +
         stat('ציון שיחה ממוצע', avgScore != null ? avgScore : '—', null, 'analyzed', az.length + ' נותחו') +
-        stat('התראות (ציון<40)', alerts.length, null, 'alerts', 'דורש תשומת לב') +
+        stat('התראות פעילות', activeAlerts.length, null, 'alerts', 'לפי סוגי ההתראות הפעילים') +
       '</div>' +
       '<div class="grid2" style="gap:14px">' +
         '<div class="card cl-sub"><h3 class="cl-h">😊 סנטימנט שיחות</h3>' + sentDonut(sent['חיובי'], sent['ניטרלי'], sent['שלילי']) + '</div>' +
@@ -1501,7 +1516,7 @@
           '<div class="table-scroll"><table><thead><tr><th>נציג</th><th>שיחות</th><th>ציון</th><th>סנטימנט</th><th>משך ממוצע</th><th>זמן שיחה בפועל</th><th>תוצאה נפוצה</th></tr></thead>' +
           '<tbody>' + (agRows || '<tr><td colspan="7" class="empty">אין נתונים</td></tr>') + '</tbody></table></div></div>' +
       '</div>' +
-      (alerts.length ? '<div class="card cl-sub" style="margin-top:14px"><h3 class="cl-h">⚠️ התראות — שיחות בציון נמוך</h3>' +
+      (alerts.length && alertOn('lowscore') ? '<div class="card cl-sub" style="margin-top:14px"><h3 class="cl-h">⚠️ התראות — שיחות בציון נמוך</h3>' +
         '<div class="table-scroll"><table><thead><tr><th>ציון</th><th>נציג</th><th>מספר</th><th>סיכום</th><th>מועד</th></tr></thead>' +
         '<tbody>' + alertRows + '</tbody></table></div></div>' : '') +
       '<div class="card cl-sub" style="margin-top:14px"><h3 class="cl-h">⏱️ שיחות אחרונות</h3>' +
@@ -1760,8 +1775,13 @@
     { key: 'redflag', type: 'דגל אדום', sev: 'גבוה', title: '🚩 דגל אדום מהניתוח',
       desc: 'דגלים אדומים שה-AI סימן בשיחה עצמה', redflag: true, action: '' }
   ];
-  function alertOn(key) { try { return JSON.parse(localStorage.getItem('fdAlert:' + key) || 'true'); } catch (e) { return true; } }
-  function alertSet(key, v) { try { localStorage.setItem('fdAlert:' + key, JSON.stringify(!!v)); } catch (e) { } }
+  //  קריאה/כתיבה מול ההגדרות בצד-שרת (app_config → window.C2B.alertSettings).
+  //  ברירת מחדל: פעיל (כל עוד לא כובה במפורש).
+  function alertOn(key) { var s = window.C2B.alertSettings || {}; return s[key] !== false; }
+  function alertSet(key, v) {
+    var s = Object.assign({}, window.C2B.alertSettings || {}); s[key] = !!v; window.C2B.alertSettings = s;
+    db.from('app_config').upsert({ key: 'alert_settings', value: s, updated_at: new Date().toISOString() }, { onConflict: 'key' }).then(function () { refreshAlertBadge(); }, function () { });
+  }
 
   function callAlerts(all) {
     var out = [];
