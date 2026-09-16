@@ -419,23 +419,73 @@
   };
   //  מיישם את מיתוג הארגון בזמן ריצה: כותרת הדף, צבע המותג, ולוגו/שם
   //  בסיידבר. ארגון 1 (פרי דרייב) עם מיתוג ריק → נשאר כמו שהוטמע בבנייה.
+  //  קישור לוגו: קישור שיתוף של Google Drive אינו כתובת-תמונה ישירה ולכן
+  //  לא נטען ב-<img>. ממירים אותו ל-lh3.googleusercontent.com/d/<id> שמגיש
+  //  תמונות Drive ציבוריות ישירות. כל כתובת אחרת עוברת as-is.
+  function logoUrl(raw) {
+    if (!raw) return '';
+    var s = String(raw).trim();
+    var m = s.match(/drive\.google\.com\/file\/d\/([^/?]+)/) || s.match(/[?&]id=([^&]+)/) || s.match(/lh3\.googleusercontent\.com\/d\/([^=?&]+)/);
+    if (m) return 'https://lh3.googleusercontent.com/d/' + m[1];
+    return s;
+  }
+  //  חילוץ צבע המותג מהלוגו: טוענים דרך img-proxy (מגיש עם CORS) לתוך canvas
+  //  ומוצאים את הצבע הרווח והרווי ביותר; deep = גרסה כהה שלו.
+  function extractLogoColor(rawUrl, cb) {
+    var url = logoUrl(rawUrl); if (!url) { cb(null); return; }
+    var prox = 'https://gfwopgoydfqiouratcpc.supabase.co/functions/v1/img-proxy?u=' + encodeURIComponent(url);
+    var im = new Image(); im.crossOrigin = 'anonymous';
+    im.onload = function () {
+      try {
+        var s = 48, cv = document.createElement('canvas'); cv.width = s; cv.height = s;
+        var ctx = cv.getContext('2d'); ctx.drawImage(im, 0, 0, s, s);
+        var d = ctx.getImageData(0, 0, s, s).data, buckets = {};
+        for (var i = 0; i < d.length; i += 4) {
+          var r = d[i], g = d[i + 1], bl = d[i + 2], a = d[i + 3];
+          if (a < 128) continue;
+          var mx = Math.max(r, g, bl), mn = Math.min(r, g, bl);
+          var sat = mx === 0 ? 0 : (mx - mn) / mx, lum = (0.299 * r + 0.587 * g + 0.114 * bl) / 255;
+          if (sat < 0.25 || lum < 0.12 || lum > 0.93) continue;   // דילוג על אפור/כמעט-שחור/כמעט-לבן
+          var key = (r >> 5) + ',' + (g >> 5) + ',' + (bl >> 5);
+          var bk = buckets[key] || (buckets[key] = { n: 0, r: 0, g: 0, b: 0 });
+          bk.n++; bk.r += r; bk.g += g; bk.b += bl;
+        }
+        var best = null, bestScore = -1;
+        Object.keys(buckets).forEach(function (k) {
+          var bk = buckets[k], r = bk.r / bk.n, g = bk.g / bk.n, b = bk.b / bk.n;
+          var mx = Math.max(r, g, b), mn = Math.min(r, g, b), sat = mx === 0 ? 0 : (mx - mn) / mx;
+          var score = bk.n * (0.5 + sat);
+          if (score > bestScore) { bestScore = score; best = { r: Math.round(r), g: Math.round(g), b: Math.round(b) }; }
+        });
+        if (!best) { cb(null); return; }
+        var hx = function (n) { return ('0' + Math.max(0, Math.min(255, n)).toString(16)).slice(-2); };
+        cb({ color: '#' + hx(best.r) + hx(best.g) + hx(best.b), deep: '#' + hx(Math.round(best.r * 0.68)) + hx(Math.round(best.g * 0.68)) + hx(Math.round(best.b * 0.68)) });
+      } catch (e) { cb(null); }
+    };
+    im.onerror = function () { cb(null); };
+    im.src = prox;
+  }
   function applyBranding() {
     var b = window.C2B.brand || {};
     if (b.name) { try { document.title = b.name + ' · CRM'; } catch (e) { } }
     var root = document.documentElement;
     if (b.color) root.style.setProperty('--brand', b.color);
     if (b.colorDeep) root.style.setProperty('--brand-deep', b.colorDeep);
-    var sb = document.querySelector('.side-brand');
-    if (sb) {
-      var img = sb.querySelector('img');
-      if (b.logo) { if (img) { img.src = b.logo; img.style.display = ''; } }
-      else if (window.C2B.orgId && window.C2B.orgId !== 1) {
-        //  ארגון שאינו פרי דרייב ובלי לוגו משלו — מציגים את שמו במקום לוגו פרי דרייב
-        if (img) img.style.display = 'none';
-        var nm = sb.querySelector('.brand-nm');
-        if (!nm) { nm = document.createElement('span'); nm.className = 'brand-nm'; nm.style.cssText = 'font-weight:900;font-size:18px;color:var(--brand)'; sb.insertBefore(nm, sb.firstChild); }
-        nm.textContent = b.name || 'CRM';
-      }
+    var sb = document.querySelector('.side-brand'); if (!sb) return;
+    var img = sb.querySelector('img'), isDefault = !window.C2B.orgId || window.C2B.orgId === 1;
+    function showName() {
+      if (img) img.style.display = 'none';
+      var nm = sb.querySelector('.brand-nm');
+      if (!nm) { nm = document.createElement('span'); nm.className = 'brand-nm'; nm.style.cssText = 'font-weight:900;font-size:18px;color:var(--brand)'; sb.insertBefore(nm, sb.firstChild); }
+      nm.textContent = b.name || 'CRM';
+    }
+    var url = logoUrl(b.logo);
+    if (url && img) {
+      var nm0 = sb.querySelector('.brand-nm'); if (nm0) nm0.remove();
+      img.onerror = function () { showName(); };   // לוגו שלא נטען → נופלים לשם הארגון
+      img.src = url; img.style.display = '';
+    } else if (!isDefault) {
+      showName();   // ארגון שאינו פרי דרייב ובלי לוגו — מציגים את שמו
     }
   }
   //  מחליף ארגונים בהדר — לסופר-אדמין בלבד. מציג את שם הארגון הנוכחי;
@@ -5750,21 +5800,39 @@
     var b = o.branding || {};
     openDrawer('<div class="dw-head"><h3 style="margin:0">🎨 מיתוג · ' + esc(o.name) + '</h3></div>' +
       '<div class="dw-body">' +
-      '<p class="muted" style="font-size:12.5px;margin:0 0 14px">הצבע והלוגו שהארגון יראה בכניסה למערכת. משפיע רק על הארגון הזה.</p>' +
-      '<div class="field"><label>צבע ראשי</label><input class="inp" type="color" id="obColor" value="' + esc(b.color || '#D9F243') + '" style="width:80px;height:40px;padding:3px"></div>' +
-      '<div class="field"><label>צבע כהה (hover/מעבר)</label><input class="inp" type="color" id="obColorDeep" value="' + esc(b.color_deep || '#6E8B10') + '" style="width:80px;height:40px;padding:3px"></div>' +
-      '<div class="field"><label>קישור ללוגו (URL, אופציונלי)</label><input class="inp ltr" id="obLogo" value="' + esc(b.logo || '') + '" placeholder="https://…/logo.png"></div>' +
-      '<div style="margin-top:14px;display:flex;gap:8px;align-items:center"><button class="btn" id="obSave">💾 שמור</button><button class="btn btn-ghost" id="obCancel">סגור</button><span id="obMsg" style="font-size:12px"></span></div>' +
+      '<p class="muted" style="font-size:12.5px;margin:0 0 14px">הלוגו, הצבע והשם שהארגון יראה במערכת. אפשר להדביק קישור תמונה (כולל Google Drive שיתופי) — והצבעים יזוהו ממנו אוטומטית.</p>' +
+      '<div class="field"><label>קישור ללוגו</label><input class="inp ltr" id="obLogo" value="' + esc(b.logo || '') + '" placeholder="קישור לתמונה או ל-Google Drive"></div>' +
+      '<div style="display:flex;gap:12px;align-items:center;margin:0 0 14px"><img id="obPrev" alt="" style="max-height:44px;max-width:130px;border-radius:6px;background:var(--surface-2);display:none" onerror="this.style.display=\'none\'">' +
+        '<button class="btn btn-ghost btn-sm" id="obDetect">🎨 זהה צבעים מהלוגו</button><span id="obDetMsg" style="font-size:12px"></span></div>' +
+      '<div style="display:flex;gap:18px;flex-wrap:wrap">' +
+        '<div class="field"><label>צבע ראשי</label><input class="inp" type="color" id="obColor" value="' + esc(b.color || '#D9F243') + '" style="width:80px;height:40px;padding:3px"></div>' +
+        '<div class="field"><label>צבע כהה (hover)</label><input class="inp" type="color" id="obColorDeep" value="' + esc(b.color_deep || '#6E8B10') + '" style="width:80px;height:40px;padding:3px"></div>' +
+      '</div>' +
+      '<div style="margin-top:16px;display:flex;gap:8px;align-items:center"><button class="btn" id="obSave">💾 שמור</button><button class="btn btn-ghost" id="obCancel">סגור</button><span id="obMsg" style="font-size:12px"></span></div>' +
       '</div>');
+    var prev = $('obPrev');
+    function refreshPreview() { var u = logoUrl($('obLogo').value); if (u) { prev.src = u; prev.style.display = ''; } else { prev.style.display = 'none'; } }
+    function detect() {
+      var raw = $('obLogo').value.trim(); if (!raw) return;
+      var dm = $('obDetMsg'); dm.style.color = 'var(--muted)'; dm.textContent = 'מזהה…';
+      extractLogoColor(raw, function (c) {
+        if (!c) { dm.style.color = 'var(--danger)'; dm.textContent = 'לא זוהו צבעים (ודא שהלוגו ציבורי/שיתופי)'; return; }
+        $('obColor').value = c.color; $('obColorDeep').value = c.deep;
+        dm.style.color = 'var(--ok)'; dm.textContent = '✔ צבעים זוהו מהלוגו';
+      });
+    }
+    refreshPreview();
+    $('obLogo').addEventListener('change', function () { refreshPreview(); detect(); });
+    $('obDetect').addEventListener('click', detect);
     $('obCancel').addEventListener('click', closeDrawer);
     $('obSave').addEventListener('click', function () {
-      var val = { color: $('obColor').value, color_deep: $('obColorDeep').value, logo: ($('obLogo').value || '').trim() || null };
+      var val = { color: $('obColor').value, color_deep: $('obColorDeep').value, logo: logoUrl($('obLogo').value) || null };
       var msg = $('obMsg'); msg.style.color = 'var(--muted)'; msg.textContent = 'שומר…';
       db.from('orgs').update({ branding: val }).eq('id', o.id).then(function (u) {
         if (u.error) { msg.style.color = 'var(--danger)'; msg.textContent = 'שגיאה: ' + u.error.message; return; }
         msg.style.color = 'var(--ok)'; msg.textContent = '✔ נשמר';
         if (o.id === window.C2B.orgId) { window.C2B.brand = { name: o.name, color: val.color, colorDeep: val.color_deep, logo: val.logo }; applyBranding(); }
-        setTimeout(function () { closeDrawer(); renderOrgs(); }, 600);
+        setTimeout(function () { closeDrawer(); renderOrgs(); }, 700);
       });
     });
   }
