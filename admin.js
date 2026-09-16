@@ -243,7 +243,7 @@
     loadLists();
     loadConfig();
     loadBrandCompanies();
-    db.from('profiles').select('role,full_name,views,active,sip_ext,phone,agent_phone,is_super,org_id').eq('user_id', session.user.id).single().then(function (r) {
+    db.from('profiles').select('role,full_name,views,active,sip_ext,phone,agent_phone,is_super,org_id,super_acting_org').eq('user_id', session.user.id).single().then(function (r) {
       window.C2B.userSip = (r.data && r.data.sip_ext) || '';
       //  השם המלא משמש בהודעות המהירות של הווטסאפ ({{נציג}})
       window.C2B.fullName = (r.data && r.data.full_name) || '';
@@ -261,10 +261,14 @@
       window.C2B.isSuper = !!(r.data && r.data.is_super);
       //  מיתוג בזמן ריצה: כל ארגון רואה את השם/הצבע/הלוגו שלו (orgs.branding),
       //  במקום המיתוג המוטמע בבנייה. org 1 (פרי דרייב) נשאר כברירת מחדל.
-      window.C2B.orgId = (r.data && r.data.org_id) || 1;
+      //  הארגון הפעיל: לסופר-אדמין — הארגון שבחר להיכנס אליו (super_acting_org),
+      //  אחרת ארגון הבית. כך המיתוג/הנתונים משקפים את הארגון שרואים כרגע.
+      window.C2B.homeOrgId = (r.data && r.data.org_id) || 1;
+      window.C2B.orgId = (window.C2B.isSuper && r.data && r.data.super_acting_org) ? r.data.super_acting_org : window.C2B.homeOrgId;
       db.from('orgs').select('name,branding').eq('id', window.C2B.orgId).maybeSingle().then(function (o) {
         if (o && o.data) { var br = o.data.branding || {}; window.C2B.brand = { name: o.data.name, color: br.color, colorDeep: br.color_deep, logo: br.logo }; applyBranding(); }
-      }, function () {});
+        initOrgSwitcher();
+      }, function () { initOrgSwitcher(); });
       window.C2B.views = (r.data && r.data.views && r.data.views.length) ? r.data.views : (DEFAULT_VIEWS[window.C2B.role] || ['dashboard']);
       // מסך ניהול חדש שנוסף בקוד לא מופיע אצל מי שרשימת המסכים שלו כבר
       // שמורה במסד — והיא נשמרת לכל משתמש שנערך אי פעם. מנהל מערכת
@@ -433,6 +437,44 @@
         nm.textContent = b.name || 'CRM';
       }
     }
+  }
+  //  מחליף ארגונים בהדר — לסופר-אדמין בלבד. מציג את שם הארגון הנוכחי;
+  //  לחיצה פותחת את רשימת הארגונים, ובחירה נכנסת אל ה-CRM של אותו ארגון.
+  function initOrgSwitcher() {
+    var wrap = document.getElementById('orgSwitch'); if (!wrap) return;
+    if (!window.C2B.isSuper) { wrap.classList.add('hidden'); return; }
+    wrap.classList.remove('hidden');
+    var nameEl = document.getElementById('orgSwitchName');
+    if (nameEl) nameEl.textContent = (window.C2B.brand && window.C2B.brand.name) || ('ארגון ' + window.C2B.orgId);
+    var btn = document.getElementById('orgSwitchBtn'), menu = document.getElementById('orgSwitchMenu');
+    if (!btn || !menu || btn.dataset.wired) return;
+    btn.dataset.wired = '1';
+    btn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      if (!menu.classList.contains('hidden')) { menu.classList.add('hidden'); return; }
+      menu.innerHTML = '<div class="muted" style="padding:10px">טוען…</div>'; menu.classList.remove('hidden');
+      db.from('orgs').select('id,name').order('id', { ascending: true }).then(function (r) {
+        var orgs = (r && r.data) || [];
+        menu.innerHTML = orgs.map(function (o) {
+          var cur = o.id === window.C2B.orgId;
+          return '<div data-sworg="' + o.id + '" style="cursor:pointer;padding:10px 13px;display:flex;justify-content:space-between;gap:8px;border-bottom:1px solid var(--line)"' +
+            ' onmouseover="this.style.background=\'var(--surface-2)\'" onmouseout="this.style.background=\'\'">' +
+            esc(o.name) + (cur ? ' <b style="color:var(--brand)">✓</b>' : '') + '</div>';
+        }).join('') || '<div class="muted" style="padding:10px">אין ארגונים</div>';
+        menu.querySelectorAll('[data-sworg]').forEach(function (it) {
+          it.addEventListener('click', function () {
+            var oid = Number(it.dataset.sworg);
+            if (oid === window.C2B.orgId) { menu.classList.add('hidden'); return; }
+            it.textContent = 'עובר…';
+            db.rpc('set_acting_org', { p_org: oid }).then(function (u) {
+              if (u.error) { alert('שגיאה במעבר ארגון: ' + u.error.message); return; }
+              location.reload();
+            });
+          });
+        });
+      });
+    });
+    document.addEventListener('click', function () { menu.classList.add('hidden'); });
   }
   function normPhone(p) {
     var d = String(p || '').replace(/[^\d+]/g, '');
