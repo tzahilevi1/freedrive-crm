@@ -679,6 +679,7 @@
       ['calls:todo', '\u26a0\ufe0f דורש חזרה'], 
       ['calls:ai', '\ud83e\udd16 ניתוח שיחות'],
       ['calls:reports', '📈 דוחות תקופתיים'],
+      ['calls:objections', '⚠️ התנגדויות'],
       ['calls:alerts', '🔔 התראות'],
       ['calls:customers', '👤 לקוחות'],
       ['calls:trends', '📈 מגמות']
@@ -1511,6 +1512,7 @@
       else if (sub === 'todo') paintTodo(all, head);
       else if (sub === 'ai') paintAi(all, head);
       else if (sub === 'reports') paintReports(all, head);
+      else if (sub === 'objections') paintObjections(all, head);
       else if (sub === 'alerts') paintAlerts(all, head);
       else if (sub === 'customers') renderCustomers(all, head);
       else if (sub === 'trends') paintTrends(all, head);
@@ -2163,6 +2165,62 @@
           '<div class="k">חזרות שנמדדו</div><div class="v">' + gaps.length + '</div>' +
           '<div class="k">עדיין ממתינים</div><div class="v" style="color:var(--danger)">' + stillOpen + '</div></div></div>' +
       '</div></div>');
+  }
+
+  // ---------- דוח התנגדויות ----------
+  //  טאב ייעודי: התנגדויות לפי קטגוריה, פלייבוק שיפור לכל התנגדות,
+  //  טיפול לפי נציג, והתנגדויות פתוחות. מבוסס על objections_detailed מהניתוח.
+  function paintObjections(all, head) {
+    var az = all.filter(function (c) { return c.crm_analysis && typeof c.crm_analysis.score === 'number'; });
+    if (!az.length) return view('<div class="card">' + head + '<div class="ai-empty">אין עדיין שיחות מנותחות בטווח שנבחר.</div></div>');
+    var objs = [];
+    az.forEach(function (c) { (c.crm_analysis.objections_detailed || []).forEach(function (o) { objs.push({ o: o, agent: agentOf(c), call: c.id }); }); });
+    if (!objs.length) return view('<div class="card">' + head + '<div class="ai-empty">לא זוהו התנגדויות בשיחות שבטווח שנבחר.</div></div>');
+    var objRes = objs.filter(function (x) { return /טופל/.test(x.o.status || ''); }).length;
+    var objByDiff = { 'קלה': 0, 'בינונית': 0, 'גבוהה': 0 };
+    objs.forEach(function (x) { var d = x.o.difficulty || ''; Object.keys(objByDiff).forEach(function (k) { if (d.indexOf(k) >= 0) objByDiff[k]++; }); });
+    var CATS = ['דחייה יסודית', 'לא עכשיו', 'מחיר', 'אי וודאות', 'אי הבנה', 'בדיקת עובדות', 'גישה', 'רגשי'];
+    var objByCat = {}; CATS.forEach(function (c) { objByCat[c] = { n: 0, res: 0 }; });
+    objs.forEach(function (x) { var cat = x.o.category || ''; CATS.forEach(function (c) { if (cat.indexOf(c) >= 0) { objByCat[c].n++; if (/טופל/.test(x.o.status || '')) objByCat[c].res++; } }); });
+    var catKeys = CATS.filter(function (c) { return objByCat[c].n > 0; }).sort(function (a, b) { return objByCat[b].n - objByCat[a].n; });
+    var catMax = Math.max.apply(null, catKeys.map(function (c) { return objByCat[c].n; }).concat([1]));
+    var catBars = catKeys.map(function (c) {
+      var o = objByCat[c], w = Math.round(o.n / catMax * 100), r = o.n ? Math.round(o.res / o.n * 100) : 0;
+      return '<div class="hbar-row"><div class="hbar-lbl" style="flex-basis:118px">' + esc(c) + '</div><div class="hbar-track"><div class="hbar-fill" style="width:' + Math.max(4, w) + '%;background:var(--brand)"></div></div><div class="hbar-n" style="flex-basis:72px">' + o.n + ' · ' + r + '%</div></div>';
+    }).join('');
+    var playbookCards = catKeys.slice(0, 6).map(function (cat) {
+      var catObjs = objs.filter(function (x) { return (x.o.category || '').indexOf(cat) >= 0; });
+      var samples = [], improvements = [], byAgCat = {};
+      catObjs.forEach(function (x) {
+        if (samples.length < 3 && x.o.quote) samples.push(x.o.quote);
+        if (improvements.length < 3 && x.o.improvement) improvements.push(x.o.improvement);
+        var o = byAgCat[x.agent] || (byAgCat[x.agent] = { n: 0, res: 0 }); o.n++; if (/טופל/.test(x.o.status || '')) o.res++;
+      });
+      var topAgent = Object.keys(byAgCat).filter(function (k) { return byAgCat[k].n >= 2; }).sort(function (a, b) { return (byAgCat[b].res / byAgCat[b].n) - (byAgCat[a].res / byAgCat[a].n); })[0];
+      var topPct = topAgent ? Math.round(byAgCat[topAgent].res / byAgCat[topAgent].n * 100) : null;
+      return '<div class="card cl-sub" style="margin:0"><div class="row-between"><b>' + esc(cat) + '</b><span class="tag">' + objByCat[cat].n + ' · ' + (objByCat[cat].n ? Math.round(objByCat[cat].res / objByCat[cat].n * 100) : 0) + '% נפתרו</span></div>' +
+        (samples.length ? '<div class="cv-sub-h">איך זה נשמע</div>' + samples.map(function (q) { return '<div class="cv-quote" style="margin-bottom:6px">"' + esc(q) + '"</div>'; }).join('') : '') +
+        (improvements.length ? '<div class="cv-sub-h" style="color:var(--ok)">איך לשפר</div><ul class="cv-ul">' + improvements.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul>' : '') +
+        (topAgent ? '<div class="cv-hl cv-hl-info" style="margin-top:8px">🏆 אלוף הקטגוריה: <b>' + esc(topAgent) + '</b> · ' + topPct + '% פתרון</div>' : '') + '</div>';
+    }).join('');
+    var openObjs = objs.filter(function (x) { return !/טופל/.test(x.o.status || ''); }).slice(0, 60);
+    var objRows = openObjs.map(function (x) {
+      return '<tr data-callinfo="' + esc(x.call) + '" style="cursor:pointer" title="פתח שיחה"><td>' + esc(x.o.category || '—') + '</td><td>' + esc(x.agent) + '</td><td class="cl-sum" style="max-width:340px">' + esc(x.o.quote || x.o.text || x.o.detail || '') + '</td><td>' + esc(x.o.difficulty || '—') + '</td></tr>';
+    }).join('');
+    var byAg = {};
+    az.forEach(function (c) { var k = agentOf(c), a = c.crm_analysis; var o = byAg[k] || (byAg[k] = { objs: 0, res: 0, oh: [] }); (a.objections_detailed || []).forEach(function (ob) { o.objs++; if (/טופל/.test(ob.status || '')) o.res++; }); var s = a.agent_skills || {}; if (typeof s.objection_handling === 'number') o.oh.push(s.objection_handling); });
+    var agRows = Object.keys(byAg).filter(function (k) { return byAg[k].objs > 0; }).sort(function (a, b) { return byAg[b].objs - byAg[a].objs; }).map(function (k) {
+      var o = byAg[k], pct = o.objs ? Math.round(o.res / o.objs * 100) : 0, oh = o.oh.length ? Math.round(o.oh.reduce(function (a, b) { return a + b; }, 0) / o.oh.length) : null;
+      return '<tr><td><b>' + esc(k) + '</b></td><td>' + o.objs + '</td><td>' + pct + '%</td><td>' + (oh != null ? scoreChip(oh) : '—') + '</td></tr>';
+    }).join('');
+    view('<div class="card">' + head +
+      '<div class="cards" style="margin-bottom:14px">' + stat('סה"כ התנגדויות', objs.length, null, null, objs.length ? Math.round(objRes / objs.length * 100) + '% טופלו' : '') + stat('קלות', objByDiff['קלה']) + stat('בינוניות', objByDiff['בינונית']) + stat('גבוהות', objByDiff['גבוהה']) + '</div>' +
+      (catBars ? '<div class="card cl-sub"><h3 class="cl-h">📊 התנגדויות לפי קטגוריה</h3><p class="muted" style="font-size:12px;margin:0 0 10px">כמות · אחוז שטופל</p>' + catBars + '</div>' : '') +
+      (playbookCards ? '<div class="card cl-sub" style="margin-top:14px"><h3 class="cl-h">📖 פלייבוק — שיפור כל התנגדות <span class="muted" style="font-size:11px;font-weight:400">· מבנה מנצח, ציטוטים ואלוף לכל קטגוריה</span></h3><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px">' + playbookCards + '</div></div>' : '') +
+      (agRows ? '<div class="card cl-sub" style="margin-top:14px"><h3 class="cl-h">👥 טיפול בהתנגדויות לפי נציג</h3><div class="table-scroll"><table><thead><tr><th>נציג</th><th>התנגדויות</th><th>% טופל</th><th>ציון טיפול</th></tr></thead><tbody>' + agRows + '</tbody></table></div></div>' : '') +
+      (objRows ? '<div class="card cl-sub" style="margin-top:14px"><h3 class="cl-h">⚠️ התנגדויות פתוחות · ' + openObjs.length + '</h3><div class="table-scroll"><table><thead><tr><th>קטגוריה</th><th>נציג</th><th>מה נאמר</th><th>קושי</th></tr></thead><tbody>' + objRows + '</tbody></table></div></div>' : '') +
+      '</div>');
+    $('view').querySelectorAll('[data-callinfo]').forEach(function (b) { b.addEventListener('click', function () { openCall(b.dataset.callinfo, 'objections'); }); });
   }
 
   function paintReports(all, head) {
