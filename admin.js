@@ -4418,20 +4418,27 @@
     loading();
     var orgId = window.C2B.orgId;
     Promise.all([
-      db.from('leads').select('id,email').eq('status', 'lost').is('deleted_at', null),
-      db.from('nurture_state').select('lead_id,last_sent_at,unsubscribed,reengaged_at')
+      db.from('leads').select('id,email,no_marketing,phone').eq('status', 'lost').is('deleted_at', null),
+      db.from('nurture_state').select('lead_id,last_sent_at,unsubscribed,reengaged_at'),
+      db.from('leads').select('id,name,phone,email,status,updated_at').eq('no_marketing', true).is('deleted_at', null).order('updated_at', { ascending: false })
     ]).then(function (res) {
       if (res[0].error) return errBox(res[0].error.message);
       var lost = res[0].data || [], states = res[1].data || [];
       var stBy = {}; states.forEach(function (s) { stBy[s.lead_id] = s; });
       var withEmail = lost.filter(function (l) { return l.email && String(l.email).indexOf('@') > 0; });
-      var sent = 0, unsub = 0, pending = 0, reeng = 0;
+      var sent = 0, pending = 0, reeng = 0;
       withEmail.forEach(function (l) {
+        if (l.no_marketing) return;                 // חסום לדיוור — לא נספר כממתין
         var s = stBy[l.id];
-        if (s && s.unsubscribed) { unsub++; return; }
         if (s && s.last_sent_at) sent++; else pending++;
       });
       states.forEach(function (s) { if (s.reengaged_at) reeng++; });
+      //  רשימת החסומים (DNC) — dedupe לפי אדם (מייל/טלפון)
+      var dncRows = res[2].data || [], seenDnc = {}, dncList = [];
+      dncRows.forEach(function (l) {
+        var key = (String(l.email || '').trim().toLowerCase()) || (String(l.phone || '').replace(/\D/g, '').slice(-9));
+        if (!key || seenDnc[key]) return; seenDnc[key] = 1; dncList.push(l);
+      });
       var brandName = (window.C2B.brand && window.C2B.brand.name) || 'הארגון';
       var batch = Math.min(pending, 25);
 
@@ -4442,13 +4449,27 @@
         + stat('ממתינים לשליחה', String(pending), null, null, 'עוד לא קיבלו מייל')
         + stat('נשלחו', String(sent), null, null, 'מייל החזרה יצא')
         + stat('חזרו למעגל', String(reeng), reeng ? true : null, null, 'לחצו "שיחזרו אליי"')
-        + stat('הוסרו מהדיוור', String(unsub), null, null, 'ביקשו הסרה')
+        + stat('🚫 חסומים לדיוור', String(dncList.length), null, null, 'הוסרו — לא יקבלו כלום')
         + '</div>'
         + '<div class="card" style="margin-top:14px"><div style="display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between">'
-        + '<div><b>סבב שליחה</b><div class="muted" style="font-size:13px;margin-top:3px;max-width:520px">כל סבב שולח עד 25 מיילים מ-<b>' + esc(brandName) + '</b> ללידים שעוד לא קיבלו. כל ליד מקבל את מייל ההחזרה פעם אחת. אפשר להריץ כמה סבבים עד שהתור מתרוקן.</div></div>'
+        + '<div><b>סבב שליחה</b><div class="muted" style="font-size:13px;margin-top:3px;max-width:520px">כל סבב שולח עד 25 מיילים מ-<b>' + esc(brandName) + '</b> ללידים שעוד לא קיבלו. כל ליד מקבל את מייל ההחזרה פעם אחת. <b>המערכת חוסמת אוטומטית כל מי שברשימת ההסרה</b> — לא יישלח אליו דבר. אפשר להריץ כמה סבבים עד שהתור מתרוקן.</div></div>'
         + '<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-ghost" id="nuPreview">👁 תצוגה מקדימה</button>'
         + '<button class="btn btn-primary" id="nuSend"' + (batch ? '' : ' disabled') + '>📤 שלח סבב (' + batch + ')</button></div>'
-        + '</div><div id="nuResult" style="margin-top:12px"></div></div>');
+        + '</div><div id="nuResult" style="margin-top:12px"></div></div>'
+        //  ---------- ניהול רשימת ההסרה מדיוור (DNC) ----------
+        + '<div class="card" style="margin-top:14px"><div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap"><b>🚫 רשימת הסרה מדיוור (' + dncList.length + ')</b>'
+        + '<span class="muted" style="font-size:12.5px">כל האנשים שביקשו הסרה או שסומנו ידנית. אף שליחה שיווקית (מייל/וואטסאפ/סמס) לא תגיע אליהם — בכל הערוצים.</span></div>'
+        + '<div style="margin-top:10px;overflow-x:auto">' + (dncList.length
+          ? '<table><thead><tr><th>שם</th><th>טלפון</th><th>מייל</th><th>מתי</th><th></th></tr></thead><tbody>'
+            + dncList.map(function (l) {
+              return '<tr><td><b>' + esc(l.name || '—') + '</b></td>'
+                + '<td class="ltr"><bdi>' + esc(l.phone || '—') + '</bdi></td>'
+                + '<td class="ltr" style="font-size:12.5px">' + esc(l.email || '—') + '</td>'
+                + '<td class="muted" style="font-size:12px">' + fmtDateTime(l.updated_at) + '</td>'
+                + '<td><button class="btn btn-ghost btn-sm" data-resub="' + esc(l.id) + '" data-ph="' + esc(l.phone || '') + '" data-em="' + esc(l.email || '') + '">↩ החזר לדיוור</button></td></tr>';
+            }).join('') + '</tbody></table>'
+          : '<p class="muted" style="margin:6px 0">אין אף אחד ברשימת ההסרה כרגע.</p>')
+        + '</div></div>');
 
       $('nuPreview').addEventListener('click', function () {
         openDrawer('<h3 style="margin:0 0 10px">👁 תצוגה מקדימה</h3><div class="muted" style="font-size:13px">טוען…</div>');
@@ -4475,6 +4496,18 @@
           $('nuResult').innerHTML = '<div style="background:var(--brand-soft);border-radius:10px;padding:11px 13px;font-weight:600">✅ נשלחו ' + d.sent + ' מיילים' + (d.failed ? (' · נכשלו ' + d.failed) : '') + ' · נותרו ' + d.remaining + ' ממתינים.</div>';
           setTimeout(renderNurture, 1400);
         }, function () { $('nuResult').innerHTML = '<p class="err">שגיאה בשליחה</p>'; btn.disabled = false; btn.textContent = '📤 שלח סבב'; });
+      });
+
+      //  החזרה לדיוור — מסיר את האדם (טלפון/מייל) מרשימת ההסרה
+      $('view').querySelectorAll('[data-resub]').forEach(function (b) {
+        b.addEventListener('click', function () {
+          if (!confirm('להחזיר את ' + (b.closest('tr').querySelector('b').textContent) + ' לרשימת הדיוור? מעכשיו יוכל לקבל דיוור שיווקי שוב.')) return;
+          b.disabled = true; b.textContent = 'מחזיר…';
+          db.rpc('dnc_set', { p_org: orgId, p_phone: b.dataset.ph || '', p_email: b.dataset.em || '', p_on: false }).then(function (r) {
+            if (r.error) { alert('שגיאה: ' + r.error.message); b.disabled = false; b.textContent = '↩ החזר לדיוור'; return; }
+            renderNurture();
+          });
+        });
       });
     }, function () { errBox('שגיאה בטעינת נתוני הדיוור'); });
   }

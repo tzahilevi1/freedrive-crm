@@ -1115,6 +1115,12 @@
       '<div class="lf"><span class="k">מקור הגעה</span><select class="lf-edit" data-field="source" data-label="מקור הגעה">' + C.selOpts((C.lists && C.lists.source) || [], lead.source, '— מקור —') + '</select></div>' +
       lf('מותג', esc(lead.brand)) +
       lf('חברת שיווק', esc(lead.marketing_company)) +
+      //  הסרה מדיוור — מסמן no_marketing לכל הלידים של אותו אדם וחוסם
+      //  אותו מכל שליחה שיווקית (מייל/וואטסאפ/סמס).
+      '<div class="lf"><span class="k">🚫 הסרה מדיוור</span><select class="lf-dnc" id="ldDnc" style="max-width:130px' + (lead.no_marketing ? ';color:var(--danger);font-weight:700' : '') + '">' +
+        '<option value="no"' + (lead.no_marketing ? '' : ' selected') + '>לא — מקבל דיוור</option>' +
+        '<option value="yes"' + (lead.no_marketing ? ' selected' : '') + '>כן — חסום</option>' +
+      '</select></div>' +
       // מזהה הליד אצל פייסבוק — המפתח לאימות מול Ads Manager ולמניעת כפילויות
       lf('Lead ID · פייסבוק', lead.external_id
         ? '<span class="mono" style="user-select:all;direction:ltr;display:inline-block">' + esc(lead.external_id) + '</span>'
@@ -1445,6 +1451,19 @@
       });
     }
     ['ldInfo', 'ldMkt'].forEach(function (id) { var el = $(id); if (el) el.addEventListener('change', saveLeadField); });
+    //  הסרה מדיוור — לא נשמר כשדה רגיל אלא דרך dnc_set (מסמן את כל
+    //  הלידים של אותו אדם לפי טלפון/מייל), כדי לחסום בכל ערוץ שיווקי.
+    var dncSel = $('ldDnc');
+    if (dncSel) dncSel.addEventListener('change', function () {
+      var on = this.value === 'yes', self = this;
+      db.rpc('dnc_set', { p_org: (C.orgId || (window.C2B && window.C2B.orgId) || null), p_phone: lead.phone || '', p_email: lead.email || '', p_on: on }).then(function (r) {
+        if (r.error) { alert('שגיאה: ' + r.error.message); self.value = lead.no_marketing ? 'yes' : 'no'; return; }
+        lead.no_marketing = on;
+        self.style.color = on ? 'var(--danger)' : ''; self.style.fontWeight = on ? '700' : '';
+        logActivity(lead.id, 'system', on ? '🚫 סומן להסרה מדיוור — חסום לכל פרסום (מייל/וואטסאפ/סמס)' : '✅ הוחזר לרשימת הדיוור');
+        self.style.borderColor = 'var(--ok)'; setTimeout(function () { self.style.borderColor = ''; }, 900);
+      });
+    });
     setupCarPicker(lead);   // cascading brand→model→trim from inventory
     // צפייה במודעה — האזנה על המיכל ולא על הכפתור:
     // בלוק השיווק מוסתר בהתחלה ומצויר מחדש במעבר בין הלשוניות.
