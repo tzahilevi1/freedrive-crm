@@ -2086,6 +2086,28 @@
     { k: 'paid', label: 'שולם ונסגר', color: '#16a34a' }
   ];
   var acctTab = 'deals', selectedAcct = {};
+
+  //  ---- עמלת מנהלת תיקי לקוחות (שני מודלים) ----
+  //  מודל 1: חתימה באותו יום שהעסקה נוצרה → 200₪, אחרת → 100₪.
+  //  מודל 2: 3% מעמלת הסוכן, רק אם אותו סוכן חתם ≥5 עסקאות באותו חודש.
+  //  (הסכום פר-עסקה מסתכם בדיוק ל-3% מסך העמלה החודשית של הסוכן.)
+  //  הערכים מרוכזים כאן לשינוי קל.
+  var MGR = { sameDay: 200, later: 100, minDeals: 5, pct: 0.03 };
+  var mgrMonthCount = {};   // מפתח: "סוכן|YYYY-MM" → מספר עסקאות חתומות (לא מבוטלות)
+  function mgrCancelled(d) { return d.status === 'cancelled' || d.stage === 'cancelled'; }
+  function mgrMonth(d) { var t = d.signed_at || d.created_at; return t ? String(t).slice(0, 7) : ''; }
+  function mgrModel1(d) {
+    if (mgrCancelled(d) || !d.has_signature || !d.signed_at) return 0;
+    var sd = String(d.signed_at).slice(0, 10), cd = String(d.created_at || '').slice(0, 10);
+    return (cd && sd === cd) ? MGR.sameDay : MGR.later;
+  }
+  function mgrModel2(d) {
+    if (mgrCancelled(d)) return 0;
+    var key = (d.salesperson || 'לא שויך') + '|' + mgrMonth(d);
+    if ((mgrMonthCount[key] || 0) < MGR.minDeals) return 0;
+    return Math.round((+d.commission || 0) * MGR.pct);
+  }
+  function mgrComm(d) { return mgrModel1(d) + mgrModel2(d); }
   var ACCT_COLS = [
     { key: 'order', label: '#', fixed: true, cell: function (d) { return '<td><b>#' + esc(d.order_no) + '</b></td>'; } },
     { key: 'client', label: 'לקוח', fixed: true, cell: function (d) { return '<td>' + esc(d.client_name) + (d.has_signature ? ' <span style="color:var(--ok)" title="נחתם">✅</span>' : '') + '</td>'; } },
@@ -2096,6 +2118,7 @@
     { key: 'balance', label: 'יתרה', cell: function (d) { return '<td style="color:' + (d._bal > 0 ? 'var(--danger)' : 'var(--ok)') + '">' + nis(d._bal) + '</td>'; } },
     { key: 'salesperson', label: 'סוכן', cell: function (d) { return '<td>' + esc(d.salesperson || '—') + '</td>'; } },
     { key: 'commission', label: 'עמלה', cell: function (d) { return '<td style="color:var(--ok);font-weight:700">' + nis(d.commission) + '</td>'; } },
+    { key: 'mgr_comm', label: 'עמלת מנהלת תיקים', cell: function (d) { var m1 = mgrModel1(d), m2 = mgrModel2(d), t = m1 + m2; return '<td style="color:var(--brand);font-weight:700" title="חתימה: ' + nis(m1) + (m1 === MGR.sameDay ? ' (אותו יום)' : m1 === MGR.later ? ' (עבר יום)' : '') + ' · 3% מעמלת סוכן: ' + nis(m2) + '">' + (t ? nis(t) : '—') + '</td>'; } },
     { key: 'acct_status', label: 'סטטוס', cell: function (d) { return '<td>' + acctStatusSel(d.id, d.acct_status) + '</td>'; } },
     { key: 'brand', label: 'מותג', def: false, cell: function (d) { return '<td>' + esc(d.brand || '—') + '</td>'; } },
     { key: 'phone', label: 'טלפון', def: false, cell: function (d) { return '<td>' + esc(d.client_phone || '—') + '</td>'; } },
@@ -2127,7 +2150,7 @@
     selectedAcct = {};
     loading();
     Promise.all([
-      db.from('deals').select('id,lead_id,order_no,brand,stage,status,client_name,client_phone,car_make,car_model,total,commission,salesperson,created_at,updated_at,checklist,cancel_reason,acct_status,has_contract,has_signature').eq('has_signature', true).is('deleted_at', null).order('created_at', { ascending: false }).limit(2000),   // הנהלת חשבונות רק עסקאות חתומות
+      db.from('deals').select('id,lead_id,order_no,brand,stage,status,client_name,client_phone,car_make,car_model,total,commission,salesperson,created_at,updated_at,signed_at,checklist,cancel_reason,acct_status,has_contract,has_signature').eq('has_signature', true).is('deleted_at', null).order('created_at', { ascending: false }).limit(2000),   // הנהלת חשבונות רק עסקאות חתומות
       db.from('payments').select('*'),
       db.from('profiles').select('user_id,full_name'),
       db.from('lead_documents').select('*').order('created_at', { ascending: false }).limit(500),
@@ -2158,6 +2181,10 @@
       revenue += tot; collected += paid; open += Math.max(0, tot - paid); commTotal += (+d.commission || 0);
     });
 
+    //  מונה עסקאות חתומות פר-סוכן-לחודש — לזכאות מודל 2 (≥5 עסקאות/חודש)
+    mgrMonthCount = {};
+    deals.forEach(function (d) { if (mgrCancelled(d)) return; var k = (d.salesperson || 'לא שויך') + '|' + mgrMonth(d); mgrMonthCount[k] = (mgrMonthCount[k] || 0) + 1; });
+
     // TAB 1 — deals + receipts (what bought, invoice name, balance, commission, status, issue)
     if (!acctCols) acctCols = C.colPicker('accounting', ACCT_COLS, function () { window.C2B_renderAccounting(); }, { sortable: true });
     deals.forEach(function (d) { var tot = +d.total || 0, paid = paidByDeal[d.id] || 0; d._tot = tot; d._paid = paid; d._bal = tot - paid; });
@@ -2170,7 +2197,14 @@
     // TAB 2 — commission per agent (frozen values)
     var byAgent = {}; deals.forEach(function (d) { var a = d.salesperson || 'לא שויך'; byAgent[a] = byAgent[a] || { n: 0, comm: 0, total: 0 }; byAgent[a].n++; byAgent[a].comm += (+d.commission || 0); byAgent[a].total += (+d.total || 0); });
     var agents = Object.keys(byAgent).sort(function (a, b) { return byAgent[b].comm - byAgent[a].comm; });
-    var commPanel = '<div class="cards">' + C.stat('סה"כ עמלות לתשלום', nis(commTotal), true) + C.stat('מספר סוכנים', agents.length) + '</div>' +
+    //  סיכום עמלת מנהלת תיקי לקוחות (שני המודלים) על העסקאות בתצוגה
+    var mgrTot1 = 0, mgrTot2 = 0; deals.forEach(function (d) { mgrTot1 += mgrModel1(d); mgrTot2 += mgrModel2(d); });
+    var mgrCard = '<div class="card"><h3>🗂️ עמלת מנהלת תיקי לקוחות</h3><div class="cards">' +
+      C.stat('חתימות (₪' + MGR.sameDay + ' / ₪' + MGR.later + ')', nis(mgrTot1)) +
+      C.stat('3% מעמלת סוכנים (≥' + MGR.minDeals + '/חודש)', nis(mgrTot2)) +
+      C.stat('סה"כ למנהלת', nis(mgrTot1 + mgrTot2), true) + '</div>' +
+      '<p class="muted" style="font-size:12px;margin:8px 0 0">₪' + MGR.sameDay + ' לחתימה באותו יום שהעסקה נפתחה · ₪' + MGR.later + ' אם עבר יום. בנוסף 3% מעמלת כל סוכן שחתם ' + MGR.minDeals + '+ עסקאות באותו חודש.</p></div>';
+    var commPanel = '<div class="cards">' + C.stat('סה"כ עמלות לתשלום', nis(commTotal), true) + C.stat('מספר סוכנים', agents.length) + '</div>' + mgrCard +
       '<div class="card"><h3>💸 עמלות סוכנים <span class="muted" style="font-size:12px">(לחצו על סוכן לפירוט העסקאות · אפשר לעדכן עמלה חסרה)</span></h3>' +
         (agents.length ? agents.map(function (a) {
           var o = byAgent[a], aDeals = deals.filter(function (d) { return (d.salesperson || 'לא שויך') === a; });
