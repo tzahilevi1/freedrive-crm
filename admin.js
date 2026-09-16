@@ -243,7 +243,7 @@
     loadLists();
     loadConfig();
     loadBrandCompanies();
-    db.from('profiles').select('role,full_name,views,active,sip_ext,phone,agent_phone').eq('user_id', session.user.id).single().then(function (r) {
+    db.from('profiles').select('role,full_name,views,active,sip_ext,phone,agent_phone,is_super').eq('user_id', session.user.id).single().then(function (r) {
       window.C2B.userSip = (r.data && r.data.sip_ext) || '';
       //  השם המלא משמש בהודעות המהירות של הווטסאפ ({{נציג}})
       window.C2B.fullName = (r.data && r.data.full_name) || '';
@@ -257,6 +257,8 @@
         return;
       }
       window.C2B.role = (r.data && r.data.role) || 'sales';
+      //  סופר-אדמין = בעל הפלטפורמה (גישה חוצה-ארגונים + פתיחת ארגונים). נטען מ-profiles.is_super.
+      window.C2B.isSuper = !!(r.data && r.data.is_super);
       window.C2B.views = (r.data && r.data.views && r.data.views.length) ? r.data.views : (DEFAULT_VIEWS[window.C2B.role] || ['dashboard']);
       // מסך ניהול חדש שנוסף בקוד לא מופיע אצל מי שרשימת המסכים שלו כבר
       // שמורה במסד — והיא נשמרת לכל משתמש שנערך אי פעם. מנהל מערכת
@@ -478,6 +480,8 @@
   function applyRole(role) {
     $('nav').querySelectorAll('.nav-item, .nav-group-label').forEach(function (it) {
       if (it.classList.contains('nav-group-label')) { it.style.display = role === 'admin' ? '' : 'none'; return; }
+      //  פריט סופר-אדמין (ניהול ארגונים) — רק לבעל הפלטפורמה, לא למנהל ארגון רגיל.
+      if (it.dataset.super) { it.style.display = (window.C2B && window.C2B.isSuper) ? '' : 'none'; return; }
       //  פריט שמסומן data-senior הוא תצוגת ניהול בתוך תפריט שפתוח לכולם
       //  (למשל תור החלוקה שבתוך "לידים") — הרשאת האב אינה מספיקה לו.
       if (it.dataset.senior && role !== 'admin' && role !== 'branch') { it.style.display = 'none'; return; }
@@ -579,6 +583,7 @@
     if (window.C2B && window.C2B.role && !navAllowed(nav, window.C2B.role)) { nav = 'dashboard'; opts = {}; }
     drawSubnav(nav);
     if (nav === 'users') { setActive(nav); if (window.innerWidth <= 820) { $('side').classList.remove('open'); $('overlay').classList.remove('open'); } return renderUsers(); }
+    if (nav === 'orgs') { setActive(nav); if (window.innerWidth <= 820) { $('side').classList.remove('open'); $('overlay').classList.remove('open'); } return renderOrgs(); }
     if (nav !== 'heyy') waUnwatch();
     if (nav === 'heyy') { waWatch(); setActive(nav); if (window.innerWidth <= 820) { $('side').classList.remove('open'); $('overlay').classList.remove('open'); } return renderHeyy(); }
     if (nav === 'agents') { setActive(nav); if (window.innerWidth <= 820) { $('side').classList.remove('open'); $('overlay').classList.remove('open'); } return renderAgents(); }
@@ -5612,6 +5617,59 @@
       };
     });
   }
+
+  //  קונסולת סופר-אדמין: רשימת הארגונים + פתיחת ארגון חדש (עם מנהל ראשון).
+  //  מוגן פעמיים — כאן ובמסד (superadmin_create_org + RLS על orgs).
+  function renderOrgs() {
+    if (!(window.C2B && window.C2B.isSuper)) return go('dashboard');
+    loading();
+    Promise.all([
+      db.from('orgs').select('id,name,slug,plan,active,created_at').order('id', { ascending: true }),
+      db.from('profiles').select('org_id')
+    ]).then(function (res) {
+      if (res[0] && res[0].error) return errBox(res[0].error.message);
+      var orgs = (res[0] && res[0].data) || [], profs = (res[1] && res[1].data) || [];
+      var uCount = {}; profs.forEach(function (p) { uCount[p.org_id] = (uCount[p.org_id] || 0) + 1; });
+      var rows = orgs.map(function (o) {
+        return '<tr><td>' + o.id + '</td><td><b>' + esc(o.name) + '</b></td>' +
+          '<td class="ltr muted">' + esc(o.slug || '—') + '</td><td>' + (uCount[o.id] || 0) + '</td>' +
+          '<td class="muted">' + esc(fmtDateTime(o.created_at)) + '</td>' +
+          '<td>' + (o.active === false ? '<span class="cl-no">כבוי</span>' : '<span class="cl-yes">פעיל</span>') + '</td></tr>';
+      }).join('');
+      view('<div class="card"><h3 style="margin:0 0 4px">🏢 ארגונים <span class="muted" style="font-size:12px;font-weight:400">· קונסולת סופר-אדמין</span></h3>' +
+        '<p class="muted" style="font-size:12.5px;margin:0 0 14px;line-height:1.7">כל ארגון עובד על אותה מערכת עם נתונים מופרדים לחלוטין (org_id + RLS). פתיחת ארגון יוצרת גם מנהל ראשון ושולחת לו פרטי התחברות.</p>' +
+        '<div class="table-scroll"><table><thead><tr><th>#</th><th>ארגון</th><th>מזהה</th><th>משתמשים</th><th>נוצר</th><th>סטטוס</th></tr></thead>' +
+        '<tbody>' + (rows || '<tr><td colspan="6" class="empty">אין ארגונים</td></tr>') + '</tbody></table></div>' +
+        '<div class="card cl-sub" style="margin-top:16px"><h3 class="cl-h">➕ פתיחת ארגון חדש</h3>' +
+          '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;max-width:640px">' +
+            '<div class="field" style="margin:0"><label>שם הארגון</label><input class="inp" id="orgName" placeholder="למשל: אלפא ליסינג"></div>' +
+            '<div class="field" style="margin:0"><label>מזהה באנגלית (slug)</label><input class="inp ltr" id="orgSlug" placeholder="alpha"></div>' +
+            '<div class="field" style="margin:0"><label>שם המנהל הראשון</label><input class="inp" id="orgAdminName" placeholder="שם מלא"></div>' +
+            '<div class="field" style="margin:0"><label>אימייל המנהל</label><input class="inp ltr" id="orgAdminEmail" type="email" placeholder="admin@company.com"></div>' +
+          '</div>' +
+          '<div style="margin-top:14px"><button class="btn" id="orgCreate">צור ארגון ושלח הזמנה למנהל</button> <span id="orgMsg" style="font-size:13px;margin-inline-start:10px"></span></div>' +
+          '<div id="orgResult" style="margin-top:12px"></div>' +
+        '</div></div>');
+      $('orgCreate').addEventListener('click', function () {
+        var name = $('orgName').value.trim(), slug = $('orgSlug').value.trim(), an = $('orgAdminName').value.trim(), ae = $('orgAdminEmail').value.trim();
+        var msg = $('orgMsg');
+        if (!name) { msg.style.color = 'var(--danger)'; msg.textContent = 'הזינו שם ארגון'; return; }
+        if (!ae || ae.indexOf('@') < 0) { msg.style.color = 'var(--danger)'; msg.textContent = 'הזינו אימייל מנהל תקין'; return; }
+        var btn = this; btn.disabled = true; msg.style.color = 'var(--muted)'; msg.textContent = 'יוצר ארגון…';
+        db.rpc('superadmin_create_org', { p_name: name, p_slug: slug, p_admin_email: ae, p_admin_name: an || ae }).then(function (r) {
+          btn.disabled = false;
+          if (r.error || (r.data && r.data.error)) { msg.style.color = 'var(--danger)'; msg.textContent = 'שגיאה: ' + esc((r.error && r.error.message) || r.data.error); return; }
+          var d = r.data || {}; msg.textContent = '';
+          $('orgResult').innerHTML = '<div class="card" style="box-shadow:none;border:1px solid var(--line);margin:0"><b>✅ הארגון נוצר (מזהה ' + esc(d.org_id) + ')</b>' +
+            '<div style="margin-top:8px;font-family:monospace;font-size:13px;background:var(--surface);padding:10px;border-radius:8px">מנהל: ' + esc(d.admin_email) + '<br>סיסמה זמנית: <b>' + esc(d.password || '') + '</b></div>' +
+            '<div class="muted" style="font-size:12px;margin-top:8px">' + (d.emailed ? 'נשלח מייל עם פרטי ההתחברות למנהל.' : 'שמרו את הסיסמה — שליחת המייל לא הוגדרה.') + '</div></div>';
+          $('orgName').value = ''; $('orgSlug').value = ''; $('orgAdminName').value = ''; $('orgAdminEmail').value = '';
+          setTimeout(renderOrgs, 2500);   // הפרופיל נוצר אסינכרונית — מרעננים אחרי רגע
+        }, function (e) { btn.disabled = false; msg.style.color = 'var(--danger)'; msg.textContent = 'שגיאה: ' + esc((e && e.message) || e); });
+      });
+    }, function (e) { errBox((e && e.message) || e); });
+  }
+  window.C2B_renderOrgs = renderOrgs;
 
   function renderUsers() {
     loading();
