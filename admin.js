@@ -426,7 +426,7 @@
     if (!raw) return '';
     var s = String(raw).trim();
     var m = s.match(/drive\.google\.com\/file\/d\/([^/?]+)/) || s.match(/[?&]id=([^&]+)/) || s.match(/lh3\.googleusercontent\.com\/d\/([^=?&]+)/);
-    if (m) return 'https://lh3.googleusercontent.com/d/' + m[1];
+    if (m) return 'https://lh3.googleusercontent.com/d/' + m[1] + '=w256';   // =w256 = רזולוציה טובה במקום תמונה זעירה
     return s;
   }
   //  חילוץ צבע המותג מהלוגו: טוענים דרך img-proxy (מגיש עם CORS) לתוך canvas
@@ -494,7 +494,7 @@
       nm.textContent = b.name || '';
     }
     //  לוגו על צ'יפ לבן מעוגל — נראה נקי על הסיידבר הכהה, בגודל אחיד.
-    function niceLogo() { if (img) img.style.cssText = 'height:34px;width:auto;max-width:118px;object-fit:contain;background:#fff;border-radius:8px;padding:4px 6px;display:block'; }
+    function niceLogo() { if (img) img.style.cssText = 'height:46px;width:auto;max-width:150px;object-fit:contain;background:#fff;border-radius:10px;padding:6px 10px;display:block;box-shadow:0 1px 3px rgba(0,0,0,.25)'; }
     var url = logoUrl(b.logo);
     if (url && img) {
       img.onerror = function () { img.style.display = 'none'; ensureName(); };  // לוגו שנכשל → שם בלבד
