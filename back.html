@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <title>תודה</title>
+  <style>
+    :root { --brand:#D9F243; }
+    * { box-sizing:border-box; }
+    body{margin:0;font-family:'Segoe UI',Arial,sans-serif;background:#0f1115;color:#e9edf2;
+         display:flex;align-items:center;justify-content:center;min-height:100vh;padding:24px}
+    .card{background:#171a21;border:1px solid #262b36;border-radius:22px;max-width:460px;width:100%;
+          padding:44px 34px;text-align:center;box-shadow:0 24px 70px rgba(0,0,0,.45)}
+    .org{font-size:20px;font-weight:800;color:var(--brand);margin-bottom:22px;letter-spacing:.2px}
+    .emoji{font-size:60px;line-height:1;margin-bottom:14px}
+    h1{font-size:25px;margin:0 0 12px;color:#fff}
+    p{font-size:16px;line-height:1.7;color:#aab3c0;margin:0}
+    .foot{margin-top:30px;font-size:12px;color:#5b636e}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="org" id="org">פרי דרייב</div>
+    <div class="emoji" id="emoji">🚗</div>
+    <h1 id="title">תודה! חוזרים אליך</h1>
+    <p id="msg">קיבלנו את הבקשה שלך. נציג שלנו יחזור אליך בהקדם עם הצעה מעודכנת ומותאמת אישית. נדבר בקרוב!</p>
+    <div class="foot" id="foot"></div>
+  </div>
+  <script>
+    (function () {
+      var p = new URLSearchParams(location.search);
+      var s = p.get('s') || 'done';
+      var org = p.get('org') || 'פרי דרייב';
+      var color = p.get('c') || '';
+      if (/^#[0-9a-fA-F]{3,8}$/.test(color)) document.documentElement.style.setProperty('--brand', color);
+      document.getElementById('org').textContent = org;
+      document.getElementById('foot').textContent = org;
+      document.title = org;
+      var views = {
+        done:  { e:'🚗', t:'תודה! חוזרים אליך',        m:'קיבלנו את הבקשה שלך. נציג שלנו יחזור אליך בהקדם עם הצעה מעודכנת ומותאמת אישית. נדבר בקרוב!' },
+        unsub: { e:'✅', t:'הוסרת מרשימת הדיוור',      m:'לא יישלח אליך דיוור נוסף. תמיד אפשר לחזור אלינו כשתרצה — נשמח לעזור.' },
+        bad:   { e:'🔗', t:'הקישור אינו תקין',          m:'ייתכן שהקישור פג תוקף. אפשר פשוט להתקשר אלינו ונשמח לעזור.' }
+      };
+      var v = views[s] || views.done;
+      document.getElementById('emoji').textContent = v.e;
+      document.getElementById('title').textContent = v.t;
+      document.getElementById('msg').textContent = v.m;
+    })();
+  </script>
+</body>
+</html>
