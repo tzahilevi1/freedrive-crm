@@ -5651,22 +5651,24 @@
     if (!(window.C2B && window.C2B.isSuper)) return go('dashboard');
     loading();
     Promise.all([
-      db.from('orgs').select('id,name,slug,plan,active,created_at').order('id', { ascending: true }),
+      db.from('orgs').select('id,name,slug,plan,active,created_at,branding').order('id', { ascending: true }),
       db.from('profiles').select('org_id')
     ]).then(function (res) {
       if (res[0] && res[0].error) return errBox(res[0].error.message);
       var orgs = (res[0] && res[0].data) || [], profs = (res[1] && res[1].data) || [];
+      var orgById = {}; orgs.forEach(function (o) { orgById[o.id] = o; });
       var uCount = {}; profs.forEach(function (p) { uCount[p.org_id] = (uCount[p.org_id] || 0) + 1; });
       var rows = orgs.map(function (o) {
         return '<tr><td>' + o.id + '</td><td><b>' + esc(o.name) + '</b></td>' +
           '<td class="ltr muted">' + esc(o.slug || '—') + '</td><td>' + (uCount[o.id] || 0) + '</td>' +
           '<td class="muted">' + esc(fmtDateTime(o.created_at)) + '</td>' +
-          '<td>' + (o.active === false ? '<span class="cl-no">כבוי</span>' : '<span class="cl-yes">פעיל</span>') + '</td></tr>';
+          '<td>' + (o.active === false ? '<span class="cl-no">כבוי</span>' : '<span class="cl-yes">פעיל</span>') + '</td>' +
+          '<td><button class="btn btn-ghost btn-sm" data-orgbrand="' + o.id + '">🎨 מיתוג</button></td></tr>';
       }).join('');
       view('<div class="card"><h3 style="margin:0 0 4px">🏢 ארגונים <span class="muted" style="font-size:12px;font-weight:400">· קונסולת סופר-אדמין</span></h3>' +
         '<p class="muted" style="font-size:12.5px;margin:0 0 14px;line-height:1.7">כל ארגון עובד על אותה מערכת עם נתונים מופרדים לחלוטין (org_id + RLS). פתיחת ארגון יוצרת גם מנהל ראשון ושולחת לו פרטי התחברות.</p>' +
-        '<div class="table-scroll"><table><thead><tr><th>#</th><th>ארגון</th><th>מזהה</th><th>משתמשים</th><th>נוצר</th><th>סטטוס</th></tr></thead>' +
-        '<tbody>' + (rows || '<tr><td colspan="6" class="empty">אין ארגונים</td></tr>') + '</tbody></table></div>' +
+        '<div class="table-scroll"><table><thead><tr><th>#</th><th>ארגון</th><th>מזהה</th><th>משתמשים</th><th>נוצר</th><th>סטטוס</th><th>מיתוג</th></tr></thead>' +
+        '<tbody>' + (rows || '<tr><td colspan="7" class="empty">אין ארגונים</td></tr>') + '</tbody></table></div>' +
         '<div class="card cl-sub" style="margin-top:16px"><h3 class="cl-h">➕ פתיחת ארגון חדש</h3>' +
           '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;max-width:640px">' +
             '<div class="field" style="margin:0"><label>שם הארגון</label><input class="inp" id="orgName" placeholder="למשל: אלפא ליסינג"></div>' +
@@ -5694,9 +5696,35 @@
           setTimeout(renderOrgs, 2500);   // הפרופיל נוצר אסינכרונית — מרעננים אחרי רגע
         }, function (e) { btn.disabled = false; msg.style.color = 'var(--danger)'; msg.textContent = 'שגיאה: ' + esc((e && e.message) || e); });
       });
+      $('view').querySelectorAll('[data-orgbrand]').forEach(function (b) { b.addEventListener('click', function () { editOrgBranding(orgById[b.dataset.orgbrand]); }); });
     }, function (e) { errBox((e && e.message) || e); });
   }
   window.C2B_renderOrgs = renderOrgs;
+
+  //  עורך מיתוג פר-ארגון (סופר-אדמין): צבע + לוגו → orgs.branding.
+  function editOrgBranding(o) {
+    if (!o) return;
+    var b = o.branding || {};
+    openDrawer('<div class="dw-head"><h3 style="margin:0">🎨 מיתוג · ' + esc(o.name) + '</h3></div>' +
+      '<div class="dw-body">' +
+      '<p class="muted" style="font-size:12.5px;margin:0 0 14px">הצבע והלוגו שהארגון יראה בכניסה למערכת. משפיע רק על הארגון הזה.</p>' +
+      '<div class="field"><label>צבע ראשי</label><input class="inp" type="color" id="obColor" value="' + esc(b.color || '#D9F243') + '" style="width:80px;height:40px;padding:3px"></div>' +
+      '<div class="field"><label>צבע כהה (hover/מעבר)</label><input class="inp" type="color" id="obColorDeep" value="' + esc(b.color_deep || '#6E8B10') + '" style="width:80px;height:40px;padding:3px"></div>' +
+      '<div class="field"><label>קישור ללוגו (URL, אופציונלי)</label><input class="inp ltr" id="obLogo" value="' + esc(b.logo || '') + '" placeholder="https://…/logo.png"></div>' +
+      '<div style="margin-top:14px;display:flex;gap:8px;align-items:center"><button class="btn" id="obSave">💾 שמור</button><button class="btn btn-ghost" id="obCancel">סגור</button><span id="obMsg" style="font-size:12px"></span></div>' +
+      '</div>');
+    $('obCancel').addEventListener('click', closeDrawer);
+    $('obSave').addEventListener('click', function () {
+      var val = { color: $('obColor').value, color_deep: $('obColorDeep').value, logo: ($('obLogo').value || '').trim() || null };
+      var msg = $('obMsg'); msg.style.color = 'var(--muted)'; msg.textContent = 'שומר…';
+      db.from('orgs').update({ branding: val }).eq('id', o.id).then(function (u) {
+        if (u.error) { msg.style.color = 'var(--danger)'; msg.textContent = 'שגיאה: ' + u.error.message; return; }
+        msg.style.color = 'var(--ok)'; msg.textContent = '✔ נשמר';
+        if (o.id === window.C2B.orgId) { window.C2B.brand = { name: o.name, color: val.color, colorDeep: val.color_deep, logo: val.logo }; applyBranding(); }
+        setTimeout(function () { closeDrawer(); renderOrgs(); }, 600);
+      });
+    });
+  }
 
   function renderUsers() {
     loading();
