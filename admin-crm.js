@@ -439,7 +439,7 @@
     C.txtCol('ad_group', 'מזהה קבוצת מודעות', { ltr: true, w: 170 }),
     C.txtCol('ad_id', 'מזהה מודעה', { ltr: true, w: 150 }),
     C.txtCol('form_id', 'מזהה טופס', { ltr: true, w: 150 }),
-    C.txtCol('external_id', 'Lead ID · פייסבוק', { ltr: true, w: 170 }),
+    C.txtCol('external_id', 'מזהה ליד בפלטפורמה', { ltr: true, w: 170 }),
     C.txtCol('page_url', 'דף נחיתה', { ltr: true, w: 240 }),
     C.txtCol('close_reason', 'סיבת סגירה', { w: 190 }),
     C.txtCol('first_response', 'מענה ראשון', { f: 'first_response_at', w: 150, fmt: fmt }),
@@ -505,7 +505,7 @@
         { key: 'ad_group', label: 'ad_group' },
         // מזהים טכניים — לאיתור ליד בודד מול פייסבוק
         { key: 'ad_id', label: 'מזהה מודעה' }, { key: 'form_id', label: 'מזהה טופס' },
-        { key: 'external_id', label: 'מזהה ליד (פייסבוק)' },
+        { key: 'external_id', label: 'מזהה ליד בפלטפורמה' },
         { key: 'page_url', label: 'כתובת הדף' }, { key: 'ip', label: 'כתובת IP' }
       ], draw);
       if (!leadCols) leadCols = C.colPicker('leads', LEAD_COLS, draw, { resizable: true, sortable: true });
@@ -1134,8 +1134,8 @@
         '<option value="no"' + (lead.no_marketing ? '' : ' selected') + '>לא — מקבל דיוור</option>' +
         '<option value="yes"' + (lead.no_marketing ? ' selected' : '') + '>כן — חסום</option>' +
       '</select></div>' +
-      // מזהה הליד אצל פייסבוק — המפתח לאימות מול Ads Manager ולמניעת כפילויות
-      lf('Lead ID · פייסבוק', lead.external_id
+      // מזהה הליד בפלטפורמת הפרסום (טיקטוק/פייסבוק) — המפתח לאימות מול Ads Manager ולמניעת כפילויות
+      lf('מזהה ליד בפלטפורמה', lead.external_id
         ? '<span class="mono" style="user-select:all;direction:ltr;display:inline-block">' + esc(lead.external_id) + '</span>'
         : '') +
       lf('מזהה טופס', esc(lead.form_id)) +
@@ -1159,7 +1159,7 @@
       lf('המודעה שהביאה את הליד',
         lead.ad_id ? '<button class="btn btn-ghost btn-sm" data-showad="' + esc(lead.ad_id) + '" style="padding:4px 10px;font-size:12.5px">📢 צפייה במודעה</button>'
         : (pageUrl ? '<a href="' + esc(pageUrl) + '" target="_blank" rel="noopener noreferrer" title="' + esc(pageUrl) + '">פתח »</a>' : '')) +
-      lf('lead_id', '<span class="muted" style="font-size:10.5px">' + esc(lead.id) + '</span>') +
+      lf('מספר לקוח', '<span class="muted" style="font-size:10.5px">' + esc(lead.id) + '</span>') +
       '</div>';
   }
   // single car search from inventory → fills the car + the existing מותג field
