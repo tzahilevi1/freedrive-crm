@@ -4420,7 +4420,7 @@
     loading();
     var orgId = window.C2B.orgId;
     Promise.all([
-      db.from('leads').select('id,email,no_marketing,phone,car_category').eq('status', 'lost').is('deleted_at', null),
+      db.from('leads').select('id,name,email,no_marketing,phone,car_category').eq('status', 'lost').is('deleted_at', null),
       db.from('nurture_state').select('lead_id,last_sent_at,unsubscribed,reengaged_at,sent_count,campaign,step,delivered_at,opened_at,bounced_at,lead:leads(name,email,status)'),
       db.from('leads').select('id,name,phone,email,status,updated_at').eq('no_marketing', true).is('deleted_at', null).order('updated_at', { ascending: false }),
       db.from('nurture_templates').select('id,segment,step,subject,intro,active,show_cars').eq('org_id', orgId).order('step')
@@ -4471,7 +4471,7 @@
         }).join('') + '</div></div>';
 
       view('<div class="head"><h1>📧 דיוור והחזרה</h1><div class="muted">החזרת לידים שסומנו "לא רלוונטי" באמצעות מייל ממותג עם כפתור "אשמח שנציג יחזור אליי". לחיצה מחזירה את הליד אוטומטית לחלוקה, עם ייחוס מלא (מקור: ליד חוזר · דיוור).</div></div>'
-        + '<div class="cards">'
+        + '<div class="cards" id="nuKpis">'
         + stat('לידים לא-רלוונטי', String(lost.length), null, null, 'סה״כ במערכת')
         + stat('עם כתובת מייל', String(withEmail.length), null, null, 'ניתנים לדיוור')
         + stat('ממתינים לשליחה', String(pending), null, null, 'עוד לא קיבלו מייל')
@@ -4482,6 +4482,7 @@
         + stat('הוקפצו', String(bounced), null, null, 'לא נמסרו / שגיאה')
         + stat('🚫 חסומים לדיוור', String(dncList.length), null, null, 'הוסרו — לא יקבלו כלום')
         + '</div>'
+        + '<div id="nuDrill" style="margin-top:12px"></div>'
         + '<div class="card" style="margin-top:14px"><div style="display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between">'
         + '<div><b>סבב שליחה</b><div class="muted" style="font-size:13px;margin-top:3px;max-width:540px">כל סבב שולח את <b>המייל הבא ברצף</b> (מ-' + esc(brandName) + ') עד 25 לידים שהגיע זמנם — כל ליד מתקדם שלב-שלב, במרווח של שבוע בין מייל למייל. מיילים עם 🚗 מזריקים דגמים מהמלאי לפי סוג הרכב שלו. <b>מי שברשימת ההסרה נחסם אוטומטית.</b></div></div>'
         + '<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-ghost" id="nuPreview">👁 תצוגה מקדימה</button>'
@@ -4525,6 +4526,38 @@
 
       //  פתיחת כרטיס ליד מרשימת המיילים שנשלחו
       $('view').querySelectorAll('[data-golead]').forEach(function (el) { el.addEventListener('click', function () { if (window.C2B_openLeadCard) window.C2B_openLeadCard(el.dataset.golead); }); });
+
+      //  ---------- KPI לחיצים: כל כרטיס פותח את רשימת הלידים שמאחוריו ----------
+      var pendingList = withEmail.filter(function (l) { return !l.no_marketing && !(stBy[l.id] && stBy[l.id].last_sent_at); });
+      var stRow = function (s, when) { var l = s.lead || {}; return { id: s.lead_id, name: l.name, email: l.email, extra: when }; };
+      var drill = {
+        lost:    { title: 'לידים לא-רלוונטי', rows: lost },
+        email:   { title: 'עם כתובת מייל', rows: withEmail },
+        pending: { title: 'ממתינים לשליחה', rows: pendingList },
+        sent:    { title: 'נשלחו', rows: sentList.map(function (s) { return stRow(s, 'שלב #' + (s.step || 1) + ' · ' + fmtDateTime(s.last_sent_at)); }) },
+        reeng:   { title: 'חזרו למעגל', rows: states.filter(function (s) { return s.reengaged_at; }).map(function (s) { return stRow(s, fmtDateTime(s.reengaged_at)); }) },
+        deliv:   { title: 'נמסרו', rows: sentList.filter(function (s) { return s.delivered_at; }).map(function (s) { return stRow(s, fmtDateTime(s.delivered_at)); }) },
+        opened:  { title: 'נפתחו', rows: sentList.filter(function (s) { return s.opened_at; }).map(function (s) { return stRow(s, fmtDateTime(s.opened_at)); }) },
+        bounced: { title: 'הוקפצו', rows: sentList.filter(function (s) { return s.bounced_at; }).map(function (s) { return stRow(s, fmtDateTime(s.bounced_at)); }) },
+        dnc:     { title: '🚫 חסומים לדיוור', rows: dncList.map(function (l) { return { id: l.id, name: l.name, email: l.email, extra: l.phone }; }) }
+      };
+      var KPI_ORDER = ['lost', 'email', 'pending', 'sent', 'reeng', 'deliv', 'opened', 'bounced', 'dnc'];
+      function showDrill(key) {
+        var d = drill[key], box = $('nuDrill'); if (!d || !box) return;
+        var rows = d.rows || [];
+        box.innerHTML = '<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap"><b>' + esc(d.title) + ' (' + rows.length + ')</b><button class="btn btn-ghost btn-sm" id="nuDrillClose">✕ סגור</button></div>'
+          + '<div style="margin-top:10px;max-height:60vh;overflow:auto">' + (rows.length
+            ? '<table><thead><tr><th>שם</th><th>מייל</th><th>פרטים</th></tr></thead><tbody>'
+              + rows.map(function (r) { return '<tr' + (r.id ? ' data-golead="' + esc(r.id) + '" style="cursor:pointer"' : '') + '><td><b>' + esc(r.name || '—') + '</b></td><td class="ltr" style="font-size:12.5px">' + esc(r.email || '—') + '</td><td class="muted" style="font-size:12px">' + esc(r.extra || '') + '</td></tr>'; }).join('')
+              + '</tbody></table>'
+            : '<p class="muted" style="margin:6px 0">אין רשומות בקטגוריה זו.</p>')
+          + '</div></div>';
+        box.querySelector('#nuDrillClose').addEventListener('click', function () { box.innerHTML = ''; });
+        box.querySelectorAll('[data-golead]').forEach(function (el) { el.addEventListener('click', function () { if (window.C2B_openLeadCard) window.C2B_openLeadCard(el.dataset.golead); }); });
+        box.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+      var kpiEls = ($('nuKpis') || {}).querySelectorAll ? $('nuKpis').querySelectorAll('.kpi') : [];
+      KPI_ORDER.forEach(function (key, i) { var el = kpiEls[i]; if (!el) return; el.classList.add('click'); el.style.cursor = 'pointer'; el.addEventListener('click', function () { showDrill(key); }); });
       //  תצוגת המייל שנשלח (לפי שלב) מתוך רשימת "מיילים שנשלחו"
       $('view').querySelectorAll('[data-prevstep]').forEach(function (b) {
         b.addEventListener('click', function () {
