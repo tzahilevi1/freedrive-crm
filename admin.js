@@ -4418,12 +4418,13 @@
     loading();
     var orgId = window.C2B.orgId;
     Promise.all([
-      db.from('leads').select('id,email,no_marketing,phone').eq('status', 'lost').is('deleted_at', null),
+      db.from('leads').select('id,email,no_marketing,phone,car_category').eq('status', 'lost').is('deleted_at', null),
       db.from('nurture_state').select('lead_id,last_sent_at,unsubscribed,reengaged_at,sent_count,campaign,lead:leads(name,email,status)'),
-      db.from('leads').select('id,name,phone,email,status,updated_at').eq('no_marketing', true).is('deleted_at', null).order('updated_at', { ascending: false })
+      db.from('leads').select('id,name,phone,email,status,updated_at').eq('no_marketing', true).is('deleted_at', null).order('updated_at', { ascending: false }),
+      db.from('nurture_templates').select('id,segment,step,subject,intro,active').eq('org_id', orgId).order('segment')
     ]).then(function (res) {
       if (res[0].error) return errBox(res[0].error.message);
-      var lost = res[0].data || [], states = res[1].data || [];
+      var lost = res[0].data || [], states = res[1].data || [], templates = (res[3] && res[3].data) || [];
       var stBy = {}; states.forEach(function (s) { stBy[s.lead_id] = s; });
       var withEmail = lost.filter(function (l) { return l.email && String(l.email).indexOf('@') > 0; });
       var sent = 0, pending = 0, reeng = 0;
@@ -4443,6 +4444,24 @@
       });
       var brandName = (window.C2B.brand && window.C2B.brand.name) || 'הארגון';
       var batch = Math.min(pending, 25);
+      //  פילוח קהל ממתין לפי סוג-רכב + בנק המיילים
+      var segCount = {};
+      withEmail.forEach(function (l) { if (l.no_marketing) return; var s = stBy[l.id]; if (s && (s.unsubscribed || s.last_sent_at)) return; var seg = l.car_category || 'אחר'; segCount[seg] = (segCount[seg] || 0) + 1; });
+      var tBySeg = {}; templates.forEach(function (t) { tBySeg[t.segment] = t; });
+      var bankSegs = ['חשמלי', 'פלאגין', 'יוקרה', 'מסחרי', 'משפחתי', 'זול', 'כללי'];
+      var bankCard = '<div class="card" style="margin-top:14px"><div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap"><b>📚 בנק מיילים — לפי סוג רכב</b><span class="muted" style="font-size:12.5px">לכל סגמנט: נושא + פתיח. המערכת מזריקה אוטומטית דגמים תואמים מהמלאי + כפתור החזרה. ערכו ושמרו.</span></div>'
+        + '<div id="nuBank">' + bankSegs.map(function (seg) {
+          var t = tBySeg[seg] || { segment: seg, subject: '', intro: '', active: true, id: '' };
+          var aud = seg === 'כללי' ? 'ברירת מחדל (ללא סיווג)' : (segCount[seg] ? segCount[seg] + ' ממתינים' : 'אין ממתינים');
+          return '<details style="border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:8px 0">'
+            + '<summary style="cursor:pointer;font-weight:700">' + esc(seg) + ' <span class="muted" style="font-weight:400;font-size:12px">· ' + esc(aud) + (t.active === false ? ' · כבוי' : '') + '</span></summary>'
+            + '<div style="margin-top:8px" data-tplseg="' + esc(seg) + '" data-tplid="' + esc(t.id || '') + '">'
+            + '<label style="font-size:12px;color:var(--muted)">נושא</label><input class="inp tpl-subject" value="' + esc(t.subject || '') + '" style="width:100%;margin-bottom:8px">'
+            + '<label style="font-size:12px;color:var(--muted)">פתיח (אפשר {firstname})</label><textarea class="inp tpl-intro" rows="3" style="width:100%;margin-bottom:8px">' + esc(t.intro || '') + '</textarea>'
+            + '<label style="font-size:13px;display:inline-flex;align-items:center;gap:6px;margin-inline-end:12px"><input type="checkbox" class="tpl-active"' + (t.active === false ? '' : ' checked') + '> פעיל</label>'
+            + '<button class="btn btn-sm btn-primary tpl-save">💾 שמור</button> <button class="btn btn-sm btn-ghost tpl-prev">👁 תצוגה מקדימה</button> <span class="tpl-msg muted" style="font-size:12px;margin-inline-start:8px"></span>'
+            + '</div></details>';
+        }).join('') + '</div></div>';
 
       view('<div class="head"><h1>📧 דיוור והחזרה</h1><div class="muted">החזרת לידים שסומנו "לא רלוונטי" באמצעות מייל ממותג עם כפתור "אשמח שנציג יחזור אליי". לחיצה מחזירה את הליד אוטומטית לחלוקה, עם ייחוס מלא (מקור: ליד חוזר · דיוור).</div></div>'
         + '<div class="cards">'
@@ -4458,6 +4477,7 @@
         + '<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-ghost" id="nuPreview">👁 תצוגה מקדימה</button>'
         + '<button class="btn btn-primary" id="nuSend"' + (batch ? '' : ' disabled') + '>📤 שלח סבב (' + batch + ')</button></div>'
         + '</div><div id="nuResult" style="margin-top:12px"></div></div>'
+        + bankCard
         //  ---------- מיילים שנשלחו ----------
         + '<div class="card" style="margin-top:14px"><div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap"><b>📤 מיילים שנשלחו (' + sentList.length + ')</b><span class="muted" style="font-size:12.5px">כל מייל החזרה שיצא — נמען, מתי, וסטטוס. (מעקב מסירה/פתיחה מלא בלוח הבקרה של Resend.)</span></div>'
         + '<div style="margin-top:10px;overflow-x:auto">' + (sentList.length
@@ -4486,6 +4506,33 @@
 
       //  פתיחת כרטיס ליד מרשימת המיילים שנשלחו
       $('view').querySelectorAll('[data-golead]').forEach(function (el) { el.addEventListener('click', function () { if (window.C2B_openLeadCard) window.C2B_openLeadCard(el.dataset.golead); }); });
+
+      //  בנק המיילים — שמירה + תצוגה מקדימה פר-סגמנט
+      var bank = $('nuBank');
+      if (bank) bank.addEventListener('click', function (e) {
+        var box = e.target.closest('[data-tplseg]'); if (!box) return;
+        var seg = box.dataset.tplseg, id = box.dataset.tplid, msg = box.querySelector('.tpl-msg');
+        if (e.target.closest('.tpl-save')) {
+          var subject = box.querySelector('.tpl-subject').value.trim(), intro = box.querySelector('.tpl-intro').value.trim(), active = box.querySelector('.tpl-active').checked;
+          if (!subject || !intro) { msg.textContent = 'נושא ופתיח חובה'; msg.style.color = 'var(--danger)'; return; }
+          msg.textContent = 'שומר…'; msg.style.color = 'var(--muted)';
+          var row = { org_id: orgId, segment: seg, step: 1, subject: subject, intro: intro, active: active, updated_at: new Date().toISOString() };
+          var op = id ? db.from('nurture_templates').update(row).eq('id', id) : db.from('nurture_templates').insert(row);
+          op.then(function (r) { if (r.error) { msg.textContent = 'שגיאה: ' + r.error.message; msg.style.color = 'var(--danger)'; return; } msg.textContent = '✔ נשמר'; msg.style.color = 'var(--ok)'; if (!id) setTimeout(renderNurture, 800); });
+          return;
+        }
+        if (e.target.closest('.tpl-prev')) {
+          openDrawer('<h3 style="margin:0 0 10px">👁 תצוגה מקדימה — ' + esc(seg) + '</h3><div class="muted" style="font-size:13px">טוען…</div>');
+          db.functions.invoke('nurture-run', { body: { org: orgId, preview: true, segment: seg } }).then(function (r) {
+            var d = r && r.data;
+            if (!d || !d.html) { openDrawer('<p class="err">שגיאה בתצוגה מקדימה</p>'); return; }
+            openDrawer('<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><h3 style="margin:0">👁 ' + esc(seg) + '</h3><button class="btn btn-ghost btn-sm" onclick="window.C2B.closeDrawer()">✕ סגור</button></div><div class="muted" style="font-size:12.5px;margin-bottom:10px">נושא: ' + esc(d.subject || '') + '</div><div id="nuFrameWrap" style="border:1px solid var(--line);border-radius:12px;overflow:hidden;height:72vh"></div>');
+            var fr = document.createElement('iframe'); fr.style.cssText = 'width:100%;height:100%;border:0;background:#fff'; fr.srcdoc = d.html; $('nuFrameWrap').appendChild(fr);
+          }, function () { openDrawer('<p class="err">שגיאה בתצוגה מקדימה</p>'); });
+          return;
+        }
+      });
+
       $('nuPreview').addEventListener('click', function () {
         openDrawer('<h3 style="margin:0 0 10px">👁 תצוגה מקדימה</h3><div class="muted" style="font-size:13px">טוען…</div>');
         db.functions.invoke('nurture-run', { body: { org: orgId, preview: true } }).then(function (r) {
