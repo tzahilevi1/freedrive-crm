@@ -439,7 +439,7 @@
     C.txtCol('ad_group', 'מזהה קבוצת מודעות', { ltr: true, w: 170 }),
     C.txtCol('ad_id', 'מזהה מודעה', { ltr: true, w: 150 }),
     C.txtCol('form_id', 'מזהה טופס', { ltr: true, w: 150 }),
-    C.txtCol('external_id', 'מזהה ליד בפלטפורמה', { ltr: true, w: 170 }),
+    C.txtCol('external_id', 'lead_id', { ltr: true, w: 170 }),
     C.txtCol('page_url', 'דף נחיתה', { ltr: true, w: 240 }),
     C.txtCol('close_reason', 'סיבת סגירה', { w: 190 }),
     C.txtCol('first_response', 'מענה ראשון', { f: 'first_response_at', w: 150, fmt: fmt }),
@@ -505,7 +505,7 @@
         { key: 'ad_group', label: 'ad_group' },
         // מזהים טכניים — לאיתור ליד בודד מול פייסבוק
         { key: 'ad_id', label: 'מזהה מודעה' }, { key: 'form_id', label: 'מזהה טופס' },
-        { key: 'external_id', label: 'מזהה ליד בפלטפורמה' },
+        { key: 'external_id', label: 'lead_id' },
         { key: 'page_url', label: 'כתובת הדף' }, { key: 'ip', label: 'כתובת IP' }
       ], draw);
       if (!leadCols) leadCols = C.colPicker('leads', LEAD_COLS, draw, { resizable: true, sortable: true });
@@ -1135,7 +1135,7 @@
         '<option value="yes"' + (lead.no_marketing ? ' selected' : '') + '>כן — חסום</option>' +
       '</select></div>' +
       // מזהה הליד בפלטפורמת הפרסום (טיקטוק/פייסבוק) — המפתח לאימות מול Ads Manager ולמניעת כפילויות
-      lf('מזהה ליד בפלטפורמה', lead.external_id
+      lf('lead_id', lead.external_id
         ? '<span class="mono" style="user-select:all;direction:ltr;display:inline-block">' + esc(lead.external_id) + '</span>'
         : '') +
       lf('מזהה טופס', esc(lead.form_id)) +
