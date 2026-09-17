@@ -4421,12 +4421,18 @@
     var orgId = window.C2B.orgId;
     Promise.all([
       db.from('leads').select('id,name,email,no_marketing,phone,car_category').eq('status', 'lost').is('deleted_at', null),
-      db.from('nurture_state').select('lead_id,last_sent_at,unsubscribed,reengaged_at,sent_count,campaign,step,delivered_at,opened_at,bounced_at,lead:leads(name,email,status)'),
+      db.from('nurture_state').select('lead_id,channel,last_sent_at,unsubscribed,reengaged_at,sent_count,campaign,step,delivered_at,opened_at,bounced_at,lead:leads(name,email,status)'),
       db.from('leads').select('id,name,phone,email,status,updated_at').eq('no_marketing', true).is('deleted_at', null).order('updated_at', { ascending: false }),
       db.from('nurture_templates').select('id,segment,step,subject,intro,active,show_cars').eq('org_id', orgId).order('step')
     ]).then(function (res) {
       if (res[0].error) return errBox(res[0].error.message);
-      var lost = res[0].data || [], states = res[1].data || [], templates = (res[3] && res[3].data) || [];
+      var lost = res[0].data || [];
+      //  התבניות והמצבים עכשיו רב-ערוציים — מפצלים לפי channel כך שכל לשונית
+      //  (מייל/סמס/וואטסאפ) עובדת על הנתונים שלה בלבד.
+      var allStates = res[1].data || [], allTpls = (res[3] && res[3].data) || [];
+      var chOf = function (x) { return x.channel || 'email'; };
+      var states = allStates.filter(function (s) { return chOf(s) === 'email'; });
+      var templates = allTpls.filter(function (t) { return chOf(t) === 'email'; });
       var stBy = {}; states.forEach(function (s) { stBy[s.lead_id] = s; });
       var withEmail = lost.filter(function (l) { return l.email && String(l.email).indexOf('@') > 0; });
       var sent = 0, pending = 0, reeng = 0;
@@ -4470,7 +4476,53 @@
             + '</div></details>';
         }).join('') + '</div></div>';
 
-      view('<div class="head"><h1>📧 דיוור והחזרה</h1><div class="muted">החזרת לידים שסומנו "לא רלוונטי" באמצעות מייל ממותג עם כפתור "אשמח שנציג יחזור אליי". לחיצה מחזירה את הליד אוטומטית לחלוקה, עם ייחוס מלא (מקור: ליד חוזר · דיוור).</div></div>'
+      // ============ לשוניות רב-ערוציות (מייל · סמס · וואטסאפ) ============
+      //  DNC משותף לכל הערוצים: מי שהוסר במקום אחד (no_marketing) נחסם בכולם.
+      var dncPh = {}, dncEm = {};
+      (res[2].data || []).forEach(function (l) { var p = String(l.phone || '').replace(/\D/g, '').slice(-9); if (p) dncPh[p] = 1; var e = String(l.email || '').trim().toLowerCase(); if (e) dncEm[e] = 1; });
+      function isDncLead(l) { var p = String(l.phone || '').replace(/\D/g, '').slice(-9), e = String(l.email || '').trim().toLowerCase(); return !!((p && dncPh[p]) || (e && dncEm[e])); }
+      var withPhone = lost.filter(function (l) { return l.phone && String(l.phone).replace(/\D/g, '').length >= 9; });
+      var CH_META = { sms: { icon: '📱', label: 'סמס', add: 'הוסף SMS לרצף', prov: 'ספק SMS (InforU/019)' }, whatsapp: { icon: '💬', label: 'וואטסאפ', add: 'הוסף וואטסאפ לרצף', prov: 'טמפלט וואטסאפ ב-Heyy' } };
+      function chanPane(ch) {
+        var meta = CH_META[ch];
+        var tpls = allTpls.filter(function (t) { return chOf(t) === ch; }).sort(function (a, b) { return (a.step || 0) - (b.step || 0); });
+        var sBy = {}; allStates.filter(function (s) { return chOf(s) === ch; }).forEach(function (s) { sBy[s.lead_id] = s; });
+        var actSteps = tpls.filter(function (t) { return t.active !== false; }).map(function (t) { return t.step; }).sort(function (a, b) { return a - b; });
+        var nextS = function (cur) { for (var i = 0; i < actSteps.length; i++) if (actSteps[i] > cur) return actSteps[i]; return null; };
+        var pend = 0, snt = 0, reg = 0;
+        withPhone.forEach(function (l) { if (isDncLead(l)) return; var s = sBy[l.id]; if (s && s.unsubscribed) return; if (nextS((s && s.step) || 0) === null) return; if (s && s.last_sent_at) snt++; else pend++; });
+        allStates.filter(function (s) { return chOf(s) === ch; }).forEach(function (s) { if (s.reengaged_at) reg++; });
+        var mx = tpls.reduce(function (m, t) { return Math.max(m, t.step || 0); }, 0);
+        var bank = tpls.map(function (t) {
+          return '<details style="border:1px solid var(--line);border-radius:10px;padding:8px 12px;margin:6px 0">'
+            + '<summary style="cursor:pointer;font-weight:600"><span class="muted">#' + (t.step || 0) + '</span> ' + esc(t.subject || (t.body || '').slice(0, 45)) + (t.show_cars ? ' 🚗' : '') + (t.active === false ? ' <span style="color:var(--danger)">· כבוי</span>' : '') + '</summary>'
+            + '<div style="margin-top:8px" data-tplid="' + esc(t.id) + '" data-tplstep="' + (t.step || 0) + '" data-chan="' + ch + '">'
+            + '<label style="font-size:12px;color:var(--muted)">תוכן ההודעה (אפשר {firstname})</label><textarea class="inp tpl-body" rows="4" style="width:100%;margin-bottom:8px">' + esc(t.body || '') + '</textarea>'
+            + (ch === 'whatsapp' ? '<label style="font-size:13px;display:inline-flex;align-items:center;gap:6px;margin-inline-end:14px"><input type="checkbox" class="tpl-cars"' + (t.show_cars ? ' checked' : '') + '> 🚗 הצג דגמים מהמלאי</label>' : '')
+            + '<label style="font-size:13px;display:inline-flex;align-items:center;gap:6px;margin-inline-end:14px"><input type="checkbox" class="tpl-active"' + (t.active === false ? '' : ' checked') + '> פעיל</label>'
+            + '<button class="btn btn-sm btn-primary tpl-save">💾 שמור</button> <button class="btn btn-sm btn-ghost tpl-prev">👁 תצוגה</button> <button class="btn btn-sm btn-ghost tpl-del">🗑</button> <span class="tpl-msg muted" style="font-size:12px;margin-inline-start:8px"></span>'
+            + '<div style="margin-top:8px;display:flex;gap:6px;align-items:center;flex-wrap:wrap;border-top:1px dashed var(--line);padding-top:8px"><span class="muted" style="font-size:12px">שליחת בדיקה:</span><input class="inp tpl-testphone ltr" placeholder="טלפון" style="width:160px;font-size:12.5px"><button class="btn btn-sm tpl-send">📤 שלח בדיקה</button></div>'
+            + '</div></details>';
+        }).join('');
+        return '<div class="cards">'
+          + stat('ממתינים לשליחה', String(pend), null, null, 'זכאים לסבב הבא')
+          + stat('נשלחו', String(snt), null, null, 'קיבלו הודעה')
+          + stat('חזרו למעגל', String(reg), reg ? true : null, null, 'לחצו על הקישור')
+          + stat('🚫 חסומים', String(dncList.length), null, null, 'משותף לכל הערוצים')
+          + '</div>'
+          + '<div class="card" style="margin-top:14px;background:#fff8e1;border:1px solid #ffe0a3"><b>⚙️ מצב סימולציה</b> — ' + esc(meta.prov) + ' עדיין לא מחובר. "שלח סבב" יראה למי היה נשלח ואיך ההודעה נראית, בלי לשלוח וללא שינוי מצב. ברגע שנחבר ספק — זה ישלח באמת.</div>'
+          + '<div class="card" style="margin-top:14px"><div style="display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between"><div><b>סבב שליחה — ' + esc(meta.label) + '</b><div class="muted" style="font-size:13px;margin-top:3px;max-width:540px">כל סבב שולח את ההודעה הבאה ברצף עד 25 לידים שהגיע זמנם. <b>מי שברשימת ההסרה נחסם אוטומטית (בכל הערוצים).</b></div></div>'
+          + '<button class="btn btn-primary" data-nusend="' + ch + '"' + (pend ? '' : ' disabled') + '>📤 שלח סבב (' + Math.min(pend, 25) + ')</button></div><div class="nu-res" data-nures="' + ch + '" style="margin-top:12px"></div></div>'
+          + '<div class="card" style="margin-top:14px"><div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap"><b>📚 בנק ' + esc(meta.label) + ' — רצף חימום (' + tpls.length + ')</b><span class="muted" style="font-size:12.5px">כל ליד מתקדם שלב-שלב. ' + (ch === 'whatsapp' ? '🚗 = הודעה שמזריקה דגמים מהמלאי. ' : '') + 'ערכו · כבו · הוסיפו.</span></div>'
+          + '<div style="margin:8px 0"><button class="btn btn-sm btn-ghost" data-nuadd="' + ch + '" data-nextstep="' + (mx + 1) + '">➕ ' + esc(meta.add) + '</button></div>'
+          + '<div class="nu-bank" data-bankchan="' + ch + '" style="max-height:60vh;overflow:auto">' + bank + '</div></div>';
+      }
+      var smsPane = chanPane('sms'), waPane = chanPane('whatsapp');
+      var nuTabs = '<div class="tabs" id="nuTabs" style="margin:0 0 14px"><button data-nutab="email" class="active">📧 מיילים</button><button data-nutab="sms">📱 סמס</button><button data-nutab="whatsapp">💬 וואטסאפ</button></div>';
+
+      view('<div class="head"><h1>📧 דיוור והחזרה</h1><div class="muted">החזרת לידים שסומנו "לא רלוונטי" בכל הערוצים — מייל, סמס ווואטסאפ. הסרה בערוץ אחד חוסמת בכולם. לחיצה על הקישור מחזירה את הליד אוטומטית לחלוקה, עם ייחוס מלא.</div></div>'
+        + nuTabs
+        + '<div id="nuPaneEmail">'
         + '<div class="cards" id="nuKpis">'
         + stat('לידים לא-רלוונטי', String(lost.length), null, null, 'סה״כ במערכת')
         + stat('עם כתובת מייל', String(withEmail.length), null, null, 'ניתנים לדיוור')
@@ -4522,7 +4574,91 @@
                 + '<td><button class="btn btn-ghost btn-sm" data-resub="' + esc(l.id) + '" data-ph="' + esc(l.phone || '') + '" data-em="' + esc(l.email || '') + '">↩ החזר לדיוור</button></td></tr>';
             }).join('') + '</tbody></table>'
           : '<p class="muted" style="margin:6px 0">אין אף אחד ברשימת ההסרה כרגע.</p>')
-        + '</div></div>');
+        + '</div></div>'
+        + '</div>'
+        + '<div id="nuPaneSms" class="hidden">' + smsPane + '</div>'
+        + '<div id="nuPaneWhatsapp" class="hidden">' + waPane + '</div>');
+
+      //  מעבר בין לשוניות הערוצים
+      var tabBar = $('nuTabs');
+      if (tabBar) tabBar.addEventListener('click', function (e) {
+        var b = e.target.closest('button[data-nutab]'); if (!b) return;
+        var ch = b.dataset.nutab;
+        tabBar.querySelectorAll('button').forEach(function (x) { x.classList.toggle('active', x === b); });
+        [['email', 'nuPaneEmail'], ['sms', 'nuPaneSms'], ['whatsapp', 'nuPaneWhatsapp']].forEach(function (p) {
+          var el = $(p[1]); if (el) el.classList.toggle('hidden', p[0] !== ch);
+        });
+      });
+
+      //  בנק SMS/וואטסאפ — שמירה / תצוגה / מחיקה / שליחת-בדיקה (דרך nurture-msg)
+      $('view').querySelectorAll('.nu-bank').forEach(function (bankEl) {
+        bankEl.addEventListener('click', function (e) {
+          var box = e.target.closest('[data-tplid]'); if (!box) return;
+          var id = box.dataset.tplid, step = box.dataset.tplstep, ch = box.dataset.chan, msg = box.querySelector('.tpl-msg');
+          if (e.target.closest('.tpl-save')) {
+            var bodyVal = box.querySelector('.tpl-body').value.trim();
+            var carsEl = box.querySelector('.tpl-cars'), show_cars = carsEl ? carsEl.checked : false, active = box.querySelector('.tpl-active').checked;
+            if (!bodyVal) { msg.textContent = 'תוכן חובה'; msg.style.color = 'var(--danger)'; return; }
+            msg.textContent = 'שומר…'; msg.style.color = 'var(--muted)';
+            db.from('nurture_templates').update({ body: bodyVal, subject: bodyVal.replace(/\n/g, ' ').slice(0, 45), show_cars: show_cars, active: active, updated_at: new Date().toISOString() }).eq('id', id).then(function (r) { if (r.error) { msg.textContent = 'שגיאה: ' + r.error.message; msg.style.color = 'var(--danger)'; return; } msg.textContent = '✔ נשמר'; msg.style.color = 'var(--ok)'; });
+            return;
+          }
+          if (e.target.closest('.tpl-del')) {
+            if (!confirm('למחוק הודעה #' + step + ' מהרצף?')) return;
+            db.from('nurture_templates').delete().eq('id', id).then(function (r) { if (r.error) { alert('שגיאה: ' + r.error.message); return; } renderNurture(); });
+            return;
+          }
+          if (e.target.closest('.tpl-prev')) {
+            var pvBody = box.querySelector('.tpl-body').value, pvCarsEl = box.querySelector('.tpl-cars'), pvCars = pvCarsEl ? pvCarsEl.checked : false;
+            openDrawer('<h3 style="margin:0 0 10px">👁 תצוגה — הודעה #' + esc(step) + '</h3><div class="muted" style="font-size:13px">טוען…</div>');
+            db.functions.invoke('nurture-msg', { body: { org: orgId, channel: ch, preview: true, step: Number(step), body: pvBody, show_cars: pvCars } }).then(function (r) {
+              var d = r && r.data;
+              if (!d || !d.text) { openDrawer('<p class="err">שגיאה בתצוגה</p>'); return; }
+              openDrawer('<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><h3 style="margin:0">👁 ' + (ch === 'sms' ? 'SMS' : 'וואטסאפ') + ' #' + esc(step) + '</h3><button class="btn btn-ghost btn-sm" onclick="window.C2B.closeDrawer()">✕ סגור</button></div>'
+                + '<div style="background:#e7f5e1;border-radius:14px;padding:14px 16px;white-space:pre-wrap;line-height:1.6;font-size:14px;max-width:420px">' + esc(d.text) + '</div>'
+                + '<p class="muted" style="font-size:12px;margin-top:10px">כך ההודעה תיראה אצל הלקוח (במצב סימולציה עד לחיבור ספק).</p>');
+            }, function () { openDrawer('<p class="err">שגיאה בתצוגה</p>'); });
+            return;
+          }
+          if (e.target.closest('.tpl-send')) {
+            var to = (box.querySelector('.tpl-testphone').value || '').trim();
+            if (to.replace(/\D/g, '').length < 9) { msg.textContent = 'טלפון לא תקין'; msg.style.color = 'var(--danger)'; return; }
+            var btn = e.target.closest('.tpl-send'); btn.disabled = true; msg.textContent = 'שולח…'; msg.style.color = 'var(--muted)';
+            db.functions.invoke('nurture-msg', { body: { org: orgId, channel: ch, step: Number(step), test_to: to } }).then(function (r) {
+              btn.disabled = false; var d = r && r.data;
+              if (!d || d.error) { msg.textContent = 'שגיאה: ' + esc((d && d.error) || 'לא ידועה'); msg.style.color = 'var(--danger)'; return; }
+              msg.textContent = d.simulated ? '👁 סימולציה (ספק לא מחובר) — ראו תצוגה' : ('✔ נשלח ל-' + to); msg.style.color = 'var(--ok)';
+            }, function () { btn.disabled = false; msg.textContent = 'שגיאה'; msg.style.color = 'var(--danger)'; });
+            return;
+          }
+        });
+      });
+
+      //  הוספת הודעה לרצף SMS/וואטסאפ
+      $('view').querySelectorAll('[data-nuadd]').forEach(function (b) {
+        b.addEventListener('click', function () {
+          var ch = b.dataset.nuadd, ns = Number(b.dataset.nextstep) || 1;
+          db.from('nurture_templates').insert({ org_id: orgId, channel: ch, segment: 'כללי', step: ns, body: 'היי {firstname}, ', subject: 'הודעה חדשה', active: true, show_cars: false }).then(function (r) { if (r.error) { alert('שגיאה: ' + r.error.message); return; } renderNurture(); });
+        });
+      });
+
+      //  סבב שליחה SMS/וואטסאפ (dry-run/סימולציה עד חיבור ספק)
+      $('view').querySelectorAll('[data-nusend]').forEach(function (b) {
+        b.addEventListener('click', function () {
+          var ch = b.dataset.nusend, res = $('view').querySelector('[data-nures="' + ch + '"]');
+          b.disabled = true; b.textContent = 'מריץ…'; if (res) res.innerHTML = '<div class="muted">מריץ…</div>';
+          db.functions.invoke('nurture-msg', { body: { org: orgId, channel: ch, limit: 25 } }).then(function (r) {
+            b.disabled = false; b.textContent = '📤 שלח סבב'; var d = r && r.data;
+            if (!d || d.error) { if (res) res.innerHTML = '<p class="err">שגיאה: ' + esc((d && d.error) || 'לא ידועה') + '</p>'; return; }
+            if (d.simulated || d.dry_run) {
+              if (res) res.innerHTML = '<div style="background:#fff8e1;border:1px solid #ffe0a3;border-radius:10px;padding:11px 13px"><b>👁 סימולציה</b> — היו נשלחות ' + (d.would_send || 0) + ' הודעות (מתוך ' + (d.total_candidates || 0) + ' זכאים). לא נשלח כלום. חברו ספק כדי לשלוח באמת.' + (d.sample ? '<div style="margin-top:8px;background:#fff;border-radius:8px;padding:10px;white-space:pre-wrap;font-size:12.5px;max-width:420px">' + esc(d.sample) + '</div>' : '') + '</div>';
+            } else {
+              if (res) res.innerHTML = '<div style="background:var(--brand-soft);border-radius:10px;padding:11px 13px;font-weight:600">✅ נשלחו ' + d.sent + (d.failed ? (' · נכשלו ' + d.failed) : '') + ' · נותרו ' + d.remaining + '.</div>';
+              setTimeout(renderNurture, 1400);
+            }
+          }, function () { b.disabled = false; b.textContent = '📤 שלח סבב'; if (res) res.innerHTML = '<p class="err">שגיאה</p>'; });
+        });
+      });
 
       //  פתיחת כרטיס ליד מרשימת המיילים שנשלחו
       $('view').querySelectorAll('[data-golead]').forEach(function (el) { el.addEventListener('click', function () { if (window.C2B_openLeadCard) window.C2B_openLeadCard(el.dataset.golead); }); });
