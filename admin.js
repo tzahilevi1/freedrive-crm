@@ -4528,7 +4528,9 @@
         }
         if (e.target.closest('.tpl-prev')) {
           openDrawer('<h3 style="margin:0 0 10px">👁 תצוגה — מייל #' + esc(step) + '</h3><div class="muted" style="font-size:13px">טוען…</div>');
-          db.functions.invoke('nurture-run', { body: { org: orgId, preview: true, step: Number(step) } }).then(function (r) {
+          //  משקף את המצב הנוכחי בטופס (כולל "הצג דגמים") גם לפני שמירה
+          var pvSubject = box.querySelector('.tpl-subject').value, pvIntro = box.querySelector('.tpl-intro').value, pvCars = box.querySelector('.tpl-cars').checked;
+          db.functions.invoke('nurture-run', { body: { org: orgId, preview: true, step: Number(step), subject: pvSubject, intro: pvIntro, show_cars: pvCars } }).then(function (r) {
             var d = r && r.data;
             if (!d || !d.html) { openDrawer('<p class="err">שגיאה בתצוגה מקדימה</p>'); return; }
             openDrawer('<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><h3 style="margin:0">👁 מייל #' + esc(step) + '</h3><button class="btn btn-ghost btn-sm" onclick="window.C2B.closeDrawer()">✕ סגור</button></div><div class="muted" style="font-size:12.5px;margin-bottom:10px">נושא: ' + esc(d.subject || '') + '</div><div id="nuFrameWrap" style="border:1px solid var(--line);border-radius:12px;overflow:hidden;height:72vh"></div>');
