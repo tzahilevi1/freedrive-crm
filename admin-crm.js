@@ -415,6 +415,7 @@
     { key: 'assigned', label: 'מנהל מכירות', w: 170, sort: function (l) { return profiles[l.assigned_to] || ''; }, cell: function (l) { return '<td>' + assignChip(l) + '</td>'; } },
     { key: 'status', label: 'סטטוס לקוח', w: 130, cell: function (l) { return '<td>' + badge(l.status || 'new', true, l.id) + '</td>'; } },
     { key: 'source', label: 'מקור הגעה', w: 130, cell: function (l) { return '<td>' + (l.source ? '<span class="tag">' + esc(l.source) + '</span>' : '—') + '</td>'; } },
+    { key: 'car_category', label: 'סוג רכב', w: 110, cell: function (l) { return '<td>' + (l.car_category ? '<span class="tag">' + esc(l.car_category) + '</span>' : '<span class="muted">—</span>') + '</td>'; } },
     { key: 'car', label: 'רכב', w: 280, cell: function (l) { return '<td class="ltr wrap2" title="' + esc(l.car || '') + '">' + esc(l.car || '—') + '</td>'; } },
     { key: 'updated', label: 'עדכון אחרון', w: 150, descFirst: true, sort: function (l) { return l.updated_at || l.status_changed_at || l.created_at || ''; }, cell: function (l) { return '<td class="muted">' + fmt(l.updated_at || l.status_changed_at || l.created_at) + '</td>'; } },
     { key: 'brand', label: 'מותג', w: 120, def: false, cell: function (l) { return '<td>' + esc(l.brand || '—') + '</td>'; } },
@@ -454,15 +455,19 @@
     { key: 'utm_medium', label: 'utm_medium' }, { key: 'utm_content', label: 'utm_content' },
     { key: 'utm_term', label: 'utm_term' }, { key: 'ad_group', label: 'ad_group' },
     { key: 'campaign', label: 'שם קמפיין' },
+    { key: 'car_category', label: 'סוג רכב (חשמלי/יוקרה/מסחרי…)' },
     { key: 'message', label: 'תיאור / הודעה' }, { key: 'name', label: 'שם לקוח' }, { key: 'phone', label: 'טלפון' }
   ];
+  //  קטגוריות סוג-רכב לפילוח דיוור
+  var CAR_CATEGORIES = ['חשמלי', 'פלאגין', 'יוקרה', 'מסחרי', 'משפחתי', 'זול', 'אחר'];
+  window.C2B.CAR_CATEGORIES = CAR_CATEGORIES;
   var BULK_FIELD_LABEL = {}; BULK_FIELDS.forEach(function (f) { BULK_FIELD_LABEL[f.key] = f.label; });
   var leadCols = null;
   window.C2B_renderLeads = function (statusFilter) {
     curFilter = statusFilter || null; selectedLeads = {};
     loading();
     Promise.all([
-      db.from('leads').select('id,name,phone,email,car,city,source,status,brand,marketing_company,assigned_to,created_at,updated_at,status_changed_at,first_response_at,close_reason,id_num,ip,no_marketing,utm_source,utm_campaign,utm_medium,utm_content,utm_term,ad_group,adset_name,ad_name,campaign,ad_id,form_id,external_id,message,page_url').is('deleted_at', null).order('created_at', { ascending: false }).limit(3000),
+      db.from('leads').select('id,name,phone,email,car,car_category,city,source,status,brand,marketing_company,assigned_to,created_at,updated_at,status_changed_at,first_response_at,close_reason,id_num,ip,no_marketing,utm_source,utm_campaign,utm_medium,utm_content,utm_term,ad_group,adset_name,ad_name,campaign,ad_id,form_id,external_id,message,page_url').is('deleted_at', null).order('created_at', { ascending: false }).limit(3000),
       db.from('profiles').select('user_id,full_name'),
       //  מי מקבל את הלידים החדשים לחלוקה. נשמר בתצורה ולא מקודד קשיח,
       //  כדי שהעברת התפקיד לאדם אחר לא תדרוש שינוי בקוד.
@@ -1044,6 +1049,7 @@
     html += ei('טלפון ראשי', 'phone', lead.phone, 'tel');
     html += ei('ת.ז / ח.פ', 'id_num', lead.id_num);
     html += ei('דואר אלקטרוני', 'email', lead.email, 'email');
+    html += '<div class="lf"><span class="k">סוג רכב (לדיוור)</span><select class="lf-edit" data-field="car_category" data-label="סוג רכב">' + C.selOpts(C.CAR_CATEGORIES || [], lead.car_category, '— סוג —') + '</select></div>';
     html += '<div class="lf"><span class="k">באיזה רכב מתעניין</span><div id="carPick" style="display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-start;max-width:64%"><span class="muted" style="font-size:12px">טוען מלאי…</span></div></div>';
     html += '<div class="lf"><span class="k">מותג</span><select class="lf-edit" data-field="brand" data-label="מותג">' + C.selOpts((window.C2B.marketingBrands && window.C2B.marketingBrands.length ? window.C2B.marketingBrands : (C.lists && C.lists.brand) || []), lead.brand, '— מותג —') + '</select></div>';
     html += ei('כתובת - עיר', 'city', lead.city);
