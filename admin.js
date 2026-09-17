@@ -4418,7 +4418,7 @@
     var orgId = window.C2B.orgId;
     Promise.all([
       db.from('leads').select('id,email,no_marketing,phone,car_category').eq('status', 'lost').is('deleted_at', null),
-      db.from('nurture_state').select('lead_id,last_sent_at,unsubscribed,reengaged_at,sent_count,campaign,lead:leads(name,email,status)'),
+      db.from('nurture_state').select('lead_id,last_sent_at,unsubscribed,reengaged_at,sent_count,campaign,step,delivered_at,opened_at,bounced_at,lead:leads(name,email,status)'),
       db.from('leads').select('id,name,phone,email,status,updated_at').eq('no_marketing', true).is('deleted_at', null).order('updated_at', { ascending: false }),
       db.from('nurture_templates').select('id,segment,step,subject,intro,active,show_cars').eq('org_id', orgId).order('step')
     ]).then(function (res) {
@@ -4433,8 +4433,11 @@
         if (s && s.last_sent_at) sent++; else pending++;
       });
       states.forEach(function (s) { if (s.reengaged_at) reeng++; });
-      //  רשימת המיילים שנשלחו בפועל (מהחדש לישן)
+      //  רשימת המיילים שנשלחו בפועל (מהחדש לישן) + מדדי מסירה/פתיחה/הקפצה
       var sentList = states.filter(function (s) { return s.last_sent_at; }).sort(function (a, b) { return String(b.last_sent_at).localeCompare(String(a.last_sent_at)); });
+      var deliv = 0, opened = 0, bounced = 0;
+      sentList.forEach(function (s) { if (s.delivered_at) deliv++; if (s.opened_at) opened++; if (s.bounced_at) bounced++; });
+      var subByStep = {}; templates.forEach(function (t) { subByStep[t.step] = t.subject; });
       //  רשימת החסומים (DNC) — dedupe לפי אדם (מייל/טלפון)
       var dncRows = res[2].data || [], seenDnc = {}, dncList = [];
       dncRows.forEach(function (l) {
@@ -4471,6 +4474,9 @@
         + stat('ממתינים לשליחה', String(pending), null, null, 'עוד לא קיבלו מייל')
         + stat('נשלחו', String(sent), null, null, 'מייל החזרה יצא')
         + stat('חזרו למעגל', String(reeng), reeng ? true : null, null, 'לחצו "שיחזרו אליי"')
+        + stat('נמסרו', String(deliv), null, null, 'הגיעו לתיבה בפועל')
+        + stat('נפתחו', String(opened), opened ? true : null, null, 'הנמען פתח את המייל')
+        + stat('הוקפצו', String(bounced), null, null, 'לא נמסרו / שגיאה')
         + stat('🚫 חסומים לדיוור', String(dncList.length), null, null, 'הוסרו — לא יקבלו כלום')
         + '</div>'
         + '<div class="card" style="margin-top:14px"><div style="display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between">'
@@ -4482,11 +4488,20 @@
         //  ---------- מיילים שנשלחו ----------
         + '<div class="card" style="margin-top:14px"><div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap"><b>📤 מיילים שנשלחו (' + sentList.length + ')</b><span class="muted" style="font-size:12.5px">כל מייל החזרה שיצא — נמען, מתי, וסטטוס. (מעקב מסירה/פתיחה מלא בלוח הבקרה של Resend.)</span></div>'
         + '<div style="margin-top:10px;overflow-x:auto">' + (sentList.length
-          ? '<table><thead><tr><th>נמען</th><th>מייל</th><th>נשלח</th><th>סבבים</th><th>סטטוס</th></tr></thead><tbody>'
+          ? '<table><thead><tr><th>נמען</th><th>מה נשלח</th><th>נשלח</th><th>מסירה</th><th>תגובה</th><th></th></tr></thead><tbody>'
             + sentList.map(function (s) {
-              var l = s.lead || {};
-              var st = s.reengaged_at ? '<span style="color:var(--ok);font-weight:700">🔥 חזר למעגל</span>' : (s.unsubscribed ? '<span style="color:var(--danger)">הוסר מדיוור</span>' : '<span class="muted">נשלח</span>');
-              return '<tr' + (s.lead_id ? ' data-golead="' + esc(s.lead_id) + '" style="cursor:pointer"' : '') + '><td><b>' + esc(l.name || '—') + '</b></td><td class="ltr" style="font-size:12.5px">' + esc(l.email || '—') + '</td><td class="muted" style="font-size:12px">' + fmtDateTime(s.last_sent_at) + '</td><td>' + (s.sent_count || 1) + '</td><td>' + st + '</td></tr>';
+              var l = s.lead || {}, step = s.step || 1;
+              var whatSent = '<b>#' + step + '</b> <span class="muted">' + esc((subByStep[step] || '').slice(0, 42)) + '</span>';
+              var deliv = s.bounced_at ? '<span style="color:var(--danger)">⚠️ הוקפץ</span>' : (s.opened_at ? '<span style="color:var(--ok);font-weight:700">👁 נפתח</span>' : (s.delivered_at ? '<span style="color:var(--ok)">✓ נמסר</span>' : '<span class="muted">נשלח…</span>'));
+              var resp = s.reengaged_at ? '<span style="color:var(--ok);font-weight:700">🔥 חזר למעגל</span>' : (s.unsubscribed ? '<span style="color:var(--danger)">הוסר מדיוור</span>' : '<span class="muted">—</span>');
+              return '<tr>'
+                + '<td' + (s.lead_id ? ' data-golead="' + esc(s.lead_id) + '" style="cursor:pointer"' : '') + '><b>' + esc(l.name || '—') + '</b><div class="muted ltr" style="font-size:11.5px">' + esc(l.email || '—') + '</div></td>'
+                + '<td style="font-size:12.5px">' + whatSent + '</td>'
+                + '<td class="muted" style="font-size:12px;white-space:nowrap">' + fmtDateTime(s.last_sent_at) + '</td>'
+                + '<td style="white-space:nowrap">' + deliv + '</td>'
+                + '<td style="white-space:nowrap">' + resp + '</td>'
+                + '<td><button class="btn btn-ghost btn-sm" data-prevstep="' + step + '" title="תצוגה של המייל שנשלח">👁</button></td>'
+                + '</tr>';
             }).join('') + '</tbody></table>'
           : '<p class="muted" style="margin:6px 0">עוד לא נשלחו מיילים. לחצו "שלח סבב" כדי להתחיל.</p>')
         + '</div></div>'
@@ -4507,6 +4522,19 @@
 
       //  פתיחת כרטיס ליד מרשימת המיילים שנשלחו
       $('view').querySelectorAll('[data-golead]').forEach(function (el) { el.addEventListener('click', function () { if (window.C2B_openLeadCard) window.C2B_openLeadCard(el.dataset.golead); }); });
+      //  תצוגת המייל שנשלח (לפי שלב) מתוך רשימת "מיילים שנשלחו"
+      $('view').querySelectorAll('[data-prevstep]').forEach(function (b) {
+        b.addEventListener('click', function () {
+          var stp = b.dataset.prevstep;
+          openDrawer('<h3 style="margin:0 0 10px">👁 תצוגה — מייל #' + esc(stp) + '</h3><div class="muted" style="font-size:13px">טוען…</div>');
+          db.functions.invoke('nurture-run', { body: { org: orgId, preview: true, step: Number(stp) } }).then(function (r) {
+            var d = r && r.data;
+            if (!d || !d.html) { openDrawer('<p class="err">שגיאה בתצוגה</p>'); return; }
+            openDrawer('<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><h3 style="margin:0">👁 מייל #' + esc(stp) + '</h3><button class="btn btn-ghost btn-sm" onclick="window.C2B.closeDrawer()">✕ סגור</button></div><div class="muted" style="font-size:12.5px;margin-bottom:10px">נושא: ' + esc(d.subject || '') + '</div><div id="nuFrameWrap" style="border:1px solid var(--line);border-radius:12px;overflow:hidden;height:72vh"></div>');
+            var fr = document.createElement('iframe'); fr.style.cssText = 'width:100%;height:100%;border:0;background:#fff'; fr.srcdoc = d.html; $('nuFrameWrap').appendChild(fr);
+          }, function () { openDrawer('<p class="err">שגיאה בתצוגה</p>'); });
+        });
+      });
 
       //  בנק המיילים — שמירה / תצוגה / מחיקה פר-שלב
       var bank = $('nuBank');
