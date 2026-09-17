@@ -4421,7 +4421,7 @@
       db.from('leads').select('id,email,no_marketing,phone,car_category').eq('status', 'lost').is('deleted_at', null),
       db.from('nurture_state').select('lead_id,last_sent_at,unsubscribed,reengaged_at,sent_count,campaign,lead:leads(name,email,status)'),
       db.from('leads').select('id,name,phone,email,status,updated_at').eq('no_marketing', true).is('deleted_at', null).order('updated_at', { ascending: false }),
-      db.from('nurture_templates').select('id,segment,step,subject,intro,active').eq('org_id', orgId).order('segment')
+      db.from('nurture_templates').select('id,segment,step,subject,intro,active,show_cars').eq('org_id', orgId).order('step')
     ]).then(function (res) {
       if (res[0].error) return errBox(res[0].error.message);
       var lost = res[0].data || [], states = res[1].data || [], templates = (res[3] && res[3].data) || [];
@@ -4447,19 +4447,20 @@
       //  פילוח קהל ממתין לפי סוג-רכב + בנק המיילים
       var segCount = {};
       withEmail.forEach(function (l) { if (l.no_marketing) return; var s = stBy[l.id]; if (s && (s.unsubscribed || s.last_sent_at)) return; var seg = l.car_category || 'אחר'; segCount[seg] = (segCount[seg] || 0) + 1; });
-      var tBySeg = {}; templates.forEach(function (t) { tBySeg[t.segment] = t; });
-      var bankSegs = ['חשמלי', 'פלאגין', 'יוקרה', 'מסחרי', 'משפחתי', 'זול', 'כללי'];
-      var bankCard = '<div class="card" style="margin-top:14px"><div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap"><b>📚 בנק מיילים — לפי סוג רכב</b><span class="muted" style="font-size:12.5px">לכל סגמנט: נושא + פתיח. המערכת מזריקה אוטומטית דגמים תואמים מהמלאי + כפתור החזרה. ערכו ושמרו.</span></div>'
-        + '<div id="nuBank">' + bankSegs.map(function (seg) {
-          var t = tBySeg[seg] || { segment: seg, subject: '', intro: '', active: true, id: '' };
-          var aud = seg === 'כללי' ? 'ברירת מחדל (ללא סיווג)' : (segCount[seg] ? segCount[seg] + ' ממתינים' : 'אין ממתינים');
-          return '<details style="border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:8px 0">'
-            + '<summary style="cursor:pointer;font-weight:700">' + esc(seg) + ' <span class="muted" style="font-weight:400;font-size:12px">· ' + esc(aud) + (t.active === false ? ' · כבוי' : '') + '</span></summary>'
-            + '<div style="margin-top:8px" data-tplseg="' + esc(seg) + '" data-tplid="' + esc(t.id || '') + '">'
+      var maxStep = templates.reduce(function (m, t) { return Math.max(m, t.step || 0); }, 0);
+      var segLine = Object.keys(segCount).sort(function (a, b) { return segCount[b] - segCount[a]; }).map(function (s) { return esc(s) + ' ' + segCount[s]; }).join(' · ');
+      var bankCard = '<div class="card" style="margin-top:14px"><div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap"><b>📚 בנק מיילים — רצף חימום (' + templates.length + ')</b><span class="muted" style="font-size:12.5px">כל ליד מתקדם שלב-שלב לאורך זמן. 🚗 = מייל שמזריק דגמים מהמלאי לפי סוג הרכב של הלקוח. ערכו · כבו · הוסיפו.</span></div>'
+        + (segLine ? '<div class="muted" style="font-size:12px;margin-top:6px">קהל ממתין לפי סוג רכב: ' + segLine + '</div>' : '')
+        + '<div style="margin:8px 0"><button class="btn btn-sm btn-ghost" id="nuAddTpl">➕ הוסף מייל לרצף</button></div>'
+        + '<div id="nuBank" style="max-height:62vh;overflow:auto">' + templates.map(function (t) {
+          return '<details style="border:1px solid var(--line);border-radius:10px;padding:8px 12px;margin:6px 0">'
+            + '<summary style="cursor:pointer;font-weight:600"><span class="muted">#' + (t.step || 0) + '</span> ' + esc(t.subject || '') + (t.show_cars ? ' 🚗' : '') + (t.active === false ? ' <span style="color:var(--danger)">· כבוי</span>' : '') + '</summary>'
+            + '<div style="margin-top:8px" data-tplid="' + esc(t.id) + '" data-tplstep="' + (t.step || 0) + '">'
             + '<label style="font-size:12px;color:var(--muted)">נושא</label><input class="inp tpl-subject" value="' + esc(t.subject || '') + '" style="width:100%;margin-bottom:8px">'
             + '<label style="font-size:12px;color:var(--muted)">פתיח (אפשר {firstname})</label><textarea class="inp tpl-intro" rows="3" style="width:100%;margin-bottom:8px">' + esc(t.intro || '') + '</textarea>'
-            + '<label style="font-size:13px;display:inline-flex;align-items:center;gap:6px;margin-inline-end:12px"><input type="checkbox" class="tpl-active"' + (t.active === false ? '' : ' checked') + '> פעיל</label>'
-            + '<button class="btn btn-sm btn-primary tpl-save">💾 שמור</button> <button class="btn btn-sm btn-ghost tpl-prev">👁 תצוגה מקדימה</button> <span class="tpl-msg muted" style="font-size:12px;margin-inline-start:8px"></span>'
+            + '<label style="font-size:13px;display:inline-flex;align-items:center;gap:6px;margin-inline-end:14px"><input type="checkbox" class="tpl-cars"' + (t.show_cars ? ' checked' : '') + '> 🚗 הצג דגמים מהמלאי</label>'
+            + '<label style="font-size:13px;display:inline-flex;align-items:center;gap:6px;margin-inline-end:14px"><input type="checkbox" class="tpl-active"' + (t.active === false ? '' : ' checked') + '> פעיל</label>'
+            + '<button class="btn btn-sm btn-primary tpl-save">💾 שמור</button> <button class="btn btn-sm btn-ghost tpl-prev">👁 תצוגה</button> <button class="btn btn-sm btn-ghost tpl-del">🗑</button> <span class="tpl-msg muted" style="font-size:12px;margin-inline-start:8px"></span>'
             + '</div></details>';
         }).join('') + '</div></div>';
 
@@ -4473,7 +4474,7 @@
         + stat('🚫 חסומים לדיוור', String(dncList.length), null, null, 'הוסרו — לא יקבלו כלום')
         + '</div>'
         + '<div class="card" style="margin-top:14px"><div style="display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between">'
-        + '<div><b>סבב שליחה</b><div class="muted" style="font-size:13px;margin-top:3px;max-width:520px">כל סבב שולח עד 25 מיילים מ-<b>' + esc(brandName) + '</b> ללידים שעוד לא קיבלו. כל ליד מקבל את מייל ההחזרה פעם אחת. <b>המערכת חוסמת אוטומטית כל מי שברשימת ההסרה</b> — לא יישלח אליו דבר. אפשר להריץ כמה סבבים עד שהתור מתרוקן.</div></div>'
+        + '<div><b>סבב שליחה</b><div class="muted" style="font-size:13px;margin-top:3px;max-width:540px">כל סבב שולח את <b>המייל הבא ברצף</b> (מ-' + esc(brandName) + ') עד 25 לידים שהגיע זמנם — כל ליד מתקדם שלב-שלב, במרווח של שבוע בין מייל למייל. מיילים עם 🚗 מזריקים דגמים מהמלאי לפי סוג הרכב שלו. <b>מי שברשימת ההסרה נחסם אוטומטית.</b></div></div>'
         + '<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-ghost" id="nuPreview">👁 תצוגה מקדימה</button>'
         + '<button class="btn btn-primary" id="nuSend"' + (batch ? '' : ' disabled') + '>📤 שלח סבב (' + batch + ')</button></div>'
         + '</div><div id="nuResult" style="margin-top:12px"></div></div>'
@@ -4507,30 +4508,37 @@
       //  פתיחת כרטיס ליד מרשימת המיילים שנשלחו
       $('view').querySelectorAll('[data-golead]').forEach(function (el) { el.addEventListener('click', function () { if (window.C2B_openLeadCard) window.C2B_openLeadCard(el.dataset.golead); }); });
 
-      //  בנק המיילים — שמירה + תצוגה מקדימה פר-סגמנט
+      //  בנק המיילים — שמירה / תצוגה / מחיקה פר-שלב
       var bank = $('nuBank');
       if (bank) bank.addEventListener('click', function (e) {
-        var box = e.target.closest('[data-tplseg]'); if (!box) return;
-        var seg = box.dataset.tplseg, id = box.dataset.tplid, msg = box.querySelector('.tpl-msg');
+        var box = e.target.closest('[data-tplid]'); if (!box) return;
+        var id = box.dataset.tplid, step = box.dataset.tplstep, msg = box.querySelector('.tpl-msg');
         if (e.target.closest('.tpl-save')) {
-          var subject = box.querySelector('.tpl-subject').value.trim(), intro = box.querySelector('.tpl-intro').value.trim(), active = box.querySelector('.tpl-active').checked;
+          var subject = box.querySelector('.tpl-subject').value.trim(), intro = box.querySelector('.tpl-intro').value.trim();
+          var show_cars = box.querySelector('.tpl-cars').checked, active = box.querySelector('.tpl-active').checked;
           if (!subject || !intro) { msg.textContent = 'נושא ופתיח חובה'; msg.style.color = 'var(--danger)'; return; }
           msg.textContent = 'שומר…'; msg.style.color = 'var(--muted)';
-          var row = { org_id: orgId, segment: seg, step: 1, subject: subject, intro: intro, active: active, updated_at: new Date().toISOString() };
-          var op = id ? db.from('nurture_templates').update(row).eq('id', id) : db.from('nurture_templates').insert(row);
-          op.then(function (r) { if (r.error) { msg.textContent = 'שגיאה: ' + r.error.message; msg.style.color = 'var(--danger)'; return; } msg.textContent = '✔ נשמר'; msg.style.color = 'var(--ok)'; if (!id) setTimeout(renderNurture, 800); });
+          db.from('nurture_templates').update({ subject: subject, intro: intro, show_cars: show_cars, active: active, updated_at: new Date().toISOString() }).eq('id', id).then(function (r) { if (r.error) { msg.textContent = 'שגיאה: ' + r.error.message; msg.style.color = 'var(--danger)'; return; } msg.textContent = '✔ נשמר'; msg.style.color = 'var(--ok)'; });
+          return;
+        }
+        if (e.target.closest('.tpl-del')) {
+          if (!confirm('למחוק את מייל #' + step + ' מהרצף?')) return;
+          db.from('nurture_templates').delete().eq('id', id).then(function (r) { if (r.error) { alert('שגיאה: ' + r.error.message); return; } renderNurture(); });
           return;
         }
         if (e.target.closest('.tpl-prev')) {
-          openDrawer('<h3 style="margin:0 0 10px">👁 תצוגה מקדימה — ' + esc(seg) + '</h3><div class="muted" style="font-size:13px">טוען…</div>');
-          db.functions.invoke('nurture-run', { body: { org: orgId, preview: true, segment: seg } }).then(function (r) {
+          openDrawer('<h3 style="margin:0 0 10px">👁 תצוגה — מייל #' + esc(step) + '</h3><div class="muted" style="font-size:13px">טוען…</div>');
+          db.functions.invoke('nurture-run', { body: { org: orgId, preview: true, step: Number(step) } }).then(function (r) {
             var d = r && r.data;
             if (!d || !d.html) { openDrawer('<p class="err">שגיאה בתצוגה מקדימה</p>'); return; }
-            openDrawer('<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><h3 style="margin:0">👁 ' + esc(seg) + '</h3><button class="btn btn-ghost btn-sm" onclick="window.C2B.closeDrawer()">✕ סגור</button></div><div class="muted" style="font-size:12.5px;margin-bottom:10px">נושא: ' + esc(d.subject || '') + '</div><div id="nuFrameWrap" style="border:1px solid var(--line);border-radius:12px;overflow:hidden;height:72vh"></div>');
+            openDrawer('<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><h3 style="margin:0">👁 מייל #' + esc(step) + '</h3><button class="btn btn-ghost btn-sm" onclick="window.C2B.closeDrawer()">✕ סגור</button></div><div class="muted" style="font-size:12.5px;margin-bottom:10px">נושא: ' + esc(d.subject || '') + '</div><div id="nuFrameWrap" style="border:1px solid var(--line);border-radius:12px;overflow:hidden;height:72vh"></div>');
             var fr = document.createElement('iframe'); fr.style.cssText = 'width:100%;height:100%;border:0;background:#fff'; fr.srcdoc = d.html; $('nuFrameWrap').appendChild(fr);
           }, function () { openDrawer('<p class="err">שגיאה בתצוגה מקדימה</p>'); });
           return;
         }
+      });
+      if ($('nuAddTpl')) $('nuAddTpl').addEventListener('click', function () {
+        db.from('nurture_templates').insert({ org_id: orgId, segment: 'כללי', step: (maxStep + 1), subject: 'מייל חדש', intro: 'היי {firstname}, ', active: true, show_cars: false }).then(function (r) { if (r.error) { alert('שגיאה: ' + r.error.message); return; } renderNurture(); });
       });
 
       $('nuPreview').addEventListener('click', function () {
