@@ -1262,7 +1262,7 @@
     var need = !lead.close_reason;
     return '<div id="lpReasonWrap" style="margin:4px 0 10px;padding:10px;border-radius:10px;background:' + (need ? 'rgba(226,85,90,.08)' : 'var(--surface-2)') + ';border:1px solid ' + (need ? 'var(--danger)' : 'var(--line)') + '">' +
       '<label class="muted" style="font-size:12px;font-weight:700;color:' + (need ? 'var(--danger)' : 'var(--muted)') + '">סיבת "לא רלוונטי" ' + (need ? '· חובה לבחור' : '') + '</label>' +
-      '<select class="inp" id="lpReason" style="width:100%;margin-top:4px"><option value="">בחר סיבה…</option>' +
+      '<select class="inp lf-edit" id="lpReason" data-field="close_reason" data-label="סיבת אי-רלוונטיות" style="width:100%;margin-top:4px"><option value="">בחר סיבה…</option>' +
       CLOSE_REASONS.map(function (x) { return '<option' + (lead.close_reason === x ? ' selected' : '') + '>' + esc(x) + '</option>'; }).join('') + '</select></div>';
   }
   // ---------- ACTIVITY (global feed: who did what) ----------
@@ -1437,7 +1437,9 @@
     // clickable funnel — move the lead through statuses straight from the flow bar
     var lfb = $('leadFlow');
     if (lfb) lfb.addEventListener('click', function (e) { var st = e.target.closest('[data-status]'); if (!st) return; changeStatus(lead.id, st.dataset.status, lead, function () { window.C2B_openLeadCard(lead.id); }); });
-    var rs = $('lpReason'); if (rs) { if (!lead.close_reason) rs.focus(); rs.addEventListener('change', function () { db.from('leads').update({ close_reason: rs.value }).eq('id', lead.id).then(function () { logActivity(lead.id, 'system', 'סיבת אי-רלוונטיות: ' + rs.value); window.C2B_openLeadCard(lead.id); }); }); }
+    //  סיבת "לא רלוונטי" נשמרת דרך saveLeadField (data-field="close_reason") — מאזין
+    //  מואצל על #ldInfo היציב, לכן עובד גם אם התוכן נטען אחרי הקישור. פוקוס בלבד כאן.
+    var rs = $('lpReason'); if (rs && !lead.close_reason) rs.focus();
     // inline field editing — save each business field on change (no edit button)
     //  אותו מאזין לשתי הלשוניות. "מקור הגעה" יושב בלשונית השיווק, וכל
     //  עוד המאזין ישב על #ldInfo בלבד שינוי שלו נראה כאילו נקלט במסך
