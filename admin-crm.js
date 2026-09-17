@@ -2205,13 +2205,30 @@
     C.txtCol('cancel_reason', 'סיבת ביטול', { w: 200 }),
     C.txtCol('stage', 'שלב תיק', { w: 130 }),
     C.txtCol('created', 'נוצרה בתאריך', { f: 'created_at', w: 150, fmt: fmt }),
+    //  שאר שדות העסקה — זמינים לבחירה בבורר העמודות (ברירת מחדל: מוסתרים)
+    C.txtCol('car_make', 'יצרן', { w: 120 }),
+    C.txtCol('car_model', 'דגם', { w: 130 }),
+    C.txtCol('car_engine', 'נפח מנוע', { w: 110 }),
+    C.txtCol('car_gearbox', 'תיבת הילוכים', { w: 120 }),
+    C.txtCol('down_initial', 'מקדמה ששולמה', { w: 130, fmt: nis }),
+    C.txtCol('down_balance', 'יתרת מקדמה', { w: 130, fmt: nis }),
+    C.txtCol('balance_to_pay', 'יתרה לתשלום', { w: 130, fmt: nis }),
+    C.txtCol('discount_pct', '% הנחה', { w: 100 }),
+    C.txtCol('spec', 'מפרט / הערות עסקה', { w: 240 }),
+    C.txtCol('contract_type', 'סוג הסכם', { w: 130 }),
+    C.txtCol('lead_id', 'מזהה ליד', { ltr: true, w: 160 }),
+    C.txtCol('updated', 'עודכן', { f: 'updated_at', w: 150, fmt: fmt }),
+    { key: 'vat_included', label: 'כולל מע"מ', def: false, cell: function (d) { return '<td>' + (d.vat_included ? 'כן' : 'לא') + '</td>'; } },
+    { key: 'has_contract', label: 'יש הסכם', def: false, cell: function (d) { return '<td>' + (d.has_contract ? '✅' : '—') + '</td>'; } },
+    { key: 'has_signature', label: 'נחתם הסכם', def: false, cell: function (d) { return '<td>' + (d.has_signature ? '✅' : '—') + '</td>'; } },
+    { key: 'addons', label: 'תוספות (₪)', def: false, cell: function (d) { var a = d.addons || {}; return '<td>' + (a.addons_amount != null ? nis(a.addons_amount) : '—') + '</td>'; } },
   ];
   var acctCols = null;
   window.C2B_renderAccounting = function () {
     selectedAcct = {};
     loading();
     Promise.all([
-      db.from('deals').select('id,lead_id,order_no,brand,stage,status,client_name,client_phone,car_make,car_model,total,car_price,purchase_price,down_total,financing,commission,salesperson,created_at,updated_at,signed_at,checklist,cancel_reason,acct_status,has_contract,has_signature').in('stage', ['signed', 'collection', 'ordered', 'delivered', 'cancelled']).is('deleted_at', null).order('created_at', { ascending: false }).limit(3000),   // הנהלת חשבונות — לפי שלב (נחתם מימון+ ומבוטלות), לא לפי חתימת-הסכם
+      db.from('deals').select('id,created_at,lead_id,order_no,form_type,status,salesperson,client_name,client_phone,client_email,client_address,client_id,invoice_name,car_make,car_model,car_year,car_trim,car_engine,car_gearbox,car_color,car_price,down_total,down_initial,down_balance,monthly,delivery_days,balance_to_pay,addons,vat_included,discount_pct,discount_amt,total,paid,spec,notes,stage,checklist,financing,tradein,charge_amount,acct_status,acct_notes,commission,brand,signed_at,cancel_reason,contract_type,updated_at,has_contract,has_signature,purchase_price').in('stage', ['signed', 'collection', 'ordered', 'delivered', 'cancelled']).is('deleted_at', null).order('created_at', { ascending: false }).limit(3000),   // הנהלת חשבונות — כל שדות העסקה (למעט כבדים/פנימיים)
       db.from('payments').select('*'),
       db.from('profiles').select('user_id,full_name'),
       db.from('lead_documents').select('*').order('created_at', { ascending: false }).limit(500),
