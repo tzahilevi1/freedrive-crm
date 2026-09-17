@@ -2170,7 +2170,7 @@
     { key: 'balance', label: 'יתרה', cell: function (d) { return '<td style="color:' + (d._bal > 0 ? 'var(--danger)' : 'var(--ok)') + '">' + nis(d._bal) + '</td>'; } },
     { key: 'salesperson', label: 'סוכן', cell: function (d) { return '<td>' + esc(d.salesperson || '—') + '</td>'; } },
     { key: 'purchase_price', label: 'מחיר קניית רכב', cell: function (d) { return '<td><input class="inp pp-edit" data-pp="' + d.id + '" type="number" value="' + (d.purchase_price == null ? '' : d.purchase_price) + '" placeholder="₪ עלות" style="width:115px;font-size:12.5px' + (d.purchase_price == null ? ';border-color:var(--warn)' : '') + '"></td>'; } },
-    { key: 'profit', label: 'רווח (מכירה−קנייה)', cell: function (d) { if (d.purchase_price == null) return '<td class="muted">—</td>'; var p = (+d._tot || 0) - (+d.purchase_price || 0); return '<td style="font-weight:700;color:' + (p >= 0 ? 'var(--ok)' : 'var(--danger)') + '" title="מכירה ' + nis(d._tot) + ' − קנייה ' + nis(d.purchase_price) + '">' + nis(p) + '</td>'; } },
+    { key: 'profit', label: 'רווח (כולל מקדמה)', cell: function (d) { if (d.purchase_price == null) return '<td class="muted">—</td>'; var carP = (+d._tot || 0) - (+d.purchase_price || 0), down = +d.down_total || 0, p = carP + down; return '<td style="font-weight:700;color:' + (p >= 0 ? 'var(--ok)' : 'var(--danger)') + '" title="רווח רכב (' + nis(d._tot) + ' − ' + nis(d.purchase_price) + ') = ' + nis(carP) + ' + מקדמה ' + nis(down) + '">' + nis(p) + '</td>'; } },
     { key: 'down_pay', label: 'מקדמה', cell: function (d) { return '<td>' + (d.down_total != null && d.down_total !== '' ? nis(d.down_total) : '<span class="muted">—</span>') + '</td>'; } },
     { key: 'financing', label: 'הוגש למימון ₪', cell: function (d) { var f = d.financing || {}; var amt = (f.amount != null ? f.amount : f.approved); if (amt == null || amt === '') return '<td class="muted">—</td>'; return '<td style="font-weight:600" title="' + (f.status ? esc(f.status) + ' · ' : '') + 'מבוקש ' + nis(f.amount) + (f.approved != null ? ' · אושר ' + nis(f.approved) : '') + '">' + nis(amt) + '</td>'; } },
     { key: 'commission', label: 'עמלה', cell: function (d) { return '<td style="color:var(--ok);font-weight:700">' + nis(d.commission) + '</td>'; } },
@@ -2399,7 +2399,7 @@
                 lf2('מה נקנה', esc(((d.car_make || '') + ' ' + (d.car_model || '')).trim())) +
                 lf2('מחיר הרכב', nis(d.car_price)) +
                 lf2('מחיר קניית רכב (עלות)', d.purchase_price != null ? nis(d.purchase_price) : '<span class="muted">— למילוי</span>') +
-                (d.purchase_price != null ? lf2('רווח גולמי (סכום − עלות)', '<b style="color:var(--brand)">' + nis((+tot || 0) - (+d.purchase_price || 0)) + '</b>') : '') +
+                (d.purchase_price != null ? lf2('רווח (רכב + מקדמה)', '<b style="color:var(--brand)">' + nis((+tot || 0) - (+d.purchase_price || 0) + (+d.down_total || 0)) + '</b> <span class="muted" style="font-size:11px">(רכב ' + nis((+tot || 0) - (+d.purchase_price || 0)) + ' + מקדמה ' + nis(+d.down_total || 0) + ')</span>') : '') +
                 lf2('מקדמה נדרשת', nis(d.down_total)) +
                 lf2('סכום העסקה', '<b>' + nis(tot) + '</b>') +
                 lf2('סכום לחיוב', '<b style="color:var(--brand)">' + nis(charge) + '</b>') +
