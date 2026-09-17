@@ -4419,7 +4419,7 @@
     var orgId = window.C2B.orgId;
     Promise.all([
       db.from('leads').select('id,email,no_marketing,phone').eq('status', 'lost').is('deleted_at', null),
-      db.from('nurture_state').select('lead_id,last_sent_at,unsubscribed,reengaged_at'),
+      db.from('nurture_state').select('lead_id,last_sent_at,unsubscribed,reengaged_at,sent_count,campaign,lead:leads(name,email,status)'),
       db.from('leads').select('id,name,phone,email,status,updated_at').eq('no_marketing', true).is('deleted_at', null).order('updated_at', { ascending: false })
     ]).then(function (res) {
       if (res[0].error) return errBox(res[0].error.message);
@@ -4433,6 +4433,8 @@
         if (s && s.last_sent_at) sent++; else pending++;
       });
       states.forEach(function (s) { if (s.reengaged_at) reeng++; });
+      //  רשימת המיילים שנשלחו בפועל (מהחדש לישן)
+      var sentList = states.filter(function (s) { return s.last_sent_at; }).sort(function (a, b) { return String(b.last_sent_at).localeCompare(String(a.last_sent_at)); });
       //  רשימת החסומים (DNC) — dedupe לפי אדם (מייל/טלפון)
       var dncRows = res[2].data || [], seenDnc = {}, dncList = [];
       dncRows.forEach(function (l) {
@@ -4443,7 +4445,7 @@
       var batch = Math.min(pending, 25);
 
       view('<div class="head"><h1>📧 דיוור והחזרה</h1><div class="muted">החזרת לידים שסומנו "לא רלוונטי" באמצעות מייל ממותג עם כפתור "אשמח שנציג יחזור אליי". לחיצה מחזירה את הליד אוטומטית לחלוקה, עם ייחוס מלא (מקור: ליד חוזר · דיוור).</div></div>'
-        + '<div class="kpis">'
+        + '<div class="cards">'
         + stat('לידים לא-רלוונטי', String(lost.length), null, null, 'סה״כ במערכת')
         + stat('עם כתובת מייל', String(withEmail.length), null, null, 'ניתנים לדיוור')
         + stat('ממתינים לשליחה', String(pending), null, null, 'עוד לא קיבלו מייל')
@@ -4456,6 +4458,17 @@
         + '<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-ghost" id="nuPreview">👁 תצוגה מקדימה</button>'
         + '<button class="btn btn-primary" id="nuSend"' + (batch ? '' : ' disabled') + '>📤 שלח סבב (' + batch + ')</button></div>'
         + '</div><div id="nuResult" style="margin-top:12px"></div></div>'
+        //  ---------- מיילים שנשלחו ----------
+        + '<div class="card" style="margin-top:14px"><div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap"><b>📤 מיילים שנשלחו (' + sentList.length + ')</b><span class="muted" style="font-size:12.5px">כל מייל החזרה שיצא — נמען, מתי, וסטטוס. (מעקב מסירה/פתיחה מלא בלוח הבקרה של Resend.)</span></div>'
+        + '<div style="margin-top:10px;overflow-x:auto">' + (sentList.length
+          ? '<table><thead><tr><th>נמען</th><th>מייל</th><th>נשלח</th><th>סבבים</th><th>סטטוס</th></tr></thead><tbody>'
+            + sentList.map(function (s) {
+              var l = s.lead || {};
+              var st = s.reengaged_at ? '<span style="color:var(--ok);font-weight:700">🔥 חזר למעגל</span>' : (s.unsubscribed ? '<span style="color:var(--danger)">הוסר מדיוור</span>' : '<span class="muted">נשלח</span>');
+              return '<tr' + (s.lead_id ? ' data-golead="' + esc(s.lead_id) + '" style="cursor:pointer"' : '') + '><td><b>' + esc(l.name || '—') + '</b></td><td class="ltr" style="font-size:12.5px">' + esc(l.email || '—') + '</td><td class="muted" style="font-size:12px">' + fmtDateTime(s.last_sent_at) + '</td><td>' + (s.sent_count || 1) + '</td><td>' + st + '</td></tr>';
+            }).join('') + '</tbody></table>'
+          : '<p class="muted" style="margin:6px 0">עוד לא נשלחו מיילים. לחצו "שלח סבב" כדי להתחיל.</p>')
+        + '</div></div>'
         //  ---------- ניהול רשימת ההסרה מדיוור (DNC) ----------
         + '<div class="card" style="margin-top:14px"><div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap"><b>🚫 רשימת הסרה מדיוור (' + dncList.length + ')</b>'
         + '<span class="muted" style="font-size:12.5px">כל האנשים שביקשו הסרה או שסומנו ידנית. אף שליחה שיווקית (מייל/וואטסאפ/סמס) לא תגיע אליהם — בכל הערוצים.</span></div>'
@@ -4471,6 +4484,8 @@
           : '<p class="muted" style="margin:6px 0">אין אף אחד ברשימת ההסרה כרגע.</p>')
         + '</div></div>');
 
+      //  פתיחת כרטיס ליד מרשימת המיילים שנשלחו
+      $('view').querySelectorAll('[data-golead]').forEach(function (el) { el.addEventListener('click', function () { if (window.C2B_openLeadCard) window.C2B_openLeadCard(el.dataset.golead); }); });
       $('nuPreview').addEventListener('click', function () {
         openDrawer('<h3 style="margin:0 0 10px">👁 תצוגה מקדימה</h3><div class="muted" style="font-size:13px">טוען…</div>');
         db.functions.invoke('nurture-run', { body: { org: orgId, preview: true } }).then(function (r) {
