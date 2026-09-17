@@ -2252,14 +2252,15 @@
     var dealsPanel = '<div class="card"><div class="row-between"><h3 style="margin:0">עסקאות · קבלות · חשבוניות <span class="muted" style="font-size:12px">(סמנו לפעולה גורפת · לחצו על שורה לפתיחת תיק החשבונות)</span></h3>' + acctCols.button() + '</div>' + aBulk + '<div class="table-scroll"><table><thead><tr><th style="width:28px;text-align:center"><input type="checkbox" id="aSelAll"></th>' + acctCols.thead() + '</tr></thead><tbody>' + (dealRows || '<tr><td colspan="' + (acctCols.colCount() + 1) + '" class="empty">אין עסקאות</td></tr>') + '</tbody></table></div></div>';
 
     // TAB 2 — commission per agent (frozen values)
-    var byAgent = {}; deals.forEach(function (d) { var a = d.salesperson || 'לא שויך'; byAgent[a] = byAgent[a] || { n: 0, comm: 0, total: 0 }; byAgent[a].n++; byAgent[a].comm += (+d.commission || 0); byAgent[a].total += (+d.total || 0); });
+    //  עמלות סוכנים — עסקאות מבוטלות אינן נספרות (אין עליהן עמלה), בעקביות עם commTotal
+    var byAgent = {}; deals.forEach(function (d) { if (isCancelled(d)) return; var a = d.salesperson || 'לא שויך'; byAgent[a] = byAgent[a] || { n: 0, comm: 0, total: 0 }; byAgent[a].n++; byAgent[a].comm += (+d.commission || 0); byAgent[a].total += (+d.total || 0); });
     var agents = Object.keys(byAgent).sort(function (a, b) { return byAgent[b].comm - byAgent[a].comm; });
     var mgrCutTotal = 0; deals.forEach(function (d) { mgrCutTotal += mgrModel2(d); });
     var commPanel = '<div class="cards">' + C.stat('עמלות ברוטו', nis(commTotal), true) + C.stat('קיזוז למנהלת (מודל 2)', nis(mgrCutTotal)) + C.stat('נטו לסוכנים', nis(commTotal - mgrCutTotal)) + '</div>' +
       (mgrCutTotal ? '<p class="muted" style="font-size:12px;margin:-2px 0 10px">💡 קיזוז המנהלת (3-8% לפי מדרגת ההחתמות החודשית) יורד מעמלת הסוכן — מוצג להלן כ"נטו".</p>' : '') +
       '<div class="card"><h3>💸 עמלות סוכנים <span class="muted" style="font-size:12px">(לחצו על סוכן לפירוט · אפשר לעדכן עמלה חסרה)</span></h3>' +
         (agents.length ? agents.map(function (a) {
-          var o = byAgent[a], aDeals = deals.filter(function (d) { return (d.salesperson || 'לא שויך') === a; });
+          var o = byAgent[a], aDeals = deals.filter(function (d) { return (d.salesperson || 'לא שויך') === a && !isCancelled(d); });
           var noComm = aDeals.filter(function (d) { return !(+d.commission); }).length;
           var aCut = aDeals.reduce(function (s, d) { return s + mgrModel2(d); }, 0), aNet = o.comm - aCut;
           return '<details style="border:1px solid var(--line);border-radius:10px;padding:8px 12px;margin:6px 0">' +
