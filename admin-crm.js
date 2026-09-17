@@ -2122,10 +2122,10 @@
   //  מודל 2: 3% מעמלת הסוכן, רק אם אותו סוכן חתם ≥5 עסקאות באותו חודש.
   //  (הסכום פר-עסקה מסתכם בדיוק ל-3% מסך העמלה החודשית של הסוכן.)
   //  הערכים מרוכזים כאן לשינוי קל.
-  //  מודל 2 מדורג לפי סך ההחתמות של המנהלת באותו חודש:
-  //  <30 → 0% (כלום) · ≥30 → 3% · ≥35 → 5% · ≥40 → 8%.
-  //  האחוז חל על עמלת הסוכן ו**יורד ממנה** (נטו לסוכן, ברוטו למנהלת).
-  var MGR = { sameDay: 200, later: 100, tiers: [{ min: 40, pct: 0.08 }, { min: 35, pct: 0.05 }, { min: 30, pct: 0.03 }] };
+  //  מודל 2: האחוז (3/5/8%) נקבע לפי סך ההחתמות של המנהלת בחודש
+  //  (<30→0 · 30→3% · 35→5% · 40→8%), אבל הקיזוז נלקח **רק** מעמלת סוכן
+  //  שחתם בעצמו ≥5 עסקאות באותו חודש (agentMin). האחוז יורד מעמלת הסוכן.
+  var MGR = { sameDay: 200, later: 100, agentMin: 5, tiers: [{ min: 40, pct: 0.08 }, { min: 35, pct: 0.05 }, { min: 30, pct: 0.03 }] };
   var mgrMonthCount = {};   // "סוכן|YYYY-MM" → מספר עסקאות חתומות (לתצוגה)
   var mgrMonthTotal = {};   // "YYYY-MM" → סך כל ההחתמות בחודש (קובע את המדרגה)
   function mgrCancelled(d) { return d.status === 'cancelled' || d.stage === 'cancelled'; }
@@ -2136,10 +2136,12 @@
     var sd = String(d.signed_at).slice(0, 10), cd = String(d.created_at || '').slice(0, 10);
     return (cd && sd === cd) ? MGR.sameDay : MGR.later;
   }
-  //  קיזוז מעמלת הסוכן (=עמלת המנהלת ממודל 2)
+  //  קיזוז מעמלת הסוכן (=עמלת המנהלת ממודל 2). נלקח רק מסוכן שחתם ≥5 בחודש.
   function mgrModel2(d) {
     if (mgrCancelled(d)) return 0;
-    return Math.round((+d.commission || 0) * mgrRate(mgrMonthTotal[mgrMonth(d)] || 0));
+    var mon = mgrMonth(d);
+    if ((mgrMonthCount[(d.salesperson || 'לא שויך') + '|' + mon] || 0) < MGR.agentMin) return 0;
+    return Math.round((+d.commission || 0) * mgrRate(mgrMonthTotal[mon] || 0));
   }
   function mgrComm(d) { return mgrModel1(d) + mgrModel2(d); }
   function agentNetComm(d) { return (+d.commission || 0) - mgrModel2(d); }   // עמלת הסוכן נטו
@@ -2283,13 +2285,13 @@
       return '<tr><td><b>#' + esc(d.order_no || '—') + '</b></td><td>' + esc(d.client_name || '—') + '</td><td class="muted">' + fmt(d.created_at) + '</td><td class="muted">' + fmt(d.signed_at) + '</td><td>' + (same ? '<span style="color:var(--ok);font-weight:700">אותו יום</span>' : '<span style="color:var(--warn)">עבר יום</span>') + '</td><td style="font-weight:700;color:var(--brand)">' + nis(m1) + '</td></tr>';
     }).join('');
     var byAM = {}; deals.forEach(function (d) { if (mgrCancelled(d)) return; var k = (d.salesperson || 'לא שויך') + '|' + mgrMonth(d); byAM[k] = byAM[k] || { agent: d.salesperson || 'לא שויך', mon: mgrMonth(d), n: 0, comm: 0 }; byAM[k].n++; byAM[k].comm += (+d.commission || 0); });
-    var m2Rows = Object.keys(byAM).map(function (k) { return byAM[k]; }).filter(function (o) { return mgrRate(mgrMonthTotal[o.mon] || 0) > 0; }).sort(function (a, b) { return b.mon.localeCompare(a.mon) || b.comm - a.comm; }).map(function (o) {
+    var m2Rows = Object.keys(byAM).map(function (k) { return byAM[k]; }).filter(function (o) { return mgrRate(mgrMonthTotal[o.mon] || 0) > 0 && o.n >= MGR.agentMin; }).sort(function (a, b) { return b.mon.localeCompare(a.mon) || b.comm - a.comm; }).map(function (o) {
       var rate = mgrRate(mgrMonthTotal[o.mon] || 0);
-      return '<tr><td><b>' + esc(o.agent) + '</b></td><td class="muted">' + esc(o.mon) + '</td><td>' + (mgrMonthTotal[o.mon] || 0) + '</td><td style="font-weight:700">' + Math.round(rate * 100) + '%</td><td>' + nis(o.comm) + '</td><td style="font-weight:700;color:var(--brand)">' + nis(Math.round(o.comm * rate)) + '</td></tr>';
+      return '<tr><td><b>' + esc(o.agent) + '</b></td><td class="muted">' + esc(o.mon) + '</td><td>' + o.n + '</td><td>' + (mgrMonthTotal[o.mon] || 0) + '</td><td style="font-weight:700">' + Math.round(rate * 100) + '%</td><td>' + nis(o.comm) + '</td><td style="font-weight:700;color:var(--brand)">' + nis(Math.round(o.comm * rate)) + '</td></tr>';
     }).join('');
     var mgrPanel = '<div class="cards">' + C.stat('בונוס חתימה', nis(mgrTot1)) + C.stat('קיזוז מעמלות (מדורג)', nis(mgrTot2)) + C.stat('סה"כ למנהלת', nis(mgrTot1 + mgrTot2), true) + '</div>' +
       '<div class="card"><h3>🖊️ בונוס חתימה <span class="muted" style="font-size:12px">(₪' + MGR.sameDay + ' חתימה באותו יום · ₪' + MGR.later + ' אם עבר יום)</span></h3><div class="table-scroll"><table><thead><tr><th>#</th><th>לקוח</th><th>נוצר</th><th>נחתם</th><th>עיתוי</th><th>בונוס</th></tr></thead><tbody>' + (m1Rows || '<tr><td colspan="6" class="empty">אין</td></tr>') + '</tbody></table></div></div>' +
-      '<div class="card"><h3>📊 קיזוז מעמלת סוכנים <span class="muted" style="font-size:12px">(מדרגה לפי סך ההחתמות בחודש: 30→3% · 35→5% · 40→8% · מתחת ל-30 → 0)</span></h3><div class="table-scroll"><table><thead><tr><th>סוכן</th><th>חודש</th><th>החתמות בחודש</th><th>אחוז</th><th>עמלת הסוכן</th><th>למנהלת</th></tr></thead><tbody>' + (m2Rows || '<tr><td colspan="6" class="empty">אף חודש לא הגיע ל-30 החתמות — אין קיזוז</td></tr>') + '</tbody></table></div></div>';
+      '<div class="card"><h3>📊 קיזוז מעמלת סוכנים <span class="muted" style="font-size:12px">(אחוז לפי סך ההחתמות של המנהלת בחודש: 30→3% · 35→5% · 40→8% · מתחת ל-30 → 0. נלקח רק מסוכן שחתם ' + MGR.agentMin + '+ עסקאות בעצמו)</span></h3><div class="table-scroll"><table><thead><tr><th>סוכן</th><th>חודש</th><th>עסקאות הסוכן</th><th>החתמות בחודש</th><th>אחוז</th><th>עמלת הסוכן</th><th>למנהלת</th></tr></thead><tbody>' + (m2Rows || '<tr><td colspan="7" class="empty">אין קיזוז (צריך 30+ החתמות בחודש למנהלת, ו-' + MGR.agentMin + '+ עסקאות לסוכן)</td></tr>') + '</tbody></table></div></div>';
 
     // TAB — ביטולים (עסקאות מבוטלות + החזרים ללקוח)
     var cancelDeals = deals.filter(isCancelled), refundTotal = 0;
