@@ -3407,12 +3407,11 @@
       var avgRt = rts.length ? Math.round(rts.reduce(function (a, b) { return a + b; }, 0) / rts.length) : 0;
 
       // ---- deal-side aggregates ----
-      // עסקה נחשבת "עסקה" רק לאחר חתימת הלקוח — הצעות/טיוטות לא-חתומות אינן נספרות בדאשבורד
-      //  ביטול יכול להירשם בסטטוס או בשלב — עסקה שבוטלה בכרטיס העסקה
-      //  מקבלת stage='cancelled' בעוד הסטטוס נשאר 'quote'. בדיקה על
-      //  סטטוס בלבד ספרה אותה כעסקה והציגה הכנסה שלא קיימת.
+      //  "עסקה חתומה" נספרת לפי שלב התיק: מ"עסקה ראשונית" ומעלה —
+      //  לא כולל "ממתין לחתימה" (awaiting) ולא "בוטל" (בסטטוס או בשלב).
+      var SIGNED_STAGES = { initial: 1, screening: 1, submitted: 1, approved: 1, signed: 1, collection: 1, ordered: 1, delivered: 1 };
       var deals = allDeals.filter(function (d) {
-        return !!d.has_signature && d.status !== 'cancelled' && d.stage !== 'cancelled'
+        return !!SIGNED_STAGES[d.stage] && d.status !== 'cancelled'
                && inRepRange(d.signed_at || d.created_at);
       });
       var cancelled = allDeals.filter(function (d) { return d.status === 'cancelled' || d.stage === 'cancelled'; }).length;
@@ -3981,7 +3980,7 @@
         else if (preset === 'last_30d') from = now - 30 * DAY;
         else if (preset === 'last_90d') from = now - 90 * DAY;
         return allDeals.reduce(function (a, d) {
-          if (!d.has_signature || d.status === 'cancelled' || d.stage === 'cancelled') return a;
+          if (!SIGNED_STAGES[d.stage] || d.status === 'cancelled') return a;
           var t = new Date(d.signed_at || d.created_at || 0).getTime();
           return t >= from ? a + (+d.car_price || 0) : a;
         }, 0);
