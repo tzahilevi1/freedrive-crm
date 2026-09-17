@@ -1614,8 +1614,11 @@
       var ts = ['חיובי', 'ניטרלי', 'שלילי'].sort(function (a, b) { return o.sent[b] - o.sent[a]; })[0];
       var top = Object.keys(o.sugg).sort(function (a, b) { return o.sugg[b] - o.sugg[a]; })[0];
       var A = function (extra, txt) { return clickable('data-go=\'{"agent":"' + esc(k) + '"' + extra + '}\'', txt); };
+      var na = o.n - o.ans;   // לא נענו = סה"כ פחות שנענו
       return '<tr><td><b>' + A('', esc(k)) + '</b></td>' +
         '<td>' + A('', o.n) + '</td>' +
+        '<td><span style="color:var(--ok);font-weight:700">' + o.ans + '</span></td>' +
+        '<td>' + (na ? '<span style="color:var(--danger);font-weight:700">' + na + '</span>' : '0') + '</td>' +
         '<td>' + (sc != null ? scoreChip(sc) : '<span class="muted">—</span>') + '</td>' +
         '<td>' + (o.sent[ts] ? sentDot(ts) : '<span class="muted">—</span>') + '</td>' +
         '<td>' + (o.ans ? esc(mmss(o.talk / o.ans)) : '—') + '</td>' +
@@ -1659,8 +1662,8 @@
       '<div class="grid2" style="gap:14px;margin-top:14px">' +
         '<div class="card cl-sub"><h3 class="cl-h">🕐 שיחות לפי שעה</h3>' + miniBars(hourItems) + '</div>' +
         '<div class="card cl-sub"><h3 class="cl-h">👥 ביצועי נציגים</h3>' +
-          '<div class="table-scroll"><table><thead><tr><th>נציג</th><th>שיחות</th><th>ציון</th><th>סנטימנט</th><th>משך ממוצע</th><th>זמן שיחה בפועל</th><th>תוצאה נפוצה</th></tr></thead>' +
-          '<tbody>' + (agRows || '<tr><td colspan="7" class="empty">אין נתונים</td></tr>') + '</tbody></table></div></div>' +
+          '<div class="table-scroll"><table><thead><tr><th>נציג</th><th>שיחות</th><th>נענו</th><th>לא נענו</th><th>ציון</th><th>סנטימנט</th><th>משך ממוצע</th><th>זמן שיחה בפועל</th><th>תוצאה נפוצה</th></tr></thead>' +
+          '<tbody>' + (agRows || '<tr><td colspan="9" class="empty">אין נתונים</td></tr>') + '</tbody></table></div></div>' +
       '</div>' +
       (alerts.length && alertOn('lowscore') ? '<div class="card cl-sub" style="margin-top:14px"><h3 class="cl-h">⚠️ התראות — שיחות בציון נמוך</h3>' +
         '<div class="table-scroll"><table><thead><tr><th>ציון</th><th>נציג</th><th>מספר</th><th>סיכום</th><th>מועד</th></tr></thead>' +
