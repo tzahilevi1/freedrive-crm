@@ -7475,5 +7475,12 @@
   window.C2B.refreshBadges = refreshBadges;
 
   // ---------- boot ----------
-  db.auth.getSession().then(function (r) { if (r.data.session) showApp(r.data.session); else showLogin(); });
+  //  האתחול חייב לרוץ אחרי ש-admin-crm.js (נטען *אחרי* הקובץ הזה) הגדיר את
+  //  C2B_renderDashboard וחבריו. getSession() נפתר לרוב כ-microtask מיד בסוף
+  //  admin.js — עוד לפני ש-admin-crm.js רץ — ואז go('dashboard') מצא את הרנדרר
+  //  undefined והמסך נשאר ריק עד מעבר-מסך וחזרה. נדחים ל-DOMContentLoaded,
+  //  שנורה רק אחרי שכל הסקריפטים חוסמי-הפרסר (כולל admin-crm.js) הורצו.
+  function boot() { db.auth.getSession().then(function (r) { if (r.data.session) showApp(r.data.session); else showLogin(); }); }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+  else boot();
 })();
