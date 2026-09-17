@@ -3414,10 +3414,10 @@
   };
   function fbtn(k) { return '<button class="btn btn-ghost btn-sm" id="flt_' + k + '">' + fltLabel(blockR[k]) + '</button>'; }
   function fbtn2(k) { return '<button class="btn btn-ghost btn-sm" id="fltf_' + k + '" title="סינון לפי שדה וערך">' + fieldBtnLabel(blockF[k]) + '</button>'; }
-  //  עסקה = הלקוח חתם על ההסכם, ולא בוטלה. הצעת מחיר, טיוטה ועסקה
-  //  שבוטלה אינן עסקה — הן היו נספרות כאן וניפחו את המספר מול הדוחות,
-  //  שם ההגדרה הזו כבר נאכפה.
-  function isDeal(d) { return !!d.has_signature && d.status !== 'cancelled' && d.stage !== 'cancelled'; }
+  //  "עסקה חתומה" נספרת לפי שלב התיק: מ"עסקה ראשונית" ומעלה — לא כולל
+  //  "ממתין לחתימה" (awaiting) ולא "בוטל". תואם לספירת השלבים בתיקי הלקוחות.
+  var SIGNED_STAGES = { initial: 1, screening: 1, submitted: 1, approved: 1, signed: 1, collection: 1, ordered: 1, delivered: 1 };
+  function isDeal(d) { return !!SIGNED_STAGES[d.stage] && d.status !== 'cancelled'; }
   //  נספרת לפי מועד החתימה ולא לפי מועד הפתיחה: עסקה שנפתחה בחודש שעבר
   //  ונחתמה היום היא עסקה של היום.
   function dealAt(d) { return d.signed_at || d.created_at; }
@@ -3433,7 +3433,7 @@
     var leads = allLeads.filter(function (l) { return inRange(l.created_at, dashRange); });
     var deals = signed.filter(function (d) { return inRange(dealAt(d), dashRange); });
     var openQuotes = allDeals.filter(function (d) {
-      return !d.has_signature && d.status !== 'cancelled' && d.stage !== 'cancelled';
+      return !SIGNED_STAGES[d.stage] && d.status !== 'cancelled' && d.stage !== 'cancelled';
     }).length;
     var todayS = periodStart('today');
     var todayN = allLeads.filter(function (l) { return new Date(l.created_at || 0).getTime() >= todayS; }).length;
@@ -3462,7 +3462,7 @@
       pTabs +
       '<div class="cards" style="margin-top:14px">' +
         C.stat('לידים חדשים היום', todayN, true, 'today') + C.stat('נחתמו היום', dealsTodayN, true, 'signedToday') +
-        C.stat('סה"כ לידים', leads.length, null, 'leads') + C.stat('עסקאות חתומות', deals.length, null, 'deals', 'הלקוח חתם על ההסכם') +
+        C.stat('סה"כ לידים', leads.length, null, 'leads') + C.stat('עסקאות חתומות', deals.length, null, 'deals', 'מעסקה ראשונית ומעלה · בטווח שנבחר') +
         C.stat('עסקאות שנסגרו', closedDeals.length, null, 'closed', 'משלב "נחתם מימון" ומעלה') +
         C.stat('פגישות נקבעו', by.meeting_set || 0, null, 'meetings') +
         C.stat('הצעות פתוחות', openQuotes, null, 'quotes') + C.stat('אחוז סגירה', conv + '%', null, 'conv') +
