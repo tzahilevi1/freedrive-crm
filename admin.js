@@ -4460,6 +4460,7 @@
             + '<label style="font-size:13px;display:inline-flex;align-items:center;gap:6px;margin-inline-end:14px"><input type="checkbox" class="tpl-cars"' + (t.show_cars ? ' checked' : '') + '> 🚗 הצג דגמים מהמלאי</label>'
             + '<label style="font-size:13px;display:inline-flex;align-items:center;gap:6px;margin-inline-end:14px"><input type="checkbox" class="tpl-active"' + (t.active === false ? '' : ' checked') + '> פעיל</label>'
             + '<button class="btn btn-sm btn-primary tpl-save">💾 שמור</button> <button class="btn btn-sm btn-ghost tpl-prev">👁 תצוגה</button> <button class="btn btn-sm btn-ghost tpl-del">🗑</button> <span class="tpl-msg muted" style="font-size:12px;margin-inline-start:8px"></span>'
+            + '<div style="margin-top:8px;display:flex;gap:6px;align-items:center;flex-wrap:wrap;border-top:1px dashed var(--line);padding-top:8px"><span class="muted" style="font-size:12px">שליחה ידנית לבדיקה:</span><input class="inp tpl-testmail ltr" type="email" placeholder="כתובת מייל" style="width:200px;font-size:12.5px"><button class="btn btn-sm tpl-send">📧 שלח מייל זה</button></div>'
             + '</div></details>';
         }).join('') + '</div></div>';
 
@@ -4533,6 +4534,17 @@
             openDrawer('<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><h3 style="margin:0">👁 מייל #' + esc(step) + '</h3><button class="btn btn-ghost btn-sm" onclick="window.C2B.closeDrawer()">✕ סגור</button></div><div class="muted" style="font-size:12.5px;margin-bottom:10px">נושא: ' + esc(d.subject || '') + '</div><div id="nuFrameWrap" style="border:1px solid var(--line);border-radius:12px;overflow:hidden;height:72vh"></div>');
             var fr = document.createElement('iframe'); fr.style.cssText = 'width:100%;height:100%;border:0;background:#fff'; fr.srcdoc = d.html; $('nuFrameWrap').appendChild(fr);
           }, function () { openDrawer('<p class="err">שגיאה בתצוגה מקדימה</p>'); });
+          return;
+        }
+        if (e.target.closest('.tpl-send')) {
+          var to = (box.querySelector('.tpl-testmail').value || '').trim();
+          if (!/.+@.+\..+/.test(to)) { msg.textContent = 'כתובת מייל לא תקינה'; msg.style.color = 'var(--danger)'; return; }
+          var btn = e.target.closest('.tpl-send'); btn.disabled = true; msg.textContent = 'שולח…'; msg.style.color = 'var(--muted)';
+          db.functions.invoke('nurture-run', { body: { org: orgId, step: Number(step), test_to: to } }).then(function (r) {
+            btn.disabled = false; var d = r && r.data;
+            if (!d || d.error) { msg.textContent = 'שגיאה: ' + esc((d && d.error) || 'לא ידועה'); msg.style.color = 'var(--danger)'; return; }
+            msg.textContent = '✔ נשלח ל-' + to; msg.style.color = 'var(--ok)';
+          }, function () { btn.disabled = false; msg.textContent = 'שגיאה בשליחה'; msg.style.color = 'var(--danger)'; });
           return;
         }
       });
