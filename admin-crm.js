@@ -2211,7 +2211,7 @@
     selectedAcct = {};
     loading();
     Promise.all([
-      db.from('deals').select('id,lead_id,order_no,brand,stage,status,client_name,client_phone,car_make,car_model,total,car_price,purchase_price,down_total,financing,commission,salesperson,created_at,updated_at,signed_at,checklist,cancel_reason,acct_status,has_contract,has_signature').eq('has_signature', true).is('deleted_at', null).order('created_at', { ascending: false }).limit(2000),   // הנהלת חשבונות רק עסקאות חתומות
+      db.from('deals').select('id,lead_id,order_no,brand,stage,status,client_name,client_phone,car_make,car_model,total,car_price,purchase_price,down_total,financing,commission,salesperson,created_at,updated_at,signed_at,checklist,cancel_reason,acct_status,has_contract,has_signature').in('stage', ['signed', 'collection', 'ordered', 'delivered', 'cancelled']).is('deleted_at', null).order('created_at', { ascending: false }).limit(3000),   // הנהלת חשבונות — לפי שלב (נחתם מימון+ ומבוטלות), לא לפי חתימת-הסכם
       db.from('payments').select('*'),
       db.from('profiles').select('user_id,full_name'),
       db.from('lead_documents').select('*').order('created_at', { ascending: false }).limit(500),
@@ -3149,7 +3149,7 @@
         var within = d.created_at && (new Date(d.signed_at) - new Date(d.created_at)) <= 24 * 3600 * 1000;
         return '<td style="white-space:nowrap"><span class="muted">' + fmt(d.signed_at) + '</span> ' + (within ? '<span style="color:var(--ok);font-weight:700" title="נחתם תוך 24 שעות">✓ 24ש׳</span>' : '<span style="color:var(--warn)" title="מעל 24 שעות מפתיחת העסקה">מעל 24ש׳</span>') + '</td>';
       } },
-    { key: 'salesperson', label: 'איש מכירות', def: false, cell: function (d) { return '<td>' + esc(d.salesperson || '—') + '</td>'; } },
+    { key: 'salesperson', label: 'סוכן מוכר', cell: function (d) { return '<td>' + esc(d.salesperson || '—') + '</td>'; } },
     { key: 'brand', label: 'מותג', def: false, cell: function (d) { return '<td>' + esc(d.brand || '—') + '</td>'; } },
     { key: 'phone', label: 'טלפון', def: false, cell: function (d) { return '<td>' + esc(d.client_phone || '—') + '</td>'; } },
     { key: 'created', label: 'נוצר', def: false, descFirst: true, sort: function (d) { return d.created_at || ''; }, cell: function (d) { return '<td class="muted">' + fmt(d.created_at) + '</td>'; } },
