@@ -232,7 +232,7 @@
   }
   // ---- automation engine: run active rules whose trigger status matches the new status ----
   function fillMsg(t, lead) { return String(t || '').replace(/\{name\}/g, (lead && lead.name) || '').replace(/\{firstname\}/g, (((lead && lead.name) || '').split(' ')[0])).replace(/\{car\}/g, (lead && lead.car) || ''); }
-  // real customer send via the "send-message" Edge Function (email = Resend, whatsapp = Meta)
+  // real customer EMAIL send via the "send-message" Edge Function (Resend). WhatsApp is sent via Heyy.
   function sendCustomerMsg(channel, lead, p) {
     var to = channel === 'email' ? (lead && lead.email) : (lead && lead.phone);
     if (!to) return Promise.resolve(false);

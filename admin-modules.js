@@ -221,7 +221,7 @@
           '<div class="field" style="margin:0;width:120px"><label>בעוד (ימים)</label><input class="inp" id="auDays" type="number" min="0" value="1"></div>' +
           '<button class="btn" id="auAdd">➕ הוסף חוק</button></div></div>' +
         '<div class="card"><h3>חוקים פעילים (' + rules.length + ')</h3><div class="table-scroll"><table><thead><tr><th>שם</th><th>תנאי</th><th>פעולה</th><th>מצב</th><th></th></tr></thead><tbody>' + list + '</tbody></table></div>' +
-        '<p class="muted" style="font-size:12px;margin-top:10px">✅ <b>המנוע רץ בשרת.</b> החוקים נורים בכל מסלול שבו סטטוס משתנה — שינוי ידני, עדכון מרוכז, חתימת לקוח, ליד שנקלט מפייסבוק או מהאתר. כל חוק רץ פעם אחת בלבד לכל ליד בכל סטטוס. שליחת WhatsApp אוטומטית תתאפשר אחרי חיבור ManyChat; עד אז החוק פותח משימה ידנית.</p>' +
+        '<p class="muted" style="font-size:12px;margin-top:10px">✅ <b>המנוע רץ בשרת.</b> החוקים נורים בכל מסלול שבו סטטוס משתנה — שינוי ידני, עדכון מרוכז, חתימת לקוח, ליד שנקלט מפייסבוק או מהאתר. כל חוק רץ פעם אחת בלבד לכל ליד בכל סטטוס. לשליחת WhatsApp החוק פותח משימה ידנית (השליחה בפועל דרך Heyy).</p>' +
         '<div class="row-between" style="margin-top:14px"><h3 style="margin:0">הרצות אחרונות</h3><button class="btn btn-ghost btn-sm" id="auRefreshRuns">↻ רענן</button></div>' +
         '<div id="auRuns" class="muted" style="font-size:12.5px;margin-top:8px">טוען…</div></div>');
       var editState = null;

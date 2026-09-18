@@ -7129,10 +7129,10 @@
       if ($('seedSources')) $('seedSources').addEventListener('click', function () {
         if (!confirm('פעולה זו תחליף את הרשימות "מקור הגעה" ו-"utm_source" בערכים מומלצים ומצומצמים.\nהערכים הקיימים בשני השדות האלה יימחקו. להמשיך?')) return;
         // curated, most-relevant sources — Hebrew display sources + technical utm_source values
-        var SRC = ['פייסבוק', 'אינסטגרם', 'טיקטוק', 'גוגל', 'וואטסאפ', 'טופס אתר', 'שיחה נכנסת', 'הפניה', 'יד2', 'ManyChat', 'ידני'];
+        var SRC = ['פייסבוק', 'אינסטגרם', 'טיקטוק', 'גוגל', 'וואטסאפ', 'טופס אתר', 'שיחה נכנסת', 'הפניה', 'יד2', 'ידני'];
         var UTM = ['facebook', 'instagram', 'tiktok', 'linkedin', 'taboola', 'outbrain', 'google', 'whatsapp',
                    'email', 'sms', 'call', 'website', 'organic', 'direct', 'referral', 'affiliate',
-                   'crm', 'automation', 'kisorit', 'manychat', 'unknown'];
+                   'crm', 'automation', 'kisorit', 'unknown'];
         var rows = SRC.map(function (v) { return { field: 'source', value: v }; }).concat(UTM.map(function (v) { return { field: 'utm_source', value: v }; }));
         db.from('field_options').delete().in('field', ['source', 'utm_source']).then(function (dr) {
           if (dr.error) return alert('שגיאה במחיקה: ' + dr.error.message);
@@ -7455,31 +7455,7 @@
     });
   }
 
-  // ---------- SETTINGS: WhatsApp via ManyChat ----------
-  function renderManychat() {
-    var host = $('manychatCard'); if (!host) return;
-    db.from('admin_config').select('value').eq('key', 'manychat').maybeSingle().then(function (r) {
-      if (r && r.error) { host.innerHTML = '<div class="card" style="border:1px solid var(--warn);background:rgba(245,158,11,.08)"><b style="color:var(--warn)">⚠️ ManyChat לא זמין</b> — הריצו את <b>supabase/telephony.sql</b> (טבלת app_config).</div>'; return; }
-      var t = (r && r.data && r.data.value) || {};
-      var has = !!t.token;
-      host.innerHTML = '<div class="card"><div class="row-between"><h3 style="margin:0">📲 WhatsApp דרך ManyChat</h3><span class="muted" style="font-size:12px">שליחת וואטסאפ ללידים</span></div>' +
-        '<p class="muted" style="font-size:13px;margin:6px 0 12px">הדביקו את ה-<b>API Token</b> של ManyChat (ב-ManyChat → <b>Settings → API</b>). הוא ישמש לשליחת WhatsApp ללידים — אוטומטית ובכפתור בכרטיס הליד.</p>' +
-        '<div class="field" style="margin:0 0 10px"><label>ManyChat API Token</label><input class="inp" id="mcToken" type="password" autocomplete="off" placeholder="' + (has ? '•••••••••• (טוקן שמור — הדביקו חדש כדי להחליף)' : 'הדביקו כאן את הטוקן…') + '" value=""></div>' +
-        '<button class="btn btn-sm" id="mcSave">💾 שמור</button> ' + (has ? '<span style="color:var(--ok);font-size:12.5px;font-weight:600;margin-inline-start:6px">✔ טוקן מחובר</span>' : '') + ' <span id="mcMsg" style="font-size:12.5px;margin-inline-start:8px"></span>' +
-        '<p class="muted" style="font-size:11.5px;margin-top:10px">🔒 הטוקן נשמר מאובטח ומשמש רק בצד השרת לשליחת ההודעות. דורש ManyChat Pro.</p>' +
-        '</div>';
-      $('mcSave').addEventListener('click', function () {
-        var tok = $('mcToken').value.trim(), msg = $('mcMsg');
-        if (!tok) { msg.style.color = 'var(--danger)'; msg.textContent = 'הדביקו טוקן'; return; }
-        var b = this; b.disabled = true; msg.style.color = 'var(--muted)'; msg.textContent = 'שומר…';
-        db.from('admin_config').upsert({ org_id: window.C2B.orgId, key: 'manychat', value: { token: tok }, updated_at: new Date().toISOString() }, { onConflict: 'org_id,key' }).then(function (u) {
-          b.disabled = false;
-          if (u.error) { msg.style.color = 'var(--danger)'; msg.textContent = 'שגיאה: ' + u.error.message; return; }
-          msg.style.color = 'var(--ok)'; msg.textContent = '✔ נשמר'; renderManychat();
-        });
-      });
-    });
-  }
+  // (ManyChat הוסר מהמערכת — שליחת WhatsApp מתבצעת דרך Heyy)
 
   // ---- מרכז חיבורים · מקורות לידים (integrations) ----
   function renderIntegrations() {
