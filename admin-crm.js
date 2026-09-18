@@ -151,7 +151,10 @@
       db.from('leads').update({ first_response_at: new Date().toISOString() })
         .eq('id', id).is('first_response_at', null).then(function () {}, function () {});
     }
-    return db.from('activities').insert({ lead_id: id, type: type, body: body || null, meta: meta || null, created_by: C.userId || null });
+    //  .then מפעיל את הבקשה (בלעדיו PostgREST builder עצל ולא מבצע) — כך גם
+    //  ~20 הקוראים ה"עירומים" רושמים לציר-הזמן. מחזירים את התוצאה כדי שהקוראים
+    //  המשורשרים (שבודקים r.error) ימשיכו לעבוד.
+    return db.from('activities').insert({ lead_id: id, type: type, body: body || null, meta: meta || null, created_by: C.userId || null }).then(function (r) { return r; }, function (e) { return { error: e }; });
   }
 
   // ---- reusable status menu (status changeable from anywhere) ----
@@ -618,7 +621,7 @@
       function logFields() {
         var summ = []; if (patch.status) summ.push('סטטוס: ' + stDef(patch.status).label); if (patch.source) summ.push('מקור: ' + patch.source); if (patch.brand) summ.push('מותג: ' + patch.brand);
         if (bf) summ.push((BULK_FIELD_LABEL[bf] || bf) + ': ' + (bv || '(רוקן)'));
-        if (summ.length) db.from('activities').insert(list.map(function (id) { return { lead_id: id, type: 'system', body: 'עדכון קבוצתי — ' + summ.join(', '), created_by: C.userId || null }; }));
+        if (summ.length) db.from('activities').insert(list.map(function (id) { return { lead_id: id, type: 'system', body: 'עדכון קבוצתי — ' + summ.join(', '), created_by: C.userId || null }; })).then(function () {}, function () {});
       }
       function done() { logFields(); selectedLeads = {}; window.C2B_renderLeads(curFilter); }
       function doAgent() {

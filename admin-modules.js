@@ -61,7 +61,7 @@
           db.from('deals').update(patch).eq('id', id).then(function (rr) {
             if (rr.error) return alert('שגיאה: ' + rr.error.message);
             var d = rows.filter(function (x) { return String(x.id) === String(id); })[0];
-            if (d && d.lead_id) { var ns = st === 'ordered' ? 'won' : (st === 'cancelled' ? 'lost' : 'quote_sent'); db.from('leads').update({ status: ns }).eq('id', d.lead_id); }
+            if (d && d.lead_id) { var ns = st === 'ordered' ? 'won' : (st === 'cancelled' ? 'lost' : 'quote_sent'); db.from('leads').update({ status: ns }).eq('id', d.lead_id).then(function () {}, function () {}); }
             window.C2B_renderQuotes(statusFilter);
           });
         });
