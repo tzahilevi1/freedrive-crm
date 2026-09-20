@@ -1307,6 +1307,12 @@
   //  'today'/'yesterday'); callFrom/callTo הם טווח מותאם שגובר עליו.
   //  החישוב לפי שעון הדפדפן (ישראל), כי started_at נשמר כ-UTC אמיתי.
   var callCols = null, callDays = 7, callFrom = "", callTo = "";
+  //  רשימת השיחות מרנדרת עד callListMax שורות בכל פעם. רינדור של אלפי
+  //  שורות טבלה חוסם את הדפדפן ל-10ש+; מגבילים ל-300 עם "הצג עוד".
+  //  _callAll/_callHead שומרים את הדאטה שנטענה כדי לסנן/לרנדר-מחדש בלי
+  //  שליפה חוזרת מהשרת (חיפוש וסינון היו מושכים הכל מחדש בכל הקלדה).
+  var callListMax = 300, _callAll = null, _callHead = '';
+  function repaintList() { if (_callAll) paintList(_callAll, _callHead); }
   function callRange() {
     var now = new Date(), until = now.toISOString(), since;
     if (callFrom && callTo) {
@@ -1513,6 +1519,9 @@
           (custom ? '<button class="btn btn-ghost btn-sm" id="clClear">נקה טווח</button>' : '') +
         '</div></div>';
 
+      //  שומרים את הדאטה שנטענה כדי שסינון/חיפוש/"הצג עוד" יעבדו עליה
+      //  מקומית בלי שליפה חוזרת. איפוס המגבלה כי זו טעינה טרייה (שינוי טווח).
+      _callAll = all; _callHead = head; callListMax = 300;
       if (sub === 'list') paintList(all, head);
       else if (sub === 'agents') paintAgents(all, head);
       else if (sub === 'todo') paintTodo(all, head);
@@ -2575,7 +2584,11 @@
     if (!callCols) callCols = window.C2B.colPicker('calls', CALL_COLS, function () { renderCalls('list'); }, { sortable: true });
     //  כל השורה לחיצה — פותחת את עמוד השיחה. הבודק ב-wireCalls מדלג על
     //  לחיצות על קישורים/כפתורים בתוך השורה (טלפון, ליד, וואטסאפ).
-    var rows = callCols.sortRows(list).map(function (c) {
+    //  מרנדרים עד callListMax שורות בלבד — רינדור אלפי שורות חוסם את הדפדפן.
+    var sorted = callCols.sortRows(list);
+    var shown = sorted.slice(0, callListMax);
+    var moreCount = sorted.length - shown.length;
+    var rows = shown.map(function (c) {
       return '<tr data-callinfo="' + esc(c.id) + '" style="cursor:pointer" title="לחצו לפתיחת עמוד השיחה">' + callCols.cells(c) + '</tr>';
     }).join('');
     var dOpts = Object.keys(depts).sort(function (a, b) { return depts[b] - depts[a]; })
@@ -2583,7 +2596,7 @@
 
     view('<div class="card">' + head +
       '<div class="row-between" style="margin-bottom:8px"><span class="muted" style="font-size:12.5px">' +
-        list.length + ' מתוך ' + all.length + '</span>' + callCols.button() + '</div>' +
+        'מוצגות ' + shown.length + ' · ' + list.length + ' בסינון · ' + all.length + ' סה״כ</span>' + callCols.button() + '</div>' +
       //  מה שסינן את הרשימה מוצג במפורש. בלי זה לחיצה על מספר בסקירה
       //  הייתה מובילה לרשימה קצרה בלי שום רמז למה.
       (Object.keys(callFilter).some(function (k) { return callFilter[k] !== ''; })
@@ -2608,17 +2621,27 @@
       '</div>' +
       '<div class="table-scroll"><table><thead><tr>' + callCols.thead() + '</tr></thead><tbody>' +
         (rows || '<tr><td colspan="' + callCols.colCount() + '" class="empty">אין שיחות בסינון הזה</td></tr>') +
-      '</tbody></table></div></div>');
+      '</tbody></table></div>' +
+      (moreCount > 0 ? '<div style="text-align:center;margin-top:12px"><button class="btn btn-ghost" id="clMore">⬇️ הצג עוד ' + Math.min(500, moreCount) + ' (נותרו ' + moreCount + ')</button></div>' : '') +
+      '</div>');
 
     callCols.bind();
+    var moreBtn = $('clMore');
+    if (moreBtn) moreBtn.addEventListener('click', function () { callListMax += 500; repaintList(); });
     var qEl = $('clQ'), t = null;
     qEl.addEventListener('input', function () {
       clearTimeout(t);
-      t = setTimeout(function () { callFilter.q = qEl.value.trim(); renderCalls('list'); }, 350);
+      //  סינון מקומי על הדאטה שכבר נטענה — בלי שליפה חוזרת מהשרת. שומרים
+      //  מיקום סמן כי repaintList בונה מחדש את תיבת החיפוש.
+      t = setTimeout(function () {
+        var pos = qEl.selectionStart;
+        callFilter.q = qEl.value.trim(); callListMax = 300; repaintList();
+        var nq = $('clQ'); if (nq) { nq.focus(); try { nq.setSelectionRange(pos, pos); } catch (e) {} }
+      }, 300);
     });
     ['clDept:dept', 'clDir:dir', 'clAns:ans'].forEach(function (pair) {
       var p = pair.split(':');
-      $(p[0]).addEventListener('change', function () { callFilter[p[1]] = this.value; renderCalls('list'); });
+      $(p[0]).addEventListener('change', function () { callFilter[p[1]] = this.value; callListMax = 300; repaintList(); });
     });
   }
 
