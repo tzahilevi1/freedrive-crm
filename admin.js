@@ -1306,7 +1306,10 @@
   //  טווח התאריכים של מסך השיחות. callDays הוא פריסט (מספר ימים, או
   //  'today'/'yesterday'); callFrom/callTo הם טווח מותאם שגובר עליו.
   //  החישוב לפי שעון הדפדפן (ישראל), כי started_at נשמר כ-UTC אמיתי.
-  var callCols = null, callDays = 7, callFrom = "", callTo = "";
+  //  ברירת מחדל "היום": מוקד עמוס מייצר ~280 שיחות/יום, ו-7 ימים = ~2000
+  //  שורות (2.9MB) שהעמיסו על הדפדפן 8-12ש. "היום" נטען כמעט מיידית;
+  //  המשתמש בוחר טווח גדול יותר בעת הצורך.
+  var callCols = null, callDays = 'today', callFrom = "", callTo = "";
   //  רשימת השיחות מרנדרת עד callListMax שורות בכל פעם. רינדור של אלפי
   //  שורות טבלה חוסם את הדפדפן ל-10ש+; מגבילים ל-300 עם "הצג עוד".
   //  _callAll/_callHead שומרים את הדאטה שנטענה כדי לסנן/לרנדר-מחדש בלי
@@ -1343,6 +1346,9 @@
   //  זה חוסך עשרות MB ומאיץ דרמטית את טעינת מסך "שיחות". transcript נשמר —
   //  נחוץ למחוון "תומלל" ולחיפוש ברשימה.
   var CALL_LIST_COLS = 'id,provider,external_id,direction,from_number,to_number,agent_ext,agent_name,started_at,answered_at,ended_at,duration_sec,talk_sec,status,recording_url,lead_id,created_at,did,answered,department,top_department,agent_code,ring_sec,transcript,recording_path,recording_at,recording_err,ai_summary,ai_sentiment,ai_source,ai_at,crm_analysis,crm_at,crm_err,alert_sent_at,tags,org_id';
+  //  הטאבים המצרפיים (סקירה/נציגים/מגמות/דוחות/התנגדויות/התראות/לקוחות/לחזרה)
+  //  לא נוגעים ב-transcript — משמיטים אותו כדי לחסוך עוד ~0.9MB בטווחים גדולים.
+  var CALL_AGG_COLS = 'id,provider,external_id,direction,from_number,to_number,agent_ext,agent_name,started_at,answered_at,ended_at,duration_sec,talk_sec,status,recording_url,lead_id,created_at,did,answered,department,top_department,agent_code,ring_sec,recording_path,recording_at,recording_err,ai_summary,ai_sentiment,ai_source,ai_at,crm_analysis,crm_at,crm_err,alert_sent_at,tags,org_id';
   //  Voicenter מחזירה ב-agent_name תוויות פנימיות (תור/רכז/DID) ולא את
   //  שם הנציג. לכן מזהים את הנציג לפי המספר (אחד מ-7) וממפים לשם הנכון.
   //  ליאור לוי מחזיק שני מספרים — שניהם ממופים אליו (איחוד).
@@ -1361,23 +1367,25 @@
   //  עשרות פעמים בשניות. מכווצים רצף כזה (אותו לקוח+נציג+כיוון, לא נענו,
   //  בפער < 2 דק') לאירוע אחד עם ספירת ניסיונות (_attempts).
   function dedupeCalls(list) {
+    //  מחשבים מפתח (טלפון|נציג|כיוון) וחותמת-זמן פעם אחת לכל שיחה, במקום
+    //  בכל השוואת מיון — חוסך עשרות אלפי קריאות ל-last9/agentOf/Date.
+    list.forEach(function (c) {
+      c._k = last9(callPhone(c)) + '|' + agentOf(c) + '|' + c.direction;
+      c._ms = +new Date(c.started_at);
+    });
     var srt = list.slice().sort(function (a, b) {
-      var ka = last9(callPhone(a)) + '|' + agentOf(a) + '|' + a.direction;
-      var kb = last9(callPhone(b)) + '|' + agentOf(b) + '|' + b.direction;
-      if (ka !== kb) return ka < kb ? -1 : 1;
-      return new Date(a.started_at) - new Date(b.started_at);
+      if (a._k !== b._k) return a._k < b._k ? -1 : 1;
+      return a._ms - b._ms;
     });
     var out = [], prev = null;
     srt.forEach(function (c) {
       if (c.answered !== true && prev && prev.answered !== true &&
-          last9(callPhone(c)) === last9(callPhone(prev)) && agentOf(c) === agentOf(prev) &&
-          c.direction === prev.direction &&
-          Math.abs(new Date(c.started_at) - new Date(prev.started_at)) < 120000) {
+          c._k === prev._k && Math.abs(c._ms - prev._ms) < 120000) {
         prev._attempts = (prev._attempts || 1) + 1; return;
       }
       c._attempts = 1; out.push(c); prev = c;
     });
-    return out.sort(function (a, b) { return new Date(b.started_at) - new Date(a.started_at); });
+    return out.sort(function (a, b) { return b._ms - a._ms; });
   }
   //  כל מספר במסך מוביל לרשימה המסוננת שמאחוריו. הסינון מוחזק כאן ולא
   //  בכתובת, כדי שחזרה ללשונית תשמור את ההקשר שממנו הגעת.
@@ -1496,7 +1504,7 @@
     loading();
     var rng = callRange();
     Promise.all([
-      fetchAll(function () { return db.from('calls').select(CALL_LIST_COLS).or(CALL_AGENT_OR).gte('started_at', rng.since).lte('started_at', rng.until).order('started_at', { ascending: false }); }),
+      fetchAll(function () { return db.from('calls').select(sub === 'list' ? CALL_LIST_COLS : CALL_AGG_COLS).or(CALL_AGENT_OR).gte('started_at', rng.since).lte('started_at', rng.until).order('started_at', { ascending: false }); }),
       fetchAll(function () { return db.from('leads').select('id,name,phone,status').is('deleted_at', null); })
     ]).then(function (res) {
       if (myTok !== viewToken) return;
