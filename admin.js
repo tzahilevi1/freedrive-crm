@@ -1332,6 +1332,11 @@
   //  שיחה נכללת אם אחד המספרים מעורב בה (מתקשר או יעד).
   var CALL_AGENTS = ['533945097', '534493184', '534494707', '534495185', '534495197', '535463720', '539295952'];
   var CALL_AGENT_OR = CALL_AGENTS.map(function (n) { return 'from_number.ilike.*' + n + ',to_number.ilike.*' + n; }).join(',');
+  //  עמודות לתצוגת הרשימה/סקירה — בלי השדות הכבדים (raw ~1KB בכל שיחה,
+  //  transcript_dialog, ai_data) שנחוצים רק בפתיחת שיחה בודדת. עם אלפי שיחות
+  //  זה חוסך עשרות MB ומאיץ דרמטית את טעינת מסך "שיחות". transcript נשמר —
+  //  נחוץ למחוון "תומלל" ולחיפוש ברשימה.
+  var CALL_LIST_COLS = 'id,provider,external_id,direction,from_number,to_number,agent_ext,agent_name,started_at,answered_at,ended_at,duration_sec,talk_sec,status,recording_url,lead_id,created_at,did,answered,department,top_department,agent_code,ring_sec,transcript,recording_path,recording_at,recording_err,ai_summary,ai_sentiment,ai_source,ai_at,crm_analysis,crm_at,crm_err,alert_sent_at,tags,org_id';
   //  Voicenter מחזירה ב-agent_name תוויות פנימיות (תור/רכז/DID) ולא את
   //  שם הנציג. לכן מזהים את הנציג לפי המספר (אחד מ-7) וממפים לשם הנכון.
   //  ליאור לוי מחזיק שני מספרים — שניהם ממופים אליו (איחוד).
@@ -1485,7 +1490,7 @@
     loading();
     var rng = callRange();
     Promise.all([
-      fetchAll(function () { return db.from('calls').select('*').or(CALL_AGENT_OR).gte('started_at', rng.since).lte('started_at', rng.until).order('started_at', { ascending: false }); }),
+      fetchAll(function () { return db.from('calls').select(CALL_LIST_COLS).or(CALL_AGENT_OR).gte('started_at', rng.since).lte('started_at', rng.until).order('started_at', { ascending: false }); }),
       fetchAll(function () { return db.from('leads').select('id,name,phone,status').is('deleted_at', null); })
     ]).then(function (res) {
       if (myTok !== viewToken) return;
