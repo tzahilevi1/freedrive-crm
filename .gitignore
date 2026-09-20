@@ -9,3 +9,8 @@
 !admin-modules.js
 !*.png
 !CNAME
+
+# workflow הפריסה — חובה שיישאר מנוהל, אחרת פריסות נעצרות
+!.github/
+!.github/workflows/
+!.github/workflows/pages.yml
