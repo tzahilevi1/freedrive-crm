@@ -3351,16 +3351,49 @@
   function closeDatePopup() { var m = document.getElementById('datepop'); if (m) m.remove(); }
   function dateFilterPopup(anchor, cur, onApply) {
     closeDatePopup();
-    var m = document.createElement('div'); m.className = 'stmenu'; m.id = 'datepop'; m.style.minWidth = '250px'; m.style.padding = '12px';
+    //  אופרטור התחלתי לפי המצב הנוכחי: הוא(eq)/אחרי(gt)/לפני(lt)/בין(between)
+    var initOp = (cur && cur.from && cur.to && cur.from === cur.to) ? 'eq'
+               : (cur && cur.from && cur.to) ? 'between'
+               : (cur && cur.from) ? 'gt'
+               : (cur && cur.to) ? 'lt' : 'between';
+    var two = initOp === 'between', hideTo = two ? '' : 'display:none';
+    var m = document.createElement('div'); m.className = 'stmenu'; m.id = 'datepop'; m.style.minWidth = '270px'; m.style.padding = '12px';
     m.innerHTML = '<div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:10px">' + PERIODS.map(function (p) { return '<button class="btn btn-ghost btn-sm" data-dp="' + p[0] + '">' + p[1] + '</button>'; }).join('') + '</div>' +
-      '<label class="muted" style="font-size:12px">טווח תאריכים מותאם</label>' +
-      '<div style="display:flex;gap:6px;align-items:center;margin:5px 0 10px"><input type="date" class="inp" id="dpFrom" value="' + ((cur && cur.from) || '') + '"><span class="muted">–</span><input type="date" class="inp" id="dpTo" value="' + ((cur && cur.to) || '') + '"></div>' +
-      '<div style="display:flex;gap:6px"><button class="btn btn-sm" id="dpApply">החל טווח</button><button class="btn btn-ghost btn-sm" id="dpClear">נקה</button></div>';
+      '<label class="muted" style="font-size:12px">תנאי תאריך מותאם</label>' +
+      '<div style="display:flex;gap:6px;align-items:center;margin:5px 0 10px;flex-wrap:wrap">' +
+        '<select class="inp" id="dpOp" style="width:82px">' +
+          '<option value="eq"' + (initOp === 'eq' ? ' selected' : '') + '>הוא</option>' +
+          '<option value="gt"' + (initOp === 'gt' ? ' selected' : '') + '>אחרי</option>' +
+          '<option value="lt"' + (initOp === 'lt' ? ' selected' : '') + '>לפני</option>' +
+          '<option value="between"' + (initOp === 'between' ? ' selected' : '') + '>בין</option>' +
+        '</select>' +
+        '<input type="date" class="inp" id="dpFrom" value="' + ((cur && cur.from) || '') + '" style="width:135px">' +
+        '<span class="muted" id="dpSep" style="' + hideTo + '">–</span>' +
+        '<input type="date" class="inp" id="dpTo" value="' + ((cur && cur.to) || '') + '" style="width:135px;' + hideTo + '">' +
+      '</div>' +
+      '<div style="display:flex;gap:6px"><button class="btn btn-sm" id="dpApply">החל</button><button class="btn btn-ghost btn-sm" id="dpClear">נקה</button></div>';
     document.body.appendChild(m);
+    //  קליק בתוך הפופאפ לא סוגר אותו — אחרת סוגר-הרקע היה מוחק את הפופאפ
+    //  ברגע שלוחצים על שדה התאריך, והבורר לא הספיק להיפתח (זה היה הבאג).
+    m.addEventListener('click', function (e) { e.stopPropagation(); });
+    //  "לפני" מציב את התאריך ב-dpFrom ויזואלית אבל מפרש כ-to; נשמור פשוט: dpFrom=תאריך יחיד
+    if (initOp === 'lt' && cur && cur.to) m.querySelector('#dpFrom').value = cur.to;
     var rc = anchor.getBoundingClientRect();
     m.style.top = (rc.bottom + window.scrollY + 4) + 'px'; m.style.left = Math.max(8, rc.left + window.scrollX - 140) + 'px';
+    //  לחיצה על השדה פותחת מיד את בורר היומן (האייקון לבדו לא תמיד נפתח ב-RTL)
+    ['dpFrom', 'dpTo'].forEach(function (id) { var el = m.querySelector('#' + id); if (el) el.addEventListener('click', function () { try { this.showPicker(); } catch (e) { } }); });
+    function syncOp() { var t = m.querySelector('#dpOp').value === 'between'; m.querySelector('#dpTo').style.display = t ? '' : 'none'; m.querySelector('#dpSep').style.display = t ? '' : 'none'; }
+    m.querySelector('#dpOp').addEventListener('change', syncOp);
     m.querySelectorAll('[data-dp]').forEach(function (b) { b.addEventListener('click', function (e) { e.stopPropagation(); onApply({ preset: b.dataset.dp }); closeDatePopup(); }); });
-    m.querySelector('#dpApply').addEventListener('click', function (e) { e.stopPropagation(); onApply({ from: m.querySelector('#dpFrom').value, to: m.querySelector('#dpTo').value }); closeDatePopup(); });
+    m.querySelector('#dpApply').addEventListener('click', function (e) {
+      e.stopPropagation();
+      var op = m.querySelector('#dpOp').value, a = m.querySelector('#dpFrom').value, b2 = m.querySelector('#dpTo').value, r;
+      if (op === 'eq') r = a ? { from: a, to: a } : { preset: 'all' };
+      else if (op === 'gt') r = a ? { from: a, to: '' } : { preset: 'all' };
+      else if (op === 'lt') r = a ? { from: '', to: a } : { preset: 'all' };
+      else r = { from: a, to: b2 };
+      onApply(r); closeDatePopup();
+    });
     m.querySelector('#dpClear').addEventListener('click', function (e) { e.stopPropagation(); onApply({ preset: 'all' }); closeDatePopup(); });
     setTimeout(function () { document.addEventListener('click', closeDatePopup, { once: true }); }, 0);
   }
