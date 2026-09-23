@@ -230,10 +230,11 @@
   // ---------- auth ----------
   function showLogin() { appStartedFor = null; $('login').classList.remove('hidden'); $('app').classList.add('hidden'); }
 
-  // ---------- MFA (אימות דו-שלבי) — נדרש לתקנות הגנת הפרטיות (אבטחת מידע) ----------
-  //  שער שרץ אחרי הסיסמה ולפני כניסה למערכת: אם הסשן אינו aal2, כופה
-  //  הרשמה לאפליקציית אימות (TOTP) או הזנת קוד. שחזור למשתמש נעול:
-  //  Supabase Dashboard → Authentication → Users → הסרת factor.
+  // ---------- MFA (אימות כניסה בקוד למייל) — נדרש לתקנות הגנת הפרטיות ----------
+  //  שער שרץ אחרי הסיסמה: שולח קוד בן 6 ספרות למייל המשתמש (RPC request_login_otp)
+  //  והוא מזין אותו (verify_login_otp). אין נעילה קשיחה — כשל שליחה לא חוסם,
+  //  ותמיד יש קישור התנתקות.
+  var OTP_WINDOW_MS = 12 * 3600 * 1000;   // דילוג על קוד ברענון תוך 12 שעות (לא בכניסה חדשה)
   function mfaBody() {
     var el = document.getElementById('mfaGate');
     if (!el) {
@@ -245,68 +246,41 @@
     return el.querySelector('#mfaInner');
   }
   function closeMfa() { var el = document.getElementById('mfaGate'); if (el) el.remove(); }
-  function mfaLogoutLink(body) { var o = body.querySelector('#mfaOut'); if (o) o.addEventListener('click', function (e) { e.preventDefault(); db.auth.signOut().then(function () { closeMfa(); showLogin(); }); }); }
-  function mfaVerifyFlow(body, factorId, onOk) {
-    var run = function () {
-      var code = (body.querySelector('#mfaCode').value || '').replace(/\D/g, '');
-      if (code.length < 6) return;
-      body.querySelector('#mfaErr').textContent = 'מאמת…';
-      db.auth.mfa.challenge({ factorId: factorId }).then(function (c) {
-        if (c.error) { body.querySelector('#mfaErr').textContent = c.error.message; return; }
-        db.auth.mfa.verify({ factorId: factorId, challengeId: c.data.id, code: code }).then(function (v) {
-          if (v.error) { body.querySelector('#mfaErr').textContent = 'קוד שגוי, נסו שוב'; return; }
-          closeMfa(); onOk();
-        });
-      });
-    };
-    body.querySelector('#mfaVerify').addEventListener('click', run);
-    body.querySelector('#mfaCode').addEventListener('keydown', function (e) { if (e.key === 'Enter') run(); });
-    mfaLogoutLink(body);
-  }
-  function mfaChallenge(factorId, onOk) {
+  function otpSendAndPrompt(onOk) {
     var body = mfaBody();
-    body.innerHTML = '<h2 style="margin:0 0 6px;font-size:19px">🔐 אימות דו-שלבי</h2>' +
-      '<p style="color:#666;font-size:13px;margin:0 0 14px">הזינו את הקוד בן 6 הספרות מאפליקציית האימות שלכם.</p>' +
-      '<input id="mfaCode" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="000000" style="width:100%;box-sizing:border-box;text-align:center;font-size:22px;letter-spacing:6px;padding:10px;border:1px solid #ddd;border-radius:10px;direction:ltr">' +
-      '<div id="mfaErr" style="color:#c0392b;font-size:13px;min-height:18px;margin:6px 0"></div>' +
-      '<button id="mfaVerify" class="btn" style="width:100%">אימות</button>' +
-      '<div style="margin-top:10px;text-align:center"><a href="#" id="mfaOut" style="font-size:12px">התנתקות</a></div>';
-    body.querySelector('#mfaCode').focus();
-    mfaVerifyFlow(body, factorId, onOk);
-  }
-  function mfaEnroll(onOk) {
-    var body = mfaBody();
-    body.innerHTML = '<div style="text-align:center;color:#666;padding:20px">טוען…</div>';
-    db.auth.mfa.enroll({ factorType: 'totp' }).then(function (r) {
-      if (r.error) { body.innerHTML = '<div style="color:#c0392b">שגיאה בהפעלת אימות: ' + esc(r.error.message) + '</div><div style="margin-top:12px;text-align:center"><a href="#" id="mfaOut">התנתקות</a></div>'; mfaLogoutLink(body); return; }
-      var f = r.data, qr = (f.totp && f.totp.qr_code) || '', secret = (f.totp && f.totp.secret) || '';
-      var qrHtml = qr ? (qr.trim().charAt(0) === '<' ? qr : '<img src="' + esc(qr) + '" alt="QR" style="width:190px;height:190px">') : '';
-      body.innerHTML = '<h2 style="margin:0 0 6px;font-size:19px">🔐 הפעלת אימות דו-שלבי</h2>' +
-        '<p style="color:#666;font-size:13px;margin:0 0 12px">נדרש לפי תקנות אבטחת מידע. סרקו באפליקציית אימות (Google Authenticator / Authy) והזינו את הקוד בן 6 הספרות.</p>' +
-        '<div style="text-align:center;margin-bottom:8px">' + qrHtml + '</div>' +
-        '<div style="font-size:12px;color:#888;text-align:center;margin-bottom:12px">קוד ידני: <code style="direction:ltr;display:inline-block;user-select:all">' + esc(secret) + '</code></div>' +
+    body.innerHTML = '<div style="text-align:center;color:#666;padding:24px">שולח קוד למייל…</div>';
+    db.rpc('request_login_otp').then(function () {
+      body.innerHTML = '<h2 style="margin:0 0 6px;font-size:19px">🔐 אימות כניסה</h2>' +
+        '<p style="color:#666;font-size:13px;margin:0 0 14px">שלחנו קוד בן 6 ספרות לכתובת המייל שלך. הזינו אותו כאן.</p>' +
         '<input id="mfaCode" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="000000" style="width:100%;box-sizing:border-box;text-align:center;font-size:22px;letter-spacing:6px;padding:10px;border:1px solid #ddd;border-radius:10px;direction:ltr">' +
         '<div id="mfaErr" style="color:#c0392b;font-size:13px;min-height:18px;margin:6px 0"></div>' +
-        '<button id="mfaVerify" class="btn" style="width:100%">אמת והפעל</button>' +
-        '<div style="margin-top:10px;text-align:center"><a href="#" id="mfaOut" style="font-size:12px">התנתקות</a></div>';
-      mfaVerifyFlow(body, f.id, onOk);
-    });
+        '<button id="mfaVerify" class="btn" style="width:100%">אימות כניסה</button>' +
+        '<div style="margin-top:10px;text-align:center;font-size:12px"><a href="#" id="mfaResend">שליחה חוזרת</a> · <a href="#" id="mfaOut">התנתקות</a></div>';
+      var run = function () {
+        var code = (body.querySelector('#mfaCode').value || '').replace(/\D/g, '');
+        if (code.length < 6) return;
+        body.querySelector('#mfaErr').textContent = 'מאמת…';
+        db.rpc('verify_login_otp', { p_code: code }).then(function (r) {
+          if (r.error || r.data !== true) { body.querySelector('#mfaErr').textContent = 'קוד שגוי או שפג תוקף, נסו שוב'; return; }
+          try { localStorage.setItem('otpOkUntil', String(Date.now() + OTP_WINDOW_MS)); } catch (e) { }
+          closeMfa(); onOk();
+        });
+      };
+      body.querySelector('#mfaVerify').addEventListener('click', run);
+      body.querySelector('#mfaCode').addEventListener('keydown', function (e) { if (e.key === 'Enter') run(); });
+      body.querySelector('#mfaResend').addEventListener('click', function (e) { e.preventDefault(); otpSendAndPrompt(onOk); });
+      body.querySelector('#mfaOut').addEventListener('click', function (e) { e.preventDefault(); db.auth.signOut().then(function () { closeMfa(); showLogin(); }); });
+      body.querySelector('#mfaCode').focus();
+    }, function () { onOk(); });   // כשל שליחת הקוד → לא נועלים החוצה (fail-safe)
   }
-  function ensureMfa(session, onOk) {
-    if (!db.auth.mfa) { onOk(); return; }   // גרסת ספרייה ישנה — לא חוסמים
-    db.auth.mfa.getAuthenticatorAssuranceLevel().then(function (aal) {
-      if (aal && aal.data && aal.data.currentLevel === 'aal2') { closeMfa(); onOk(); return; }
-      db.auth.mfa.listFactors().then(function (lf) {
-        var totp = (lf.data && lf.data.totp) || [];
-        var verified = totp.filter(function (f) { return f.status === 'verified'; });
-        if (verified.length) { mfaChallenge(verified[0].id, onOk); return; }
-        //  ניקוי גורמים לא-מאומתים תקועים מניסיון קודם, ואז הרשמה נקייה
-        var stale = ((lf.data && lf.data.all) || []).filter(function (f) { return f.status === 'unverified'; });
-        var chain = Promise.resolve();
-        stale.forEach(function (f) { chain = chain.then(function () { return db.auth.mfa.unenroll({ factorId: f.id }); }); });
-        chain.then(function () { mfaEnroll(onOk); }, function () { mfaEnroll(onOk); });
-      }, function () { onOk(); });   // כשל API של MFA → לא נועלים החוצה (fail-safe להשקה)
-    }, function () { onOk(); });
+  //  force=true (כניסה חדשה עם סיסמה) → תמיד קוד. force=false/undefined (רענון) →
+  //  דילוג אם כבר אומת ב-12 השעות האחרונות בדפדפן הזה (כדי לא לשלוח קוד בכל רענון).
+  function ensureMfa(session, onOk, force) {
+    if (!force) {
+      var okUntil = 0; try { okUntil = +localStorage.getItem('otpOkUntil') || 0; } catch (e) { }
+      if (Date.now() < okUntil) { onOk(); return; }
+    }
+    otpSendAndPrompt(onOk);
   }
   //  showApp נקראה פעמיים: פעם מטופס ההתחברות, ופעם מ-getSession של טעינת
   //  העמוד שהבטחתו נפתרת אחרי ההתחברות ומוצאת סשן קיים. התוצאה הייתה 24
@@ -710,7 +684,7 @@
     e.preventDefault(); $('loginErr').textContent = '';
     db.auth.signInWithPassword({ email: $('email').value.trim(), password: $('password').value }).then(function (r) {
       if (r.error) { $('loginErr').textContent = 'התחברות נכשלה: ' + r.error.message; return; }
-      ensureMfa(r.data.session, function () { showApp(r.data.session); });
+      ensureMfa(r.data.session, function () { showApp(r.data.session); }, true);
     });
   });
   $('logout').addEventListener('click', function () { db.auth.signOut().then(showLogin); });
