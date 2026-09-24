@@ -232,8 +232,9 @@
 
   // ---------- MFA (אימות כניסה בקוד למייל) — נדרש לתקנות הגנת הפרטיות ----------
   //  שער שרץ אחרי הסיסמה: שולח קוד בן 6 ספרות למייל המשתמש (RPC request_login_otp)
-  //  והוא מזין אותו (verify_login_otp). אין נעילה קשיחה — כשל שליחה לא חוסם,
-  //  ותמיד יש קישור התנתקות.
+  //  והוא מזין אותו (verify_login_otp). fail-closed: כשל בשליחת הקוד חוסם את
+  //  הכניסה (לא נעקף) — עם שליחה חוזרת והתנתקות. אם מנוע ה-OTP נשבר לחלוטין,
+  //  שחזור-חירום: פאנל Supabase (נטרול זמני של השער / איפוס). תמיד יש התנתקות.
   var OTP_WINDOW_MS = 12 * 3600 * 1000;   // דילוג על קוד ברענון תוך 12 שעות (לא בכניסה חדשה)
   function mfaBody() {
     var el = document.getElementById('mfaGate');
@@ -271,7 +272,16 @@
       body.querySelector('#mfaResend').addEventListener('click', function (e) { e.preventDefault(); otpSendAndPrompt(onOk); });
       body.querySelector('#mfaOut').addEventListener('click', function (e) { e.preventDefault(); db.auth.signOut().then(function () { closeMfa(); showLogin(); }); });
       body.querySelector('#mfaCode').focus();
-    }, function () { onOk(); });   // כשל שליחת הקוד → לא נועלים החוצה (fail-safe)
+    }, function () {
+      // כשל שליחת הקוד → fail-closed: לא מכניסים. הודעה ברורה + שליחה חוזרת + התנתקות.
+      body.innerHTML = '<h2 style="margin:0 0 6px;font-size:19px">🔐 אימות כניסה</h2>' +
+        '<div style="color:#c0392b;font-size:14px;margin:0 0 14px">לא הצלחנו לשלוח את קוד האימות כרגע. הכניסה חסומה עד שהקוד יישלח ויאומת.</div>' +
+        '<button id="mfaRetry" class="btn" style="width:100%">שליחה חוזרת</button>' +
+        '<div style="margin-top:10px;text-align:center;font-size:12px"><a href="#" id="mfaOut">התנתקות</a></div>' +
+        '<div style="margin-top:10px;color:#999;font-size:11px">אם התקלה נמשכת פנו למנהל המערכת.</div>';
+      body.querySelector('#mfaRetry').addEventListener('click', function () { otpSendAndPrompt(onOk); });
+      body.querySelector('#mfaOut').addEventListener('click', function (e) { e.preventDefault(); db.auth.signOut().then(function () { closeMfa(); showLogin(); }); });
+    });
   }
   //  force=true (כניסה חדשה עם סיסמה) → תמיד קוד. force=false/undefined (רענון) →
   //  דילוג אם כבר אומת ב-12 השעות האחרונות בדפדפן הזה (כדי לא לשלוח קוד בכל רענון).

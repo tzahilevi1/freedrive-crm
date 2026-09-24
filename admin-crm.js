@@ -2595,7 +2595,7 @@
     var w = window.open('', '_blank');
     if (!w) { alert('חלון ההדפסה נחסם — אפשרו חלונות קופצים לאתר ונסו שוב.'); return; }
     w.document.write('<!doctype html><html dir="rtl" lang="he"><head><meta charset="utf-8"><title>' +
-      (title || 'הסכם — פרי דרייב') + '</title><style>' +
+      esc(title || 'הסכם — פרי דרייב') + '</title><style>' +
       '@page{size:A4;margin:16mm 15mm}' +
       '*{-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
       'body{margin:0;background:#fff;color:#111;font-family:Arial,\'Segoe UI\',sans-serif}' +
