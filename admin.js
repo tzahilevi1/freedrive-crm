@@ -329,7 +329,7 @@
       window.C2B.homeOrgId = (r.data && r.data.org_id) || 1;
       window.C2B.orgId = (window.C2B.isSuper && r.data && r.data.super_acting_org) ? r.data.super_acting_org : window.C2B.homeOrgId;
       db.from('orgs').select('name,branding').eq('id', window.C2B.orgId).maybeSingle().then(function (o) {
-        if (o && o.data) { var br = o.data.branding || {}; window.C2B.brand = { name: o.data.name, color: br.color, colorDeep: br.color_deep, logo: br.logo }; applyBranding(); }
+        if (o && o.data) { var br = o.data.branding || {}; window.C2B.brand = { name: o.data.name, color: br.color, colorDeep: br.color_deep, logo: br.logo, legal_entity: br.legal_entity, phone: br.phone, sender_name: br.sender_name }; applyBranding(); }
         initOrgSwitcher();
       }, function () { initOrgSwitcher(); });
       window.C2B.views = (r.data && r.data.views && r.data.views.length) ? r.data.views : (DEFAULT_VIEWS[window.C2B.role] || ['dashboard']);
@@ -528,6 +528,8 @@
     im.onerror = function () { cb(null); };
     im.src = prox;
   }
+  //  שם המותג של הארגון הפעיל (runtime) עם fallback לטוקן-הבנייה.
+  function bn() { return (window.C2B && C2B.brand && C2B.brand.name) || 'פרי דרייב'; }
   function applyBranding() {
     var b = window.C2B.brand || {};
     if (b.name) { try { document.title = b.name + ' · CRM'; } catch (e) { } }
@@ -5141,7 +5143,7 @@
     L.push('\u2705 עד 100% מימון');
     L.push('');
     L.push('אשמח לענות על כל שאלה \ud83d\ude42');
-    L.push('_' + (brandName || 'פרי דרייב') + '_');
+    L.push('_' + (brandName || bn()) + '_');
     return L.join('\n');
   }
 
@@ -5181,7 +5183,7 @@
     L.push('\u2705 אספקה מהירה \ud83d\ude9a');
     L.push('\u2705 עד 40% הנחה בביטוח חובה ומקיף \ud83d\udee1\ufe0f');
     L.push('\u2705 אגרת רישוי ראשונה כלולה \ud83e\uddfe');
-    L.push('\u2705 פתיחת תיק ב-פרי דרייב \ud83d\udcc2');
+    L.push('\u2705 פתיחת תיק ב-' + bn() + '\ud83d\udcc2');
     L.push('\u2705 איש מימון צמוד שידאג להשיג עבורך את הריביות הנמוכות ביותר \ud83e\udd1d');
     L.push('\u2705 אביזרים ומיגונים בהתאם לדרישות חברת הביטוח \ud83e\uddf0');
     L.push('\u2705 מערכת איתור לרכב \ud83d\udce1');
@@ -5238,7 +5240,7 @@
     return '<div class="q-doc">' +
       (c.img ? '<img class="q-img" src="' + esc(carImg(c.img)) + '" alt="">' : '') +
       '<div class="q-body">' + body + '</div>' +
-      '<div class="q-foot">פרי דרייב</div></div>';
+      '<div class="q-foot">' + bn() + '</div></div>';
   }
 
   //  ---------- עוזר המכירות ----------
@@ -5662,7 +5664,7 @@
     db.from('leads').insert({
       name: t.contact_name || '\u05e4\u05d5\u05e0\u05d4 \u05d1\u05d5\u05d5\u05d8\u05e1\u05d0\u05e4', phone: phone,
       source: '\u05d5\u05d5\u05d0\u05d8\u05e1\u05d0\u05e4', status: 'new',
-      brand: 'פרי דרייב', marketing_company: '\u05e9\u05d9\u05d5\u05d5\u05e7 \u05e4\u05e0\u05d9\u05de\u05d9',
+      brand: bn(), marketing_company: '\u05e9\u05d9\u05d5\u05d5\u05e7 \u05e4\u05e0\u05d9\u05de\u05d9',
       utm_source: 'whatsapp', utm_medium: 'seo',
     }).select('id,status,name,car').single().then(function (r) {
       if (r.error) return cb(null, r.error.message);
@@ -6391,12 +6393,18 @@
     openDrawer('<div class="dw-head"><h3 style="margin:0">🎨 מיתוג · ' + esc(o.name) + '</h3></div>' +
       '<div class="dw-body">' +
       '<p class="muted" style="font-size:12.5px;margin:0 0 14px">הלוגו, הצבע והשם שהארגון יראה במערכת. אפשר להדביק קישור תמונה (כולל Google Drive שיתופי) — והצבעים יזוהו ממנו אוטומטית.</p>' +
-      '<div class="field"><label>קישור ללוגו</label><input class="inp ltr" id="obLogo" value="' + esc(b.logo || '') + '" placeholder="קישור לתמונה או ל-Google Drive"></div>' +
+      '<div class="field"><label>לוגו</label><input class="inp ltr" id="obLogo" value="' + esc(b.logo || '') + '" placeholder="קישור לתמונה / Google Drive — או העלאה"></div>' +
       '<div style="display:flex;gap:12px;align-items:center;margin:0 0 14px"><img id="obPrev" alt="" style="max-height:44px;max-width:130px;border-radius:6px;background:var(--surface-2);display:none" onerror="this.style.display=\'none\'">' +
+        '<label class="btn btn-ghost btn-sm" style="cursor:pointer">⬆️ העלה לוגו<input type="file" id="obUpload" accept="image/*" style="display:none"></label>' +
         '<button class="btn btn-ghost btn-sm" id="obDetect">🎨 זהה צבעים מהלוגו</button><span id="obDetMsg" style="font-size:12px"></span></div>' +
       '<div style="display:flex;gap:18px;flex-wrap:wrap">' +
         '<div class="field"><label>צבע ראשי</label><input class="inp" type="color" id="obColor" value="' + esc(b.color || '#D9F243') + '" style="width:80px;height:40px;padding:3px"></div>' +
         '<div class="field"><label>צבע כהה (hover)</label><input class="inp" type="color" id="obColorDeep" value="' + esc(b.color_deep || '#6E8B10') + '" style="width:80px;height:40px;padding:3px"></div>' +
+      '</div>' +
+      '<div class="field" style="margin-top:12px"><label>ישות משפטית (בהסכם)</label><input class="inp" id="obLegal" value="' + esc(b.legal_entity || '') + '" placeholder="שם חברה + ח.פ"></div>' +
+      '<div style="display:flex;gap:18px;flex-wrap:wrap">' +
+        '<div class="field"><label>טלפון</label><input class="inp ltr" id="obPhone" value="' + esc(b.phone || '') + '" placeholder="טלפון"></div>' +
+        '<div class="field"><label>שם שולח במייל</label><input class="inp" id="obSender" value="' + esc(b.sender_name || '') + '" placeholder="ברירת מחדל: שם הארגון"></div>' +
       '</div>' +
       '<div style="margin-top:16px;display:flex;gap:8px;align-items:center"><button class="btn" id="obSave">💾 שמור</button><button class="btn btn-ghost" id="obCancel">סגור</button><span id="obMsg" style="font-size:12px"></span></div>' +
       '</div>');
@@ -6414,14 +6422,30 @@
     refreshPreview();
     $('obLogo').addEventListener('change', function () { refreshPreview(); detect(); });
     $('obDetect').addEventListener('click', detect);
+    //  העלאת לוגו לדלי הציבורי org-branding/{org}/logo.<ext> → כתובת ציבורית ישירה
+    $('obUpload').addEventListener('change', function (e) {
+      var f = e.target.files && e.target.files[0]; if (!f) return;
+      var dm = $('obDetMsg'); dm.style.color = 'var(--muted)'; dm.textContent = 'מעלה…';
+      var ext = (f.name.split('.').pop() || 'png').toLowerCase().replace(/[^a-z0-9]/g, '') || 'png';
+      var path = o.id + '/logo.' + ext;
+      db.storage.from('org-branding').upload(path, f, { upsert: true, contentType: f.type }).then(function (r) {
+        if (r.error) { dm.style.color = 'var(--danger)'; dm.textContent = 'העלאה נכשלה: ' + r.error.message; return; }
+        var pub = db.storage.from('org-branding').getPublicUrl(path).data.publicUrl + '?t=' + Date.now();
+        $('obLogo').value = pub; refreshPreview(); dm.style.color = 'var(--ok)'; dm.textContent = '✔ הלוגו הועלה'; detect();
+      });
+    });
     $('obCancel').addEventListener('click', closeDrawer);
     $('obSave').addEventListener('click', function () {
-      var val = { color: $('obColor').value, color_deep: $('obColorDeep').value, logo: logoUrl($('obLogo').value) || null };
+      var val = Object.assign({}, b, {
+        color: $('obColor').value, color_deep: $('obColorDeep').value, logo: logoUrl($('obLogo').value) || null,
+        legal_entity: $('obLegal').value.trim() || null, phone: $('obPhone').value.trim() || null,
+        sender_name: $('obSender').value.trim() || null
+      });
       var msg = $('obMsg'); msg.style.color = 'var(--muted)'; msg.textContent = 'שומר…';
       db.from('orgs').update({ branding: val }).eq('id', o.id).then(function (u) {
         if (u.error) { msg.style.color = 'var(--danger)'; msg.textContent = 'שגיאה: ' + u.error.message; return; }
         msg.style.color = 'var(--ok)'; msg.textContent = '✔ נשמר';
-        if (o.id === window.C2B.orgId) { window.C2B.brand = { name: o.name, color: val.color, colorDeep: val.color_deep, logo: val.logo }; applyBranding(); }
+        if (o.id === window.C2B.orgId) { window.C2B.brand = { name: o.name, color: val.color, colorDeep: val.color_deep, logo: val.logo, legal_entity: val.legal_entity, phone: val.phone, sender_name: val.sender_name }; applyBranding(); }
         setTimeout(function () { closeDrawer(); renderOrgs(); }, 700);
       });
     });
@@ -6653,7 +6677,7 @@
   //
   //  הערה על פרטיות: ההקשר נבנה מהנתונים שהמשתמש רשאי לקרוא. RLS כבר מגביל
   //  סוכן ללידים שלו בלבד, ולכן "כל הלידים" עבורו = הלידים שלו.
-  var AI_BASE = 'אתה עוזר AI בתוך מערכת CRM של סוכנות רכב ישראלית בשם פרי דרייב ' +
+  var AI_BASE = 'אתה עוזר AI בתוך מערכת CRM של סוכנות רכב ישראלית בשם ' + bn() + ' ' +
     '(ליסינג מימוני פרטי, עבודה מול כל היבואנים, מימון עד 100%, טרייד-אין, מעטפת מלאה). ' +
     'ענה תמיד בעברית תקנית, תמציתי וברור, ומבוסס אך ורק על הנתונים שקיבלת. ' +
     'אם נתון חסר או לא ניתן להסיק אותו — אמור זאת במפורש ואל תמציא מספרים. דיוק לפני הכל. ' +
@@ -6785,7 +6809,7 @@
       var cold = openLeads.filter(function (l) { return days(l.status_changed_at || l.created_at) >= 7; })
                           .sort(function (a, b) { return new Date(a.status_changed_at || a.created_at) - new Date(b.status_changed_at || b.created_at); });
       var overdue = tasks.filter(function (t) { return !t.done && t.due_at && new Date(t.due_at) < now; });
-      var head = 'נתוני פרי דרייב · ' + new Date().toLocaleDateString('he-IL') + ' · 90 הימים האחרונים' + '\n';
+      var head = 'נתוני ' + bn() + ' · ' + new Date().toLocaleDateString('he-IL') + ' · 90 הימים האחרונים' + '\n';
 
       var ctx;
       if (role === 'sales') {
