@@ -1583,6 +1583,7 @@
                 .replace(/\{\s*(firstname|first_name)\s*\}/gi, first)
                 .replace(/\{\s*(name|fullname|full_name|שם)\s*\}/gi, lead.name || '')
                 .replace(/\{\s*(car|רכב)\s*\}/gi, lead.car || '')
+                .replace(/\{\s*(brand|מותג)\s*\}/gi, bname())
                 .replace(/\{\s*(phone|טלפון)\s*\}/gi, lead.phone || '');
             }
             var waText = fill(m.wa_text);
@@ -2944,8 +2945,8 @@
       )) +
       '<div style="margin-top:34px;display:flex;justify-content:space-between;align-items:flex-end;page-break-inside:avoid">' +
         (ctype === 'car2buy'
-          ? '<div>חתימת הקונה:<br>' + (sig ? '<img src="' + sig + '" style="height:70px">' : '________________________') + '<div style="font-size:11px;color:#666;margin-top:2px">תאריך: ' + today + '</div></div><div style="text-align:left">חתימה וחותמת החברה:<br><b>צוות ' + bname() + '</b></div>'
-          : '<div>חתימת המזמין:<br>' + (sig ? '<img src="' + sig + '" style="height:70px">' : '________________________') + '</div><div style="text-align:left">בברכה,<br><b>צוות ' + bname() + '</b></div>'
+          ? '<div>חתימת הקונה:<br>' + (sig ? '<img src="' + sig + '" style="height:70px">' : '________________________') + '<div style="font-size:11px;color:#666;margin-top:2px">תאריך: ' + today + '</div></div><div style="text-align:left">חתימה וחותמת החברה:<br><b>צוות ' + esc(bname()) + '</b></div>'
+          : '<div>חתימת המזמין:<br>' + (sig ? '<img src="' + sig + '" style="height:70px">' : '________________________') + '</div><div style="text-align:left">בברכה,<br><b>צוות ' + esc(bname()) + '</b></div>'
         ) +
       '</div></div>';
   }
