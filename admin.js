@@ -5240,7 +5240,7 @@
     return '<div class="q-doc">' +
       (c.img ? '<img class="q-img" src="' + esc(carImg(c.img)) + '" alt="">' : '') +
       '<div class="q-body">' + body + '</div>' +
-      '<div class="q-foot">' + bn() + '</div></div>';
+      '<div class="q-foot">' + esc(bn()) + '</div></div>';
   }
 
   //  ---------- עוזר המכירות ----------
