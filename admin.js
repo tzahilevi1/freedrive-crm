@@ -286,6 +286,11 @@
   //  force=true (כניסה חדשה עם סיסמה) → תמיד קוד. force=false/undefined (רענון) →
   //  דילוג אם כבר אומת ב-12 השעות האחרונות בדפדפן הזה (כדי לא לשלוח קוד בכל רענון).
   function ensureMfa(session, onOk, force) {
+    // ===== TEMP BREAK-GLASS 27.9.26 — שער ה-OTP מנוטרל זמנית =====
+    //  הסיבה: מייל מושבת (מכסת Resend נשרפה + החלפת מפתח) וליאור נעול בחוץ.
+    //  להחזרת השער: מחק את שתי השורות הבאות (הבייפאס) ובנה+פרוס מחדש.
+    onOk(); return;
+    // ===== סוף ברייק-גלאס =====
     if (!force) {
       var okUntil = 0; try { okUntil = +localStorage.getItem('otpOkUntil') || 0; } catch (e) { }
       if (Date.now() < okUntil) { onOk(); return; }
