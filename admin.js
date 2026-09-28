@@ -496,7 +496,12 @@
   //  ומוצאים את הצבע הרווח והרווי ביותר; deep = גרסה כהה שלו.
   function extractLogoColor(rawUrl, cb) {
     var url = logoUrl(rawUrl); if (!url) { cb(null); return; }
-    var prox = 'https://gfwopgoydfqiouratcpc.supabase.co/functions/v1/img-proxy?u=' + encodeURIComponent(url);
+    //  לוגו שהועלה ל-Storage של הפרויקט כבר מוגש עם CORS → טוענים ישירות (בלי proxy,
+    //  שה-allowlist שלו לא כולל את מארח ה-Storage). כל השאר עובר דרך img-proxy.
+    var SB = 'https://gfwopgoydfqiouratcpc.supabase.co';
+    var prox = (url.indexOf(SB + '/storage/') === 0)
+      ? url
+      : SB + '/functions/v1/img-proxy?u=' + encodeURIComponent(url);
     var im = new Image(); im.crossOrigin = 'anonymous';
     im.onload = function () {
       try {
