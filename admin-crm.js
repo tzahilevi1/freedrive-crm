@@ -10,7 +10,15 @@
   var db = C.db, esc = C.esc, fmt = C.fmt, nis = C.nis, view = C.view, loading = C.loading, errBox = C.errBox;
   //  מיתוג פר-ארגון בזמן-ריצה (נטען ל-C.brand ב-boot). fallback לטוקן-הבנייה.
   function bname() { var b = C.brand || {}; return b.name || 'פרי דרייב'; }
-  function blegal() { var b = C.brand || {}; return b.legal_entity || LEGAL_ENTITY || ''; }
+  function blegal() {
+    var b = C.brand || {};
+    if (b.legal_entity) return b.legal_entity;
+    //  נפילה לישות מה-build (‎.env / נ.ש פוקס מוטורס בע"מ ח.פ. 516742731‎) מותרת **רק** למותג-הבנייה עצמו:
+    //  org הבית (שם הארגון === מותג-הבנייה) או פרויקט מותג-יחיד (אין C.brand).
+    //  לארגון אחר בפלטפורמה המשותפת → ריק. אסור לחשוף ישות/ח.פ של חברה אחרת בהסכם.
+    if (!b.name || b.name === 'פרי דרייב') return LEGAL_ENTITY || '';
+    return '';
+  }
   function bregno() { var b = C.brand || {}; return b.reg_no || ''; }
   //  שורת הישות המשפטית להסכם: שם החברה + ח.פ. אם אין ישות, נופל לשם המותג + ח.פ.
   function blegalLine() {
