@@ -329,7 +329,7 @@
       window.C2B.homeOrgId = (r.data && r.data.org_id) || 1;
       window.C2B.orgId = (window.C2B.isSuper && r.data && r.data.super_acting_org) ? r.data.super_acting_org : window.C2B.homeOrgId;
       db.from('orgs').select('name,branding').eq('id', window.C2B.orgId).maybeSingle().then(function (o) {
-        if (o && o.data) { var br = o.data.branding || {}; window.C2B.brand = { name: o.data.name, color: br.color, colorDeep: br.color_deep, logo: br.logo, legal_entity: br.legal_entity, phone: br.phone, sender_name: br.sender_name }; applyBranding(); }
+        if (o && o.data) { var br = o.data.branding || {}; window.C2B.brand = { name: o.data.name, color: br.color, colorDeep: br.color_deep, logo: br.logo, legal_entity: br.legal_entity, reg_no: br.reg_no, phone: br.phone, sender_name: br.sender_name }; applyBranding(); }
         initOrgSwitcher();
       }, function () { initOrgSwitcher(); });
       window.C2B.views = (r.data && r.data.views && r.data.views.length) ? r.data.views : (DEFAULT_VIEWS[window.C2B.role] || ['dashboard']);
@@ -6345,39 +6345,42 @@
       var uCount = {}; profs.forEach(function (p) { uCount[p.org_id] = (uCount[p.org_id] || 0) + 1; });
       var rows = orgs.map(function (o) {
         return '<tr><td>' + o.id + '</td><td><b>' + esc(o.name) + '</b></td>' +
-          '<td class="ltr muted">' + esc(o.slug || '—') + '</td><td>' + (uCount[o.id] || 0) + '</td>' +
+          '<td class="ltr muted">' + esc(o.slug || '—') + '</td>' +
+          '<td class="ltr muted">' + esc((o.branding && o.branding.reg_no) || '—') + '</td>' +
+          '<td>' + (uCount[o.id] || 0) + '</td>' +
           '<td class="muted">' + esc(fmtDateTime(o.created_at)) + '</td>' +
           '<td>' + (o.active === false ? '<span class="cl-no">כבוי</span>' : '<span class="cl-yes">פעיל</span>') + '</td>' +
           '<td><button class="btn btn-ghost btn-sm" data-orgbrand="' + o.id + '">🎨 מיתוג</button></td></tr>';
       }).join('');
       view('<div class="card"><h3 style="margin:0 0 4px">🏢 ארגונים <span class="muted" style="font-size:12px;font-weight:400">· קונסולת סופר-אדמין</span></h3>' +
         '<p class="muted" style="font-size:12.5px;margin:0 0 14px;line-height:1.7">כל ארגון עובד על אותה מערכת עם נתונים מופרדים לחלוטין (org_id + RLS). פתיחת ארגון יוצרת גם מנהל ראשון ושולחת לו פרטי התחברות.</p>' +
-        '<div class="table-scroll"><table><thead><tr><th>#</th><th>ארגון</th><th>מזהה</th><th>משתמשים</th><th>נוצר</th><th>סטטוס</th><th>מיתוג</th></tr></thead>' +
-        '<tbody>' + (rows || '<tr><td colspan="7" class="empty">אין ארגונים</td></tr>') + '</tbody></table></div>' +
+        '<div class="table-scroll"><table><thead><tr><th>#</th><th>ארגון</th><th>מזהה</th><th>ח.פ</th><th>משתמשים</th><th>נוצר</th><th>סטטוס</th><th>מיתוג</th></tr></thead>' +
+        '<tbody>' + (rows || '<tr><td colspan="8" class="empty">אין ארגונים</td></tr>') + '</tbody></table></div>' +
         '<div class="card cl-sub" style="margin-top:16px"><h3 class="cl-h">➕ פתיחת ארגון חדש</h3>' +
           '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;max-width:640px">' +
             '<div class="field" style="margin:0"><label>שם הארגון</label><input class="inp" id="orgName" placeholder="למשל: אלפא ליסינג"></div>' +
             '<div class="field" style="margin:0"><label>מזהה באנגלית (slug)</label><input class="inp ltr" id="orgSlug" placeholder="alpha"></div>' +
             '<div class="field" style="margin:0"><label>שם המנהל הראשון</label><input class="inp" id="orgAdminName" placeholder="שם מלא"></div>' +
             '<div class="field" style="margin:0"><label>אימייל המנהל</label><input class="inp ltr" id="orgAdminEmail" type="email" placeholder="admin@company.com"></div>' +
+            '<div class="field" style="margin:0"><label>ח.פ / ע.מ <span class="muted" style="font-weight:400">(להסכם וחשבוניות)</span></label><input class="inp ltr" id="orgRegNo" placeholder="מספר חברה"></div>' +
           '</div>' +
           '<div style="margin-top:14px"><button class="btn" id="orgCreate">צור ארגון ושלח הזמנה למנהל</button> <span id="orgMsg" style="font-size:13px;margin-inline-start:10px"></span></div>' +
           '<div id="orgResult" style="margin-top:12px"></div>' +
         '</div></div>');
       $('orgCreate').addEventListener('click', function () {
-        var name = $('orgName').value.trim(), slug = $('orgSlug').value.trim(), an = $('orgAdminName').value.trim(), ae = $('orgAdminEmail').value.trim();
+        var name = $('orgName').value.trim(), slug = $('orgSlug').value.trim(), an = $('orgAdminName').value.trim(), ae = $('orgAdminEmail').value.trim(), regno = $('orgRegNo').value.trim();
         var msg = $('orgMsg');
         if (!name) { msg.style.color = 'var(--danger)'; msg.textContent = 'הזינו שם ארגון'; return; }
         if (!ae || ae.indexOf('@') < 0) { msg.style.color = 'var(--danger)'; msg.textContent = 'הזינו אימייל מנהל תקין'; return; }
         var btn = this; btn.disabled = true; msg.style.color = 'var(--muted)'; msg.textContent = 'יוצר ארגון…';
-        db.rpc('superadmin_create_org', { p_name: name, p_slug: slug, p_admin_email: ae, p_admin_name: an || ae }).then(function (r) {
+        db.rpc('superadmin_create_org', { p_name: name, p_slug: slug, p_admin_email: ae, p_admin_name: an || ae, p_reg_no: regno || null }).then(function (r) {
           btn.disabled = false;
           if (r.error || (r.data && r.data.error)) { msg.style.color = 'var(--danger)'; msg.textContent = 'שגיאה: ' + esc((r.error && r.error.message) || r.data.error); return; }
           var d = r.data || {}; msg.textContent = '';
           $('orgResult').innerHTML = '<div class="card" style="box-shadow:none;border:1px solid var(--line);margin:0"><b>✅ הארגון נוצר (מזהה ' + esc(d.org_id) + ')</b>' +
             '<div style="margin-top:8px;font-family:monospace;font-size:13px;background:var(--surface);padding:10px;border-radius:8px">מנהל: ' + esc(d.admin_email) + '<br>סיסמה זמנית: <b>' + esc(d.password || '') + '</b></div>' +
             '<div class="muted" style="font-size:12px;margin-top:8px">' + (d.emailed ? 'נשלח מייל עם פרטי ההתחברות למנהל.' : 'שמרו את הסיסמה — שליחת המייל לא הוגדרה.') + '</div></div>';
-          $('orgName').value = ''; $('orgSlug').value = ''; $('orgAdminName').value = ''; $('orgAdminEmail').value = '';
+          $('orgName').value = ''; $('orgSlug').value = ''; $('orgAdminName').value = ''; $('orgAdminEmail').value = ''; $('orgRegNo').value = '';
           setTimeout(renderOrgs, 2500);   // הפרופיל נוצר אסינכרונית — מרעננים אחרי רגע
         }, function (e) { btn.disabled = false; msg.style.color = 'var(--danger)'; msg.textContent = 'שגיאה: ' + esc((e && e.message) || e); });
       });
@@ -6401,7 +6404,10 @@
         '<div class="field"><label>צבע ראשי</label><input class="inp" type="color" id="obColor" value="' + esc(b.color || '#D9F243') + '" style="width:80px;height:40px;padding:3px"></div>' +
         '<div class="field"><label>צבע כהה (hover)</label><input class="inp" type="color" id="obColorDeep" value="' + esc(b.color_deep || '#6E8B10') + '" style="width:80px;height:40px;padding:3px"></div>' +
       '</div>' +
-      '<div class="field" style="margin-top:12px"><label>ישות משפטית (בהסכם)</label><input class="inp" id="obLegal" value="' + esc(b.legal_entity || '') + '" placeholder="שם חברה + ח.פ"></div>' +
+      '<div style="display:flex;gap:18px;flex-wrap:wrap;margin-top:12px">' +
+        '<div class="field" style="flex:2;min-width:180px"><label>ישות משפטית (בהסכם)</label><input class="inp" id="obLegal" value="' + esc(b.legal_entity || '') + '" placeholder="שם החברה המשפטי"></div>' +
+        '<div class="field" style="flex:1;min-width:120px"><label>ח.פ / ע.מ</label><input class="inp ltr" id="obRegNo" value="' + esc(b.reg_no || '') + '" placeholder="מספר חברה"></div>' +
+      '</div>' +
       '<div style="display:flex;gap:18px;flex-wrap:wrap">' +
         '<div class="field"><label>טלפון</label><input class="inp ltr" id="obPhone" value="' + esc(b.phone || '') + '" placeholder="טלפון"></div>' +
         '<div class="field"><label>שם שולח במייל</label><input class="inp" id="obSender" value="' + esc(b.sender_name || '') + '" placeholder="ברירת מחדל: שם הארגון"></div>' +
@@ -6438,14 +6444,15 @@
     $('obSave').addEventListener('click', function () {
       var val = Object.assign({}, b, {
         color: $('obColor').value, color_deep: $('obColorDeep').value, logo: logoUrl($('obLogo').value) || null,
-        legal_entity: $('obLegal').value.trim() || null, phone: $('obPhone').value.trim() || null,
+        legal_entity: $('obLegal').value.trim() || null, reg_no: $('obRegNo').value.trim() || null,
+        phone: $('obPhone').value.trim() || null,
         sender_name: $('obSender').value.trim() || null
       });
       var msg = $('obMsg'); msg.style.color = 'var(--muted)'; msg.textContent = 'שומר…';
       db.from('orgs').update({ branding: val }).eq('id', o.id).then(function (u) {
         if (u.error) { msg.style.color = 'var(--danger)'; msg.textContent = 'שגיאה: ' + u.error.message; return; }
         msg.style.color = 'var(--ok)'; msg.textContent = '✔ נשמר';
-        if (o.id === window.C2B.orgId) { window.C2B.brand = { name: o.name, color: val.color, colorDeep: val.color_deep, logo: val.logo, legal_entity: val.legal_entity, phone: val.phone, sender_name: val.sender_name }; applyBranding(); }
+        if (o.id === window.C2B.orgId) { window.C2B.brand = { name: o.name, color: val.color, colorDeep: val.color_deep, logo: val.logo, legal_entity: val.legal_entity, reg_no: val.reg_no, phone: val.phone, sender_name: val.sender_name }; applyBranding(); }
         setTimeout(function () { closeDrawer(); renderOrgs(); }, 700);
       });
     });
