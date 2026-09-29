@@ -6434,7 +6434,7 @@
     if (!(window.C2B && window.C2B.isSuper)) return go('dashboard');
     loading();
     Promise.all([
-      db.from('orgs').select('id,name,slug,plan,active,created_at,branding').order('id', { ascending: true }),
+      db.from('orgs').select('id,name,slug,plan,active,created_at,branding,supabase_url,anon_key,ingest_url,ready').order('id', { ascending: true }),
       db.from('profiles').select('org_id')
     ]).then(function (res) {
       if (res[0] && res[0].error) return errBox(res[0].error.message);
@@ -6448,12 +6448,13 @@
           '<td>' + (uCount[o.id] || 0) + '</td>' +
           '<td class="muted">' + esc(fmtDateTime(o.created_at)) + '</td>' +
           '<td>' + (o.active === false ? '<span class="cl-no">כבוי</span>' : '<span class="cl-yes">פעיל</span>') + '</td>' +
-          '<td><button class="btn btn-ghost btn-sm" data-orgbrand="' + o.id + '">🎨 מיתוג</button></td></tr>';
+          '<td>' + (o.ready ? '<span class="cl-yes">🔗 מחובר</span>' : (o.supabase_url ? '<span class="muted">ממתין</span>' : '<span class="muted">—</span>')) + '</td>' +
+          '<td><button class="btn btn-ghost btn-sm" data-orgbrand="' + o.id + '">🎨 מיתוג / חיבור</button></td></tr>';
       }).join('');
       view('<div class="card"><h3 style="margin:0 0 4px">🏢 ארגונים <span class="muted" style="font-size:12px;font-weight:400">· קונסולת סופר-אדמין</span></h3>' +
         '<p class="muted" style="font-size:12.5px;margin:0 0 14px;line-height:1.7">כל ארגון עובד על אותה מערכת עם נתונים מופרדים לחלוטין (org_id + RLS). פתיחת ארגון יוצרת גם מנהל ראשון ושולחת לו פרטי התחברות.</p>' +
-        '<div class="table-scroll"><table><thead><tr><th>#</th><th>ארגון</th><th>מזהה</th><th>ח.פ</th><th>משתמשים</th><th>נוצר</th><th>סטטוס</th><th>מיתוג</th></tr></thead>' +
-        '<tbody>' + (rows || '<tr><td colspan="8" class="empty">אין ארגונים</td></tr>') + '</tbody></table></div>' +
+        '<div class="table-scroll"><table><thead><tr><th>#</th><th>ארגון</th><th>מזהה</th><th>ח.פ</th><th>משתמשים</th><th>נוצר</th><th>סטטוס</th><th>צי</th><th>מיתוג</th></tr></thead>' +
+        '<tbody>' + (rows || '<tr><td colspan="9" class="empty">אין ארגונים</td></tr>') + '</tbody></table></div>' +
         '<div class="card cl-sub" style="margin-top:16px"><h3 class="cl-h">➕ פתיחת ארגון חדש</h3>' +
           '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;max-width:640px">' +
             '<div class="field" style="margin:0"><label>שם הארגון</label><input class="inp" id="orgName" placeholder="למשל: אלפא ליסינג"></div>' +
@@ -6510,8 +6511,29 @@
         '<div class="field"><label>טלפון</label><input class="inp ltr" id="obPhone" value="' + esc(b.phone || '') + '" placeholder="טלפון"></div>' +
         '<div class="field"><label>שם שולח במייל</label><input class="inp" id="obSender" value="' + esc(b.sender_name || '') + '" placeholder="ברירת מחדל: שם הארגון"></div>' +
       '</div>' +
+      '<div style="margin-top:16px;border-top:1px solid var(--line);padding-top:14px">' +
+        '<div style="font-weight:700;font-size:13px;margin-bottom:2px">🔗 פרויקט הצי (Supabase נפרד)</div>' +
+        '<p class="muted" style="font-size:12px;margin:0 0 10px;line-height:1.6">חבר את פרויקט ה-Supabase של המותג — הדתא שלו יושב שם, והמערכת תיפתח בכתובת <b class="ltr">/' + esc(o.slug || '') + '</b>. הדבק <b>anon key ציבורי בלבד</b> — לעולם לא service_role.</p>' +
+        '<div class="field"><label>Supabase URL</label><input class="inp ltr" id="obSbUrl" value="' + esc(o.supabase_url || '') + '" placeholder="https://xxxxxxxx.supabase.co"></div>' +
+        '<div class="field"><label>anon key (ציבורי)</label><input class="inp ltr" id="obSbAnon" value="' + esc(o.anon_key || '') + '" placeholder="eyJ..."></div>' +
+        '<div class="field"><label>כתובת ingest (קליטת לידים מכל המקורות)</label><input class="inp ltr" id="obIngest" value="' + esc(o.ingest_url || '') + '" placeholder="https://xxxx.supabase.co/functions/v1/ingest?key=..."></div>' +
+        '<div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:4px">' +
+          '<button class="btn btn-ghost btn-sm" id="obTest">🔌 בדוק חיבור</button>' +
+          '<label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer"><input type="checkbox" id="obReady"' + (o.ready ? ' checked' : '') + '> פעיל בצי (מוגש ב-/' + esc(o.slug || '') + ')</label>' +
+          '<span id="obTestMsg" style="font-size:12px"></span>' +
+        '</div>' +
+      '</div>' +
       '<div style="margin-top:16px;display:flex;gap:8px;align-items:center"><button class="btn" id="obSave">💾 שמור</button><button class="btn btn-ghost" id="obCancel">סגור</button><span id="obMsg" style="font-size:12px"></span></div>' +
       '</div>');
+    $('obTest').addEventListener('click', function () {
+      var u = ($('obSbUrl').value || '').trim().replace(/\/+$/, ''), a = ($('obSbAnon').value || '').trim();
+      var tm = $('obTestMsg');
+      if (!u || !a) { tm.style.color = 'var(--danger)'; tm.textContent = 'מלא URL ו-anon key'; return; }
+      tm.style.color = 'var(--muted)'; tm.textContent = 'בודק…';
+      fetch(u + '/rest/v1/', { headers: { apikey: a, Authorization: 'Bearer ' + a } })
+        .then(function (r) { if (r.status >= 200 && r.status < 500) { tm.style.color = 'var(--ok)'; tm.textContent = '✔ חיבור תקין (' + r.status + ')'; } else { tm.style.color = 'var(--danger)'; tm.textContent = '❌ תגובה ' + r.status; } })
+        .catch(function () { tm.style.color = 'var(--danger)'; tm.textContent = '❌ לא הצליח להתחבר — בדוק URL'; });
+    });
     var prev = $('obPrev');
     function refreshPreview() { var u = logoUrl($('obLogo').value); if (u) { prev.src = u; prev.style.display = ''; } else { prev.style.display = 'none'; } }
     function detect() {
@@ -6546,8 +6568,15 @@
         phone: $('obPhone').value.trim() || null,
         sender_name: $('obSender').value.trim() || null
       });
-      var msg = $('obMsg'); msg.style.color = 'var(--muted)'; msg.textContent = 'שומר…';
-      db.from('orgs').update({ branding: val }).eq('id', o.id).then(function (u) {
+      var sbUrl = ($('obSbUrl').value || '').trim().replace(/\/+$/, '') || null;
+      var sbAnon = ($('obSbAnon').value || '').trim() || null;
+      var ingest = ($('obIngest').value || '').trim() || null;
+      var ready = $('obReady').checked;
+      var msg = $('obMsg');
+      if (ready && (!sbUrl || !sbAnon)) { msg.style.color = 'var(--danger)'; msg.textContent = 'אי אפשר לסמן "פעיל בצי" בלי Supabase URL ו-anon key'; return; }
+      if (sbAnon) { try { var _pl = JSON.parse(atob((sbAnon.split('.')[1] || '').replace(/-/g, '+').replace(/_/g, '/'))); if (_pl && _pl.role === 'service_role') { msg.style.color = 'var(--danger)'; msg.textContent = '⛔ זהו service_role (מפתח סודי)! הדבק anon key ציבורי בלבד'; return; } } catch (e) {} }
+      msg.style.color = 'var(--muted)'; msg.textContent = 'שומר…';
+      db.from('orgs').update({ branding: val, supabase_url: sbUrl, anon_key: sbAnon, ingest_url: ingest, ready: ready }).eq('id', o.id).then(function (u) {
         if (u.error) { msg.style.color = 'var(--danger)'; msg.textContent = 'שגיאה: ' + u.error.message; return; }
         msg.style.color = 'var(--ok)'; msg.textContent = '✔ נשמר';
         if (o.id === window.C2B.orgId) { window.C2B.brand = { name: o.name, color: val.color, colorDeep: val.color_deep, logo: val.logo, legal_entity: val.legal_entity, reg_no: val.reg_no, phone: val.phone, sender_name: val.sender_name }; applyBranding(); }
