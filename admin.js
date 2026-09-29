@@ -6,8 +6,11 @@
    ============================================================ */
 (function () {
   'use strict';
-  var SUPABASE_URL = 'https://gfwopgoydfqiouratcpc.supabase.co';
-  var SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdmd29wZ295ZGZxaW91cmF0Y3BjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc2NDg0NTUsImV4cCI6MjEwMzIyNDQ1NX0.ukPDUGS7KjYgD7jAhzSqAEKo_eJ8gQwsHMqTBGXeux8';
+  //  תצורת-ריצה מ-fleet-boot (המותג נבחר לפי ה-path); נפילה לטוקן-הבנייה (המאסטר)
+  //  אם admin.js נטען ישירות בלי fleet-boot — תואם-לאחור מלא.
+  var _FC = window.__fleetCfg || {};
+  var SUPABASE_URL = _FC.url || 'https://gfwopgoydfqiouratcpc.supabase.co';
+  var SUPABASE_ANON_KEY = _FC.anon || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdmd29wZ295ZGZxaW91cmF0Y3BjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc2NDg0NTUsImV4cCI6MjEwMzIyNDQ1NX0.ukPDUGS7KjYgD7jAhzSqAEKo_eJ8gQwsHMqTBGXeux8';
   // ---------- דיווח שגיאות מרכזי ----------
   // מתוך 164 קריאות למסד, כ-60% לא בדקו r.error — כלומר כשל ברשת או הרשאה
   // פשוט לא קרה כלום והמשתמש לא ידע. במקום לתקן 164 מקומות, מיירטים כאן:
@@ -328,10 +331,18 @@
       //  אחרת ארגון הבית. כך המיתוג/הנתונים משקפים את הארגון שרואים כרגע.
       window.C2B.homeOrgId = (r.data && r.data.org_id) || 1;
       window.C2B.orgId = (window.C2B.isSuper && r.data && r.data.super_acting_org) ? r.data.super_acting_org : window.C2B.homeOrgId;
-      db.from('orgs').select('name,branding').eq('id', window.C2B.orgId).maybeSingle().then(function (o) {
-        if (o && o.data) { var br = o.data.branding || {}; window.C2B.brand = { name: o.data.name, color: br.color, colorDeep: br.color_deep, logo: br.logo, legal_entity: br.legal_entity, reg_no: br.reg_no, phone: br.phone, sender_name: br.sender_name }; applyBranding(); }
-        initOrgSwitcher();
-      }, function () { initOrgSwitcher(); });
+      if (_FC.branding && !_FC.isMaster) {
+        //  מותג שנבחר לפי ה-path (פרויקט נפרד): המיתוג מגיע מ-fleet_resolve,
+        //  לא מטבלת orgs (שאולי לא קיימת בפרויקט המותג).
+        var br = _FC.branding;
+        window.C2B.brand = { name: _FC.name || (window.C2B.brand && window.C2B.brand.name), color: br.color, colorDeep: br.color_deep, logo: br.logo, legal_entity: br.legal_entity, reg_no: br.reg_no, phone: br.phone, sender_name: br.sender_name };
+        applyBranding(); initOrgSwitcher();
+      } else {
+        db.from('orgs').select('name,branding').eq('id', window.C2B.orgId).maybeSingle().then(function (o) {
+          if (o && o.data) { var br2 = o.data.branding || {}; window.C2B.brand = { name: o.data.name, color: br2.color, colorDeep: br2.color_deep, logo: br2.logo, legal_entity: br2.legal_entity, reg_no: br2.reg_no, phone: br2.phone, sender_name: br2.sender_name }; applyBranding(); }
+          initOrgSwitcher();
+        }, function () { initOrgSwitcher(); });
+      }
       window.C2B.views = (r.data && r.data.views && r.data.views.length) ? r.data.views : (DEFAULT_VIEWS[window.C2B.role] || ['dashboard']);
       // מסך ניהול חדש שנוסף בקוד לא מופיע אצל מי שרשימת המסכים שלו כבר
       // שמורה במסד — והיא נשמרת לכל משתמש שנערך אי פעם. מנהל מערכת
@@ -498,7 +509,7 @@
     var url = logoUrl(rawUrl); if (!url) { cb(null); return; }
     //  לוגו שהועלה ל-Storage של הפרויקט כבר מוגש עם CORS → טוענים ישירות (בלי proxy,
     //  שה-allowlist שלו לא כולל את מארח ה-Storage). כל השאר עובר דרך img-proxy.
-    var SB = 'https://gfwopgoydfqiouratcpc.supabase.co';
+    var SB = SUPABASE_URL;
     var prox = (url.indexOf(SB + '/storage/') === 0)
       ? url
       : SB + '/functions/v1/img-proxy?u=' + encodeURIComponent(url);
@@ -718,6 +729,82 @@
   });
   // activity screen now lives in the header (next to the bell)
   $('activityBtn').addEventListener('click', function () { go('activity'); });
+
+  // ---------- מחשבון מימון רכב (הלוואת בלון) — פופאפ מההדר ----------
+  var FINANCE_COMPANIES = [
+    { name: 'מקס יבואן', rate: 3.9 },
+    { name: 'מקס 0 ק"מ', rate: 4.2 },
+    { name: 'מימון ישיר', rate: 5.99 }
+  ];
+  function openFinanceCalc() {
+    var old = document.getElementById('calcModal'); if (old) old.remove();
+    var money = function (n) { return '₪' + Math.round(n || 0).toLocaleString('he-IL'); };
+    var wrap = document.createElement('div'); wrap.id = 'calcModal';
+    wrap.style.cssText = 'position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,.5);display:flex;align-items:flex-start;justify-content:center;padding:30px 16px;overflow:auto';
+    wrap.innerHTML =
+      '<div style="background:var(--surface);color:var(--txt);border:1px solid var(--line);border-radius:16px;max-width:640px;width:100%;box-shadow:0 24px 70px rgba(0,0,0,.5)">' +
+        '<div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--line)">' +
+          '<h3 style="margin:0;font-size:18px">🧮 מחשבון מימון — הלוואת בלון</h3>' +
+          '<button id="calcClose" class="icon-btn" title="סגור">✕</button></div>' +
+        '<div style="padding:18px 20px;display:grid;gap:14px">' +
+          '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">' +
+            '<div class="field" style="margin:0"><label>מחירון הרכב (₪)</label><input class="inp" type="number" id="fcPrice" placeholder="למשל 150000"></div>' +
+            '<div class="field" style="margin:0"><label>סכום הלוואה (₪)</label><input class="inp" type="number" id="fcLoan" placeholder="הסכום למימון"></div>' +
+          '</div>' +
+          '<div class="field" style="margin:0"><label>אחוז בלון: <b id="fcBalLbl">50%</b></label><input type="range" id="fcBalloon" min="0" max="100" value="50" style="width:100%"></div>' +
+          '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">' +
+            '<div class="field" style="margin:0"><label>מספר חודשים</label><input class="inp" type="number" id="fcMonths" value="60"></div>' +
+            '<div class="field" style="margin:0"><label>חברת מימון</label><select class="inp" id="fcCompany">' + FINANCE_COMPANIES.map(function (c, i) { return '<option value="' + i + '">' + esc(c.name) + ' — ' + c.rate + '%</option>'; }).join('') + '</select></div>' +
+          '</div>' +
+          '<div id="fcResults" style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px"></div>' +
+          '<div id="fcTableWrap" style="max-height:230px;overflow:auto;border:1px solid var(--line);border-radius:10px"></div>' +
+          '<p style="font-size:12px;color:var(--muted);line-height:1.6;margin:0">אישור המימון בכפוף לבדיקת כדאיות וזכאות אשראי ולאישור ע"י הגורם המממן בלבד.</p>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(wrap);
+    function close() { wrap.remove(); }
+    wrap.addEventListener('click', function (e) { if (e.target === wrap) close(); });
+    $('calcClose').addEventListener('click', close);
+
+    function calc() {
+      var price = +$('fcPrice').value || 0, loan = +$('fcLoan').value || 0;
+      var balPct = +$('fcBalloon').value || 0, months = Math.max(1, Math.round(+$('fcMonths').value || 0));
+      var rate = FINANCE_COMPANIES[+$('fcCompany').value || 0].rate;
+      $('fcBalLbl').textContent = balPct + '%';
+      var balloon = price * balPct / 100;
+      var mRate = rate / 100 / 12;
+      var pow = Math.pow(1 + mRate, months);
+      var balloonPV = balloon / pow;
+      var toFinance = loan - balloonPV;
+      var monthly = mRate === 0 ? toFinance / months : toFinance * (mRate * pow) / (pow - 1);
+      var down = price - loan;
+      var totalPaid = monthly * months + balloon + down;
+      var totalInterest = totalPaid - price;
+      function card(label, val, hi) { return '<div style="background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:10px 12px"><div style="font-size:12px;color:var(--muted)">' + label + '</div><div style="font-size:' + (hi ? '19' : '16') + 'px;font-weight:800;color:' + (hi ? 'var(--brand)' : 'var(--txt)') + '">' + money(val) + '</div></div>'; }
+      $('fcResults').innerHTML =
+        card('תשלום חודשי', monthly, true) + card('תשלום בלון (בסוף)', balloon, true) +
+        card('סכום למימון', toFinance) + card('סה"כ ריבית', totalInterest) +
+        card('סה"כ תשלום', totalPaid) + card('מקדמה', down);
+      var bal = toFinance, m = 0, year = 0, rows = '';
+      rows += '<table style="width:100%;border-collapse:collapse;font-size:12.5px"><thead><tr style="background:var(--surface-2)">' +
+        ['שנה', 'תשלום שנתי', 'ריבית', 'קרן', 'יתרה', 'יתרה + בלון'].map(function (h) { return '<th style="padding:6px 8px;text-align:right;border-bottom:1px solid var(--line)">' + h + '</th>'; }).join('') + '</tr></thead><tbody>';
+      while (m < months) {
+        year++; var yP = 0, yI = 0, yK = 0;
+        for (var k = 0; k < 12 && m < months; k++, m++) {
+          var interest = bal * mRate, principal = monthly - interest;
+          bal -= principal; yP += monthly; yI += interest; yK += principal;
+        }
+        var rem = months - m, balloonPVnow = balloon / Math.pow(1 + mRate, rem);
+        rows += '<tr>' + [year, money(yP), money(yI), money(yK), money(Math.max(0, bal)), money(Math.max(0, bal) + balloonPVnow)].map(function (c) { return '<td style="padding:6px 8px;border-bottom:1px solid var(--line)">' + c + '</td>'; }).join('') + '</tr>';
+      }
+      rows += '<tr style="background:var(--brand-soft)"><td style="padding:6px 8px" colspan="5"><b>תשלום הבלון</b></td><td style="padding:6px 8px"><b>' + money(balloon) + '</b></td></tr></tbody></table>';
+      $('fcTableWrap').innerHTML = rows;
+    }
+    ['fcPrice', 'fcLoan', 'fcBalloon', 'fcMonths', 'fcCompany'].forEach(function (id) { $(id).addEventListener('input', calc); });
+    calc();
+  }
+  window.C2B_openFinanceCalc = openFinanceCalc;
+  if ($('calcBtn')) $('calcBtn').addEventListener('click', openFinanceCalc);
 
   // ---------- routing ----------
   function setActive(nav, status) {
@@ -7130,7 +7217,7 @@
     var host = $('connBox'); if (!host) return;
     if (!(window.C2B.role === 'admin' || window.C2B.isSuper)) { host.innerHTML = '<div class="card"><div class="sec-note">רק מנהל מערכת של הארגון מגדיר חיבורים.</div></div>'; return; }
     var oid = window.C2B.orgId || 1;
-    var base = 'https://gfwopgoydfqiouratcpc.supabase.co/functions/v1';
+    var base = SUPABASE_URL + '/functions/v1';
     host.innerHTML = '<div class="ai-empty">טוען חיבורים…</div>';
     Promise.all([
       db.from('org_integrations').select('platform,config,connected'),
@@ -7763,6 +7850,12 @@
   //  undefined והמסך נשאר ריק עד מעבר-מסך וחזרה. נדחים ל-DOMContentLoaded,
   //  שנורה רק אחרי שכל הסקריפטים חוסמי-הפרסר (כולל admin-crm.js) הורצו.
   function boot() { db.auth.getSession().then(function (r) { if (r.data.session) ensureMfa(r.data.session, function () { showApp(r.data.session); }); else showLogin(); }); }
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
-  else boot();
+  window.C2B_boot = boot;
+  //  טעינת fleet (הזרקה דינמית ב-fleet-boot): הסקריפטים נטענים async ו-fleet-boot
+  //  קורא ל-C2B_boot רק אחרי שהאחרון (admin-modules.js) נטען — כדי ש-boot ירוץ עם
+  //  כל הרנדררים (admin-crm.js) כבר מוגדרים. טעינה ישנה/ישירה (בלי fleet-boot): self-boot.
+  if (!window.__fleetCfg) {
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+    else boot();
+  }
 })();
