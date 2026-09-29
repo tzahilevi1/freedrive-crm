@@ -6501,6 +6501,7 @@
         '<div class="field" style="margin:0"><label>אימייל</label><input class="inp" id="nuEmail" type="email" placeholder="name@email.com"></div></div>' +
         '<div class="grid2" style="margin-top:12px"><div class="field" style="margin:0"><label>טלפון</label><input class="inp" id="nuPhone" type="tel" placeholder="050-0000000"></div>' +
         '<div class="field" style="margin:0"><label>תפקיד</label><select class="inp" id="nuRole">' + roleOpts.map(function (x) { return '<option value="' + x[0] + '">' + x[1] + '</option>'; }).join('') + '</select></div></div>' +
+        '<div class="field" style="margin-top:12px"><label>מותג <span style="color:var(--danger)">*</span> <span class="muted" style="font-weight:400">— לאיזה מותג הסוכן משויך</span></label><select class="inp" id="nuBrand" style="width:100%">' + window.C2B.selOpts((window.C2B.marketingBrands || []), '', '— בחר מותג —') + '</select></div>' +
         '<label style="font-size:13px;color:var(--muted);margin-top:12px;display:block">תצוגות שהמשתמש יראה (מוגדר לפי התפקיד — אפשר להוסיף/להוריד):</label><div id="nuViews">' + viewChecks('nv', DEFAULT_VIEWS.sales) + '</div>' +
         '<div style="margin-top:14px"><button class="btn" id="nuCreate">צור משתמש ושלח הזמנה</button> <span id="nuMsg" style="font-size:13px;margin-inline-start:10px"></span></div><div id="nuResult" style="margin-top:12px"></div></div>';
       view('<h2 style="margin:0 0 14px">משתמשים והרשאות</h2>' +
@@ -6530,13 +6531,14 @@
       // add-user: role change → reset the view checkboxes to that role's defaults
       $('nuRole').addEventListener('change', function () { $('nuViews').innerHTML = viewChecks('nv', DEFAULT_VIEWS[this.value] || ['dashboard']); });
       $('nuCreate').addEventListener('click', function () {
-        var name = $('nuName').value.trim(), email = $('nuEmail').value.trim(), role = $('nuRole').value, phone = ($('nuPhone') ? $('nuPhone').value.trim() : '');
+        var name = $('nuName').value.trim(), email = $('nuEmail').value.trim(), role = $('nuRole').value, phone = ($('nuPhone') ? $('nuPhone').value.trim() : ''), brand = ($('nuBrand') ? $('nuBrand').value : '');
         var views = []; $('nuViews').querySelectorAll('input[data-nv]:checked').forEach(function (c) { views.push(c.dataset.nv); });
         var msg = $('nuMsg');
         if (!email || email.indexOf('@') < 0) { msg.style.color = 'var(--danger)'; msg.textContent = 'הזינו אימייל תקין'; return; }
+        if (!brand) { msg.style.color = 'var(--danger)'; msg.textContent = 'בחרו מותג — שיוך המותג חובה'; return; }
         msg.style.color = 'var(--muted)'; msg.textContent = 'יוצר…'; this.disabled = true;
         var btn = this;
-        db.rpc('admin_create_user', { p_email: email, p_name: name || email, p_role: role, p_views: views, p_phone: phone || null }).then(function (res) {
+        db.rpc('admin_create_user', { p_email: email, p_name: name || email, p_role: role, p_views: views, p_phone: phone || null, p_brand: brand }).then(function (res) {
           btn.disabled = false;
           if (res.error) { msg.style.color = 'var(--danger)'; msg.textContent = 'שגיאה: ' + res.error.message; return; }
           var d = res.data || {};
