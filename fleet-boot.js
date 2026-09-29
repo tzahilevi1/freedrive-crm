@@ -6,7 +6,7 @@
   'use strict';
   var MASTER_URL = 'https://gfwopgoydfqiouratcpc.supabase.co';
   var MASTER_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdmd29wZ295ZGZxaW91cmF0Y3BjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc2NDg0NTUsImV4cCI6MjEwMzIyNDQ1NX0.ukPDUGS7KjYgD7jAhzSqAEKo_eJ8gQwsHMqTBGXeux8';
-  var V = '202609290901';
+  var V = '202609291312';
   var APP = ['/admin.js', '/admin-crm.js', '/admin-modules.js'];
   //  נתיבים שאינם slug של מותג — נטענים כמאסטר (שורש/דפים ישנים).
   var RESERVED = { '': 1, 'admin.html': 1, 'index.html': 1, 'reset.html': 1, 'sign.html': 1, 'back.html': 1 };
@@ -18,6 +18,7 @@
   }
   function loadApp(cfg) {
     window.__fleetCfg = cfg;
+    window.__fleetMaster = { url: MASTER_URL, anon: MASTER_ANON };   // למחליף-הצי: רשימת כל המותגים מהמאסטר
     var q = V && V.charAt(0) !== '_' ? ('?v=' + V) : '';
     (function next(i) {
       if (i >= APP.length) { if (window.C2B_boot) window.C2B_boot(); return; }   // כל הסקריפטים נטענו → הפעל את ה-boot

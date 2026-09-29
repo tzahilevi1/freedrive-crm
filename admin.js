@@ -603,13 +603,14 @@
       if (!menu.classList.contains('hidden')) { menu.classList.add('hidden'); return; }
       menu.innerHTML = '<div class="muted" style="padding:10px">טוען…</div>'; menu.classList.remove('hidden');
       //  מודל-צי: כל מותג = פרויקט נפרד. מעבר = ניווט ל-/<slug> (fleet-boot טוען את
-      //  הפרויקט של המותג), לא set_acting_org (שהיה למודל המשותף).
-      db.from('orgs').select('id,name,slug,supabase_url').order('id', { ascending: true }).then(function (r) {
-        var orgs = (r && r.data) || [];
-        var curSlug = (window.__fleetCfg && window.__fleetCfg.slug) || null;
-        menu.innerHTML = orgs.map(function (o) {
+      //  הפרויקט של המותג), לא set_acting_org (שהיה למודל המשותף). רשימת כל המותגים
+      //  נשמרת רק במאסטר — ולכן שולפים אותה מ-fleet_list() במאסטר (לא מטבלת ה-orgs
+      //  של הפרויקט הנוכחי, שבו יש מותג אחד בלבד) כדי שהמנהל-על יראה הכל מכל פרויקט.
+      var curSlug = (window.__fleetCfg && window.__fleetCfg.slug) || null;
+      var renderList = function (orgs) {
+        menu.innerHTML = (orgs || []).map(function (o) {
           var cur = o.slug && o.slug === curSlug;
-          var tag = cur ? ' <b style="color:var(--brand)">✓</b>' : (o.supabase_url ? '' : ' <span class="muted" style="font-size:11px">(לא מחובר)</span>');
+          var tag = cur ? ' <b style="color:var(--brand)">✓</b>' : '';
           return '<div data-swslug="' + esc(o.slug || '') + '" style="cursor:pointer;padding:10px 13px;display:flex;justify-content:space-between;gap:8px;border-bottom:1px solid var(--line)"' +
             ' onmouseover="this.style.background=\'var(--surface-2)\'" onmouseout="this.style.background=\'\'">' +
             esc(o.name) + tag + '</div>';
@@ -621,7 +622,21 @@
             location.href = '/' + slug;   // מעבר לפרויקט של המותג דרך נתיב-הצי
           });
         });
-      });
+      };
+      var master = window.__fleetMaster;
+      if (master && master.url) {
+        fetch(master.url + '/rest/v1/rpc/fleet_list', {
+          method: 'POST',
+          headers: { apikey: master.anon, Authorization: 'Bearer ' + master.anon, 'content-type': 'application/json' },
+          body: '{}'
+        }).then(function (r) { return r.ok ? r.json() : []; })
+          .then(function (rows) { renderList(rows || []); })
+          .catch(function () { renderList([]); });
+      } else {
+        //  תאימות-לאחור (ריצה מחוץ ל-fleet-boot): הרשימה מהפרויקט הנוכחי.
+        db.from('orgs').select('name,slug').order('id', { ascending: true })
+          .then(function (r) { renderList((r && r.data) || []); });
+      }
     });
     document.addEventListener('click', function () { menu.classList.add('hidden'); });
   }
