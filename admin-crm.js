@@ -569,6 +569,22 @@
       return true;
     });
   }
+  //  שינוי סטטוס מרשימת הלידים: מעדכן את התג *במקום* ואת המטמון, בלי לרנדר
+  //  מחדש את כל הטבלה. (המשתמש ביקש לבטל את ה"רענון" הקופץ בכל שינוי סטטוס —
+  //  קודם ה-callback הריץ renderLeads והדף קפץ לראש ואיבד גלילה/מיקום.)
+  function bindListStatusBadge(el) {
+    el.addEventListener('click', function (e) {
+      e.stopPropagation();
+      openStatusMenu(el, el.dataset.cur, function (to) {
+        var leadId = el.dataset.stLead;
+        changeStatus(leadId, to, { status: el.dataset.cur }, function () {
+          for (var i = 0; i < cache.length; i++) if (String(cache[i].id) === String(leadId)) { cache[i].status = to; break; }
+          var td = el.closest('td');
+          if (td) { td.innerHTML = badge(to, true, leadId); var nw = td.querySelector('.tag.click'); if (nw) bindListStatusBadge(nw); }
+        });
+      });
+    });
+  }
   function draw() {
     var rows = leadCols ? leadCols.sortRows(listRows()) : listRows();
     orderIds = rows.map(function (l) { return l.id; });
@@ -596,9 +612,7 @@
     if (leadFilter) leadFilter.bind();
     bindBulk();
     C.$('ltbl').querySelectorAll('td[data-open]').forEach(function (td) { td.addEventListener('click', function () { window.C2B_openLeadCard(td.parentNode.dataset.lead); }); });
-    C.$('ltbl').querySelectorAll('.tag.click').forEach(function (el) {
-      el.addEventListener('click', function (e) { e.stopPropagation(); openStatusMenu(el, el.dataset.cur, function (to) { changeStatus(el.dataset.stLead, to, { status: el.dataset.cur }, function () { window.C2B_renderLeads(curFilter); }); }); });
-    });
+    C.$('ltbl').querySelectorAll('.tag.click').forEach(bindListStatusBadge);
     C.$('ltbl').querySelectorAll('.assign-chip').forEach(function (el) {
       el.addEventListener('click', function (e) { e.stopPropagation(); openAssignMenu(el, el.dataset.assign, el.dataset.cur, function (uid) { assignLead(el.dataset.assign, uid); }); });
     });
