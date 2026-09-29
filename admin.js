@@ -602,23 +602,23 @@
       e.stopPropagation();
       if (!menu.classList.contains('hidden')) { menu.classList.add('hidden'); return; }
       menu.innerHTML = '<div class="muted" style="padding:10px">טוען…</div>'; menu.classList.remove('hidden');
-      db.from('orgs').select('id,name').order('id', { ascending: true }).then(function (r) {
+      //  מודל-צי: כל מותג = פרויקט נפרד. מעבר = ניווט ל-/<slug> (fleet-boot טוען את
+      //  הפרויקט של המותג), לא set_acting_org (שהיה למודל המשותף).
+      db.from('orgs').select('id,name,slug,supabase_url').order('id', { ascending: true }).then(function (r) {
         var orgs = (r && r.data) || [];
+        var curSlug = (window.__fleetCfg && window.__fleetCfg.slug) || null;
         menu.innerHTML = orgs.map(function (o) {
-          var cur = o.id === window.C2B.orgId;
-          return '<div data-sworg="' + o.id + '" style="cursor:pointer;padding:10px 13px;display:flex;justify-content:space-between;gap:8px;border-bottom:1px solid var(--line)"' +
+          var cur = o.slug && o.slug === curSlug;
+          var tag = cur ? ' <b style="color:var(--brand)">✓</b>' : (o.supabase_url ? '' : ' <span class="muted" style="font-size:11px">(לא מחובר)</span>');
+          return '<div data-swslug="' + esc(o.slug || '') + '" style="cursor:pointer;padding:10px 13px;display:flex;justify-content:space-between;gap:8px;border-bottom:1px solid var(--line)"' +
             ' onmouseover="this.style.background=\'var(--surface-2)\'" onmouseout="this.style.background=\'\'">' +
-            esc(o.name) + (cur ? ' <b style="color:var(--brand)">✓</b>' : '') + '</div>';
+            esc(o.name) + tag + '</div>';
         }).join('') || '<div class="muted" style="padding:10px">אין ארגונים</div>';
-        menu.querySelectorAll('[data-sworg]').forEach(function (it) {
+        menu.querySelectorAll('[data-swslug]').forEach(function (it) {
           it.addEventListener('click', function () {
-            var oid = Number(it.dataset.sworg);
-            if (oid === window.C2B.orgId) { menu.classList.add('hidden'); return; }
-            it.textContent = 'עובר…';
-            db.rpc('set_acting_org', { p_org: oid }).then(function (u) {
-              if (u.error) { alert('שגיאה במעבר ארגון: ' + u.error.message); return; }
-              location.reload();
-            });
+            var slug = it.dataset.swslug;
+            if (!slug || slug === curSlug) { menu.classList.add('hidden'); return; }
+            location.href = '/' + slug;   // מעבר לפרויקט של המותג דרך נתיב-הצי
           });
         });
       });
