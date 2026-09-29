@@ -744,7 +744,7 @@
     wrap.innerHTML =
       '<div style="background:var(--surface);color:var(--txt);border:1px solid var(--line);border-radius:16px;max-width:640px;width:100%;box-shadow:0 24px 70px rgba(0,0,0,.5)">' +
         '<div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--line)">' +
-          '<h3 style="margin:0;font-size:18px">🧮 מחשבון מימון — הלוואת בלון</h3>' +
+          '<h3 style="margin:0;font-size:18px;display:flex;align-items:center;gap:8px"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="4.5" y="2.5" width="15" height="19" rx="2.5"/><rect x="7.5" y="5" width="9" height="3.6" rx="1"/><g fill="currentColor" stroke="none"><circle cx="8.3" cy="12.4" r="1"/><circle cx="12" cy="12.4" r="1"/><circle cx="15.7" cy="12.4" r="1"/><circle cx="8.3" cy="15.7" r="1"/><circle cx="12" cy="15.7" r="1"/><circle cx="15.7" cy="15.7" r="1"/><circle cx="8.3" cy="19" r="1"/><circle cx="12" cy="19" r="1"/><circle cx="15.7" cy="19" r="1"/></g></svg>מחשבון מימון — הלוואת בלון</h3>' +
           '<button id="calcClose" class="icon-btn" title="סגור">✕</button></div>' +
         '<div style="padding:18px 20px;display:grid;gap:14px">' +
           '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">' +
