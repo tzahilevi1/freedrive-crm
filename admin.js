@@ -353,7 +353,7 @@
         });
       }
       if (r.data && r.data.full_name) { window.C2B.userName = r.data.full_name; $('whoami').textContent = r.data.full_name + ' · ' + roleLabel(window.C2B.role); }
-      applyRole(window.C2B.role); refreshBadges(); go('dashboard');
+      applyRole(window.C2B.role); refreshBadges(); go(lastView() || 'dashboard');
     });
   }
   // admin-managed dropdown lists (brand / source / marketing_company / utm_source)
@@ -873,10 +873,16 @@
   //  אסימון תצוגה: כל ניווט מגדיל אותו; רינדור אסינכרוני מיושן (שנטען
   //  לפני שעברת מסך) מבוטל ולא דורס את המסך החדש.
   var viewToken = 0;
+  //  שמירת המסך הנוכחי כדי שרענון יחזיר לאותו מסך (לא לדשבורד). per-tab (sessionStorage),
+  //  מנומספר לפי מותג כדי שלא ידלוף בין מותגים על אותו origin.
+  var LV_KEY = 'c2b_view_' + ((window.__fleetCfg && window.__fleetCfg.slug) || 'default');
+  function lastView() { try { return sessionStorage.getItem(LV_KEY) || ''; } catch (e) { return ''; } }
+  function saveView(nav) { try { sessionStorage.setItem(LV_KEY, nav); } catch (e) {} }
   function go(nav, opts) {
     opts = opts || {};
     viewToken++;
     if (window.C2B && window.C2B.role && !navAllowed(nav, window.C2B.role)) { nav = 'dashboard'; opts = {}; }
+    saveView(nav);
     drawSubnav(nav);
     if (nav === 'users') { setActive(nav); if (window.innerWidth <= 820) { $('side').classList.remove('open'); $('overlay').classList.remove('open'); } return renderUsers(); }
     if (nav === 'orgs') { setActive(nav); if (window.innerWidth <= 820) { $('side').classList.remove('open'); $('overlay').classList.remove('open'); } return renderOrgs(); }
