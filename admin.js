@@ -6426,13 +6426,13 @@
       if (ph && ph.length < 9) { msg.style.color = 'var(--danger)'; msg.textContent = 'מספר לא תקין'; return; }
       db.from('wa_numbers').insert({ phone: ph || null, label: ($('waNewLabel').value || '').trim() || null }).then(function (r) {
         if (r.error) { msg.style.color = 'var(--danger)'; msg.textContent = r.error.message; return; }
-        renderUsers();
+        renderSettings('phone');
       });
     };
     box.querySelectorAll('[data-numtog]').forEach(function (b) {
       b.onclick = function () {
         db.from('wa_numbers').update({ active: this.dataset.on === '1' }).eq('id', this.dataset.numtog)
-          .then(function () { renderUsers(); });
+          .then(function () { renderSettings('phone'); });
       };
     });
     box.querySelectorAll('[data-waassign]').forEach(function (sel) {
@@ -6641,23 +6641,27 @@
           '<td>' + reset + '</td></tr>' +
           '<tr class="hidden" id="uedit_' + p.user_id + '"><td colspan="5" style="padding:0 8px"></td></tr>';
       }).join('');
+      //  שדות ההוספה פרושים לרוחב ברשת רספונסיבית (עד 3 עמודות = מקס 2 שורות
+      //  בדסקטופ, מתקפלת בנייד), ואז התצוגות והכפתור.
       var addForm = '<div class="card"><h3>➕ הוספת משתמש</h3><p class="muted" style="font-size:13px">נשלח אליו מייל עם קישור, אימייל וסיסמה זמנית — הוא נכנס מיד ויכול לאפס סיסמה בעצמו.</p>' +
-        '<div class="grid2"><div class="field" style="margin:0"><label>שם מלא</label><input class="inp" id="nuName" placeholder="למשל: דנה כהן"></div>' +
-        '<div class="field" style="margin:0"><label>אימייל</label><input class="inp" id="nuEmail" type="email" placeholder="name@email.com"></div></div>' +
-        '<div class="grid2" style="margin-top:12px"><div class="field" style="margin:0"><label>טלפון</label><input class="inp" id="nuPhone" type="tel" placeholder="050-0000000"></div>' +
-        '<div class="field" style="margin:0"><label>תפקיד</label><select class="inp" id="nuRole">' + roleOpts.map(function (x) { return '<option value="' + x[0] + '">' + x[1] + '</option>'; }).join('') + '</select></div></div>' +
-        '<div class="field" style="margin-top:12px"><label>מותג <span style="color:var(--danger)">*</span> <span class="muted" style="font-weight:400">— לאיזה מותג הסוכן משויך</span></label><select class="inp" id="nuBrand" style="width:100%">' + window.C2B.selOpts((window.C2B.marketingBrands || []), '', '— בחר מותג —') + '</select></div>' +
+        '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px 14px">' +
+        '<div class="field" style="margin:0"><label>שם מלא</label><input class="inp" id="nuName" placeholder="למשל: דנה כהן"></div>' +
+        '<div class="field" style="margin:0"><label>אימייל</label><input class="inp" id="nuEmail" type="email" placeholder="name@email.com"></div>' +
+        '<div class="field" style="margin:0"><label>טלפון</label><input class="inp" id="nuPhone" type="tel" placeholder="050-0000000"></div>' +
+        '<div class="field" style="margin:0"><label>תפקיד</label><select class="inp" id="nuRole">' + roleOpts.map(function (x) { return '<option value="' + x[0] + '">' + x[1] + '</option>'; }).join('') + '</select></div>' +
+        '<div class="field" style="margin:0"><label>מותג <span style="color:var(--danger)">*</span> <span class="muted" style="font-weight:400">— לאיזה מותג משויך</span></label><select class="inp" id="nuBrand">' + window.C2B.selOpts((window.C2B.marketingBrands || []), '', '— בחר מותג —') + '</select></div>' +
+        '</div>' +
         '<label style="font-size:13px;color:var(--muted);margin-top:12px;display:block">תצוגות שהמשתמש יראה (מוגדר לפי התפקיד — אפשר להוסיף/להוריד):</label><div id="nuViews">' + viewChecks('nv', DEFAULT_VIEWS.sales) + '</div>' +
         '<div style="margin-top:14px"><button class="btn" id="nuCreate">צור משתמש ושלח הזמנה</button> <span id="nuMsg" style="font-size:13px;margin-inline-start:10px"></span></div><div id="nuResult" style="margin-top:12px"></div></div>';
+      //  ערוצי Hey · WhatsApp עברו למסך "הגדרות ורשימות" → טלפוניה ווואטסאפ
+      //  (הם הגדרת-מערכת, לא ניהול-משתמשים).
       view('<h2 style="margin:0 0 14px">משתמשים והרשאות</h2>' +
-        (isAdminU ? waNumbersCard(ps) : '') +
         (isAdminU ? '' : '<div class="sec-note">🔑 אתם יכולים ליצור משתמשים, לשנות תפקידים והרשאות ולהפעיל או לכבות אנשי צוות. תפקיד <b>מנהל מערכת</b> שמור לבעל המערכת — אי אפשר ליצור אותו או לערוך משתמש שכבר מוגדר כך.</div>') +
         (canEditUsers ? addForm : '') +
         '<div class="card"><h3>משתמשים קיימים (' + ps.length + ')</h3>' +
         '<div class="table-scroll"><table><thead><tr><th>שם</th><th>תפקיד</th><th>תצוגות מותרות</th><th>פעיל</th><th></th></tr></thead><tbody>' + (rows || '<tr><td colspan="5" class="empty">אין משתמשים</td></tr>') + '</tbody></table></div>' +
         '<div class="muted" style="font-size:12.5px;margin-top:10px">מנהל מערכת רואה הכל. שאר המשתמשים רואים רק את הלידים <b>שהוקצו להם</b> ואת התצוגות שסומנו כאן.</div></div>');
 
-      if (isAdminU) wireWaNumbers();
       if (!canEditUsers) return;                 // אין מאזיני עריכה בתצוגת הצפייה
       // sync the Cloudflare Access gate to the CRM's active users (manager never touches Cloudflare)
       function syncAccessGate() {
@@ -7360,7 +7364,7 @@
       else if (sec === 'integrations') mid = '<div id="integrationsCard"></div>';
       else if (sec === 'brands') mid = '<div id="brandMapCard"></div>';
       else if (sec === 'quick') mid = '<div id="quickMsgCard"></div>';
-      else if (sec === 'phone') mid = '<div id="telephonyCard"></div><div id="heyCard"></div>';
+      else if (sec === 'phone') mid = '<div id="telephonyCard"></div><div id="heyCard"></div><div id="waChannelsCard"></div>';
       else if (sec === 'hours') mid = '<div id="officeCard"></div>';
       else if (sec === 'connections') mid = '<div id="connBox"></div>';
       else if (sec === 'actions') mid = actionEditorCard();
@@ -7370,7 +7374,10 @@
       if (sec === 'integrations') renderIntegrations();
       if (sec === 'brands') renderBrandMap();
       if (sec === 'quick') renderQuickMsgs();
-      if (sec === 'phone') { renderTelephony(); renderHeyCfg(); }
+      if (sec === 'phone') { renderTelephony(); renderHeyCfg();
+        //  ערוצי Hey · WhatsApp — הועברו לכאן ממסך המשתמשים (הגדרת-מערכת)
+        db.from('profiles').select('*').then(function (pr) { var el = $('waChannelsCard'); if (el) el.innerHTML = waNumbersCard((pr && pr.data) || []); });
+      }
       if (sec === 'hours') renderOffice();
       if (sec === 'connections') renderConnections();
       // מחיקת צ'יפ במקום — בלי לרענן את כל הדף
