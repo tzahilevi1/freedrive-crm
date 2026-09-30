@@ -570,8 +570,12 @@
     }
     if (b.colorDeep) root.style.setProperty('--brand-deep', b.colorDeep);
     var sb = document.querySelector('.side-brand'); if (!sb) return;
-    var isDefault = !window.C2B.orgId || window.C2B.orgId === 1;
-    if (isDefault) return;   // פרי דרייב — נשאר כפי שהוטמע (logo.png + CRM)
+    //  במודל-הצי כל פרויקט-מותג הוא org id=1, לכן orgId===1 כבר לא מזהה "פרי דרייב".
+    //  המאסטר מזוהה לפי _FC.isMaster (fleet-boot). רק המאסטר נשאר עם logo.png;
+    //  כל מותג מקבל את הלוגו/השם שלו. (מצב legacy בלי _FC — org 1 = פרי דרייב.)
+    var _fc = window.__fleetCfg;
+    var isDefault = _fc ? !!_fc.isMaster : (!window.C2B.orgId || window.C2B.orgId === 1);
+    if (isDefault) return;   // המאסטר (פרי דרייב) — נשאר כפי שהוטמע (logo.png + CRM)
     var img = sb.querySelector('img'), crm = sb.querySelector('span:not(.brand-nm)');
     //  שם הארגון ליד ה-CRM (לפניו), מוצג גם כשיש לוגו.
     function ensureName() {
@@ -582,6 +586,9 @@
     //  לוגו על צ'יפ לבן מעוגל — נראה נקי על הסיידבר הכהה, בגודל אחיד.
     function niceLogo() { if (img) img.style.cssText = 'height:46px;width:auto;max-width:150px;object-fit:contain;background:#fff;border-radius:10px;padding:6px 10px;display:block;box-shadow:0 1px 3px rgba(0,0,0,.25)'; }
     var url = logoUrl(b.logo);
+    //  גם הלוגו במסך-ההתחברות (h1 בתוך #login) — כדי שכל המסכים ממותגים.
+    var loginImg = document.querySelector('#login img');
+    if (loginImg) { if (url) { loginImg.onerror = function () { loginImg.style.display = 'none'; }; loginImg.src = url; } else { loginImg.style.display = 'none'; } }
     if (url && img) {
       img.onerror = function () { img.style.display = 'none'; ensureName(); };  // לוגו שנכשל → שם בלבד
       img.onload = niceLogo;
@@ -7914,7 +7921,15 @@
   //  admin.js — עוד לפני ש-admin-crm.js רץ — ואז go('dashboard') מצא את הרנדרר
   //  undefined והמסך נשאר ריק עד מעבר-מסך וחזרה. נדחים ל-DOMContentLoaded,
   //  שנורה רק אחרי שכל הסקריפטים חוסמי-הפרסר (כולל admin-crm.js) הורצו.
-  function boot() { db.auth.getSession().then(function (r) { if (r.data.session) ensureMfa(r.data.session, function () { showApp(r.data.session); }); else showLogin(); }); }
+  function boot() {
+    //  מיתוג מוקדם (fleet): צובע ומחליף לוגו כבר במסך-ההתחברות, לא רק אחרי כניסה.
+    if (_FC.branding && !_FC.isMaster) {
+      var br = _FC.branding;
+      window.C2B.brand = { name: _FC.name || (window.C2B.brand && window.C2B.brand.name), color: br.color, colorDeep: br.color_deep, logo: br.logo, legal_entity: br.legal_entity, reg_no: br.reg_no, phone: br.phone, sender_name: br.sender_name };
+      try { applyBranding(); } catch (e) {}
+    }
+    db.auth.getSession().then(function (r) { if (r.data.session) ensureMfa(r.data.session, function () { showApp(r.data.session); }); else showLogin(); });
+  }
   window.C2B_boot = boot;
   //  טעינת fleet (הזרקה דינמית ב-fleet-boot): הסקריפטים נטענים async ו-fleet-boot
   //  קורא ל-C2B_boot רק אחרי שהאחרון (admin-modules.js) נטען — כדי ש-boot ירוץ עם
