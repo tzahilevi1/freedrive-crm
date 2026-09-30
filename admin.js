@@ -289,7 +289,12 @@
   //  force=true (כניסה חדשה עם סיסמה) → תמיד קוד. force=false/undefined (רענון) →
   //  דילוג אם כבר אומת ב-12 השעות האחרונות בדפדפן הזה (כדי לא לשלוח קוד בכל רענון).
   function ensureMfa(session, onOk, force) {
-    if (!force) {
+    if (force) {
+      //  כניסה חדשה עם סיסמה: מבטלים כל חלון-דילוג ישן. אחרת אימות מסשן קודם
+      //  (otpOkUntil גלובלי) היה מאפשר לעקוף את הקוד ברענון של מסך-הקוד — הכניסה
+      //  לארגון בלי אימות. החלון נשמר מחדש רק אחרי verify_login_otp מוצלח.
+      try { localStorage.removeItem('otpOkUntil'); } catch (e) { }
+    } else {
       var okUntil = 0; try { okUntil = +localStorage.getItem('otpOkUntil') || 0; } catch (e) { }
       if (Date.now() < okUntil) { onOk(); return; }
     }
