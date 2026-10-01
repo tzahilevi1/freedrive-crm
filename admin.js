@@ -6467,6 +6467,10 @@
     ]).then(function (res) {
       if (res[0] && res[0].error) return errBox(res[0].error.message);
       var orgs = (res[0] && res[0].data) || [], profs = (res[1] && res[1].data) || [];
+      //  ממותג: orgs המקומי לא מחזיק את סטטוס-הצי (supabase_url/ready) — הם רק במאסטר.
+      //  מעשירים כל שורה דרך fleet_resolve הציבורי כדי שעמודת "צי" תציג "מחובר" נכון.
+      var _fcO = window.__fleetCfg || {}, MO = window.__fleetMaster;
+      function build() {
       var orgById = {}; orgs.forEach(function (o) { orgById[o.id] = o; });
       var uCount = {}; profs.forEach(function (p) { uCount[p.org_id] = (uCount[p.org_id] || 0) + 1; });
       var rows = orgs.map(function (o) {
@@ -6517,6 +6521,13 @@
         }, function (e) { btn.disabled = false; msg.style.color = 'var(--danger)'; msg.textContent = 'שגיאה: ' + esc((e && e.message) || e); });
       });
       $('view').querySelectorAll('[data-orgbrand]').forEach(function (b) { b.addEventListener('click', function () { editOrgBranding(orgById[b.dataset.orgbrand]); }); });
+      }
+      if (!_fcO.isMaster && MO && orgs.length) {
+        Promise.all(orgs.map(function (o) {
+          return fetch(MO.url + '/rest/v1/rpc/fleet_resolve', { method: 'POST', headers: { apikey: MO.anon, 'Content-Type': 'application/json' }, body: JSON.stringify({ p_slug: o.slug }) })
+            .then(function (r) { return r.json(); }).then(function (d) { if (d && d.supabase_url) { o.supabase_url = d.supabase_url; o.ready = true; } }, function () {});
+        })).then(build, build);
+      } else { build(); }
     }, function (e) { errBox((e && e.message) || e); });
   }
   window.C2B_renderOrgs = renderOrgs;
