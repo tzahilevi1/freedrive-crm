@@ -748,7 +748,8 @@
     e.preventDefault();
     var em = $('email').value.trim();
     if (!em) { $('loginErr').style.color = 'var(--danger)'; $('loginErr').textContent = 'הזינו אימייל למעלה ואז לחצו "שכחתי סיסמה".'; return; }
-    var redirect = 'https://crm.freedrive.co.il/reset.html';
+    var _fc = window.__fleetCfg || {};
+    var redirect = 'https://crm.freedrive.co.il/reset.html' + (_fc.slug && !_fc.isMaster ? '?org=' + encodeURIComponent(_fc.slug) : '');
     db.auth.resetPasswordForEmail(em, { redirectTo: redirect }).then(function (r) {
       $('loginErr').style.color = r.error ? 'var(--danger)' : 'var(--ok)';
       $('loginErr').textContent = r.error ? ('שגיאה: ' + r.error.message) : 'נשלח מייל לאיפוס סיסמה (אם החשבון קיים). בדקו את תיבת הדואר.';
@@ -6762,7 +6763,8 @@
       // password reset for a user
       $('view').querySelectorAll('button[data-reset]').forEach(function (b) {
         b.addEventListener('click', function () {
-          var email = b.dataset.reset, redirect = 'https://crm.freedrive.co.il/reset.html';
+          var _fc = window.__fleetCfg || {};
+          var email = b.dataset.reset, redirect = 'https://crm.freedrive.co.il/reset.html' + (_fc.slug && !_fc.isMaster ? '?org=' + encodeURIComponent(_fc.slug) : '');
           db.auth.resetPasswordForEmail(email, { redirectTo: redirect }).then(function (r) { alert(r.error ? ('שגיאה: ' + r.error.message) : ('נשלח מייל לאיפוס סיסמה אל ' + email)); });
         });
       });
