@@ -6526,11 +6526,29 @@
   //  של fleet-ops *אחרי* שהרשימה נטענה, ולכן האובייקט ב-cache ישן ושדות-הצי נראו ריקים.
   function editOrgBranding(o) {
     if (!o) return;
-    db.from('orgs').select('id,name,slug,plan,active,created_at,branding,supabase_url,anon_key,ingest_url,ready').eq('id', o.id).maybeSingle().then(function (fr) {
-      _editOrgBrandingRender((fr && fr.data) || o);
-    }, function () { _editOrgBrandingRender(o); });
+    var _fc = window.__fleetCfg || {}, M = window.__fleetMaster;
+    if (_fc.isMaster || !M) {
+      //  במאסטר: db הוא רישום-הצי עצמו — עריכה מלאה (רענון נגד staleness של ה-worker).
+      db.from('orgs').select('id,name,slug,plan,active,created_at,branding,supabase_url,anon_key,ingest_url,ready').eq('id', o.id).maybeSingle().then(function (fr) {
+        _editOrgBrandingRender((fr && fr.data) || o, false);
+      }, function () { _editOrgBrandingRender(o, false); });
+    } else {
+      //  ממותג: פרטי-חיבור-הצי חיים *רק* במאסטר (orgs המקומי לא מחזיק אותם). שולפים
+      //  אותם דרך fleet_resolve הציבורי של המאסטר כדי שיוצגו — לקריאה בלבד; עריכה במאסטר.
+      fetch(M.url + '/rest/v1/rpc/fleet_resolve', { method: 'POST', headers: { apikey: M.anon, 'Content-Type': 'application/json' }, body: JSON.stringify({ p_slug: o.slug }) })
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+          d = d || {};
+          _editOrgBrandingRender(Object.assign({}, o, {
+            supabase_url: d.supabase_url || o.supabase_url || '',
+            anon_key: d.anon_key || o.anon_key || '',
+            ingest_url: d.supabase_url ? (d.supabase_url + '/functions/v1/ingest?org=1') : (o.ingest_url || ''),
+            ready: !!d.supabase_url, branding: o.branding || d.branding || {}
+          }), true);
+        }, function () { _editOrgBrandingRender(o, true); });
+    }
   }
-  function _editOrgBrandingRender(o) {
+  function _editOrgBrandingRender(o, connRO) {
     var b = o.branding || {};
     openDrawer('<div class="dw-head"><h3 style="margin:0">🎨 מיתוג · ' + esc(o.name) + '</h3></div>' +
       '<div class="dw-body">' +
@@ -6552,14 +6570,16 @@
         '<div class="field"><label>שם שולח במייל</label><input class="inp" id="obSender" value="' + esc(b.sender_name || '') + '" placeholder="ברירת מחדל: שם הארגון"></div>' +
       '</div>' +
       '<div style="margin-top:16px;border-top:1px solid var(--line);padding-top:14px">' +
-        '<div style="font-weight:700;font-size:13px;margin-bottom:2px">🔗 פרויקט הצי (Supabase נפרד)</div>' +
-        '<p class="muted" style="font-size:12px;margin:0 0 10px;line-height:1.6">חבר את פרויקט ה-Supabase של המותג — הדתא שלו יושב שם, והמערכת תיפתח בכתובת <b class="ltr">/' + esc(o.slug || '') + '</b>. הדבק <b>anon key ציבורי בלבד</b> — לעולם לא service_role.</p>' +
-        '<div class="field"><label>Supabase URL</label><input class="inp ltr" id="obSbUrl" value="' + esc(o.supabase_url || '') + '" placeholder="https://xxxxxxxx.supabase.co"></div>' +
-        '<div class="field"><label>anon key (ציבורי)</label><input class="inp ltr" id="obSbAnon" value="' + esc(o.anon_key || '') + '" placeholder="eyJ..."></div>' +
-        '<div class="field"><label>כתובת ingest (קליטת לידים מכל המקורות)</label><input class="inp ltr" id="obIngest" value="' + esc(o.ingest_url || '') + '" placeholder="https://xxxx.supabase.co/functions/v1/ingest?key=..."></div>' +
+        '<div style="font-weight:700;font-size:13px;margin-bottom:2px">🔗 פרויקט הצי (Supabase נפרד)' + (connRO && o.ready ? ' <span class="cl-yes" style="font-size:12px">✓ מחובר</span>' : '') + '</div>' +
+        (connRO
+          ? '<p class="muted" style="font-size:12px;margin:0 0 10px;line-height:1.6;background:var(--surface-2);padding:8px 10px;border-radius:8px">👁️ <b>תצוגה בלבד</b> — חיבורי-הצי נשמרים ורק ב-CRM הראשי. אתה צופה מתוך המותג, לכן השדות מוצגים מרישום-הצי של המאסטר ואי אפשר לערוך אותם כאן. לעריכה, היכנס ל-<b class="ltr">crm.freedrive.co.il</b>.</p>'
+          : '<p class="muted" style="font-size:12px;margin:0 0 10px;line-height:1.6">חבר את פרויקט ה-Supabase של המותג — הדתא שלו יושב שם, והמערכת תיפתח בכתובת <b class="ltr">/' + esc(o.slug || '') + '</b>. הדבק <b>anon key ציבורי בלבד</b> — לעולם לא service_role.</p>') +
+        '<div class="field"><label>Supabase URL</label><input class="inp ltr"' + (connRO ? ' readonly' : '') + ' id="obSbUrl" value="' + esc(o.supabase_url || '') + '" placeholder="https://xxxxxxxx.supabase.co"></div>' +
+        '<div class="field"><label>anon key (ציבורי)</label><input class="inp ltr"' + (connRO ? ' readonly' : '') + ' id="obSbAnon" value="' + esc(o.anon_key || '') + '" placeholder="eyJ..."></div>' +
+        '<div class="field"><label>כתובת ingest (קליטת לידים מכל המקורות)</label><input class="inp ltr"' + (connRO ? ' readonly' : '') + ' id="obIngest" value="' + esc(o.ingest_url || '') + '" placeholder="https://xxxx.supabase.co/functions/v1/ingest?key=..."></div>' +
         '<div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:4px">' +
           '<button class="btn btn-ghost btn-sm" id="obTest">🔌 בדוק חיבור</button>' +
-          '<label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer"><input type="checkbox" id="obReady"' + (o.ready ? ' checked' : '') + '> פעיל בצי (מוגש ב-/' + esc(o.slug || '') + ')</label>' +
+          '<label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer"><input type="checkbox" id="obReady"' + (o.ready ? ' checked' : '') + (connRO ? ' disabled' : '') + '> פעיל בצי (מוגש ב-/' + esc(o.slug || '') + ')</label>' +
           '<span id="obTestMsg" style="font-size:12px"></span>' +
         '</div>' +
       '</div>' +
@@ -6613,10 +6633,15 @@
       var ingest = ($('obIngest').value || '').trim() || null;
       var ready = $('obReady').checked;
       var msg = $('obMsg');
-      if (ready && (!sbUrl || !sbAnon)) { msg.style.color = 'var(--danger)'; msg.textContent = 'אי אפשר לסמן "פעיל בצי" בלי Supabase URL ו-anon key'; return; }
-      if (sbAnon) { try { var _pl = JSON.parse(atob((sbAnon.split('.')[1] || '').replace(/-/g, '+').replace(/_/g, '/'))); if (_pl && _pl.role === 'service_role') { msg.style.color = 'var(--danger)'; msg.textContent = '⛔ זהו service_role (מפתח סודי)! הדבק anon key ציבורי בלבד'; return; } } catch (e) {} }
+      //  ממותג (connRO): פרטי-החיבור לקריאה בלבד — שומרים רק מיתוג (שמסתנכרן למאסטר).
+      //  פרטי-החיבור חיים במאסטר ונערכים שם בלבד, לכן לא כותבים אותם ל-orgs המקומי.
+      if (!connRO) {
+        if (ready && (!sbUrl || !sbAnon)) { msg.style.color = 'var(--danger)'; msg.textContent = 'אי אפשר לסמן "פעיל בצי" בלי Supabase URL ו-anon key'; return; }
+        if (sbAnon) { try { var _pl = JSON.parse(atob((sbAnon.split('.')[1] || '').replace(/-/g, '+').replace(/_/g, '/'))); if (_pl && _pl.role === 'service_role') { msg.style.color = 'var(--danger)'; msg.textContent = '⛔ זהו service_role (מפתח סודי)! הדבק anon key ציבורי בלבד'; return; } } catch (e) {} }
+      }
       msg.style.color = 'var(--muted)'; msg.textContent = 'שומר…';
-      db.from('orgs').update({ branding: val, supabase_url: sbUrl, anon_key: sbAnon, ingest_url: ingest, ready: ready }).eq('id', o.id).then(function (u) {
+      var _upd = connRO ? { branding: val } : { branding: val, supabase_url: sbUrl, anon_key: sbAnon, ingest_url: ingest, ready: ready };
+      db.from('orgs').update(_upd).eq('id', o.id).then(function (u) {
         if (u.error) { msg.style.color = 'var(--danger)'; msg.textContent = 'שגיאה: ' + u.error.message; return; }
         msg.style.color = 'var(--ok)'; msg.textContent = '✔ נשמר';
         if (o.id === window.C2B.orgId) { window.C2B.brand = { name: o.name, color: val.color, colorDeep: val.color_deep, logo: val.logo, legal_entity: val.legal_entity, reg_no: val.reg_no, phone: val.phone, sender_name: val.sender_name }; applyBranding(); }
