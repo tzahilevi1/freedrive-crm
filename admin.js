@@ -7295,7 +7295,7 @@
   var CONN_HELP = {
     resend:    { u: 'https://resend.com/api-keys',                        l: 'מפתח API ב-Resend' },
     openai:    { u: 'https://platform.openai.com/api-keys',               l: 'מפתח API ב-OpenAI' },
-    voicenter: { u: 'https://cp.voicenter.co.il',                         l: 'לוח הבקרה של Voicenter' },
+    voicenter: { u: 'https://www.voicenter.co.il',                       l: 'האתר של Voicenter' },
     facebook:  { u: 'https://business.facebook.com/settings/system-users', l: 'משתמשי מערכת ב-Meta Business' },
     whatsapp:  { u: 'https://heyy.ai',                                    l: 'לוח הבקרה של Heyy' },
     icredit:   { u: 'https://icredit.rivhit.co.il',                       l: 'iCredit (ריווחית)' }
