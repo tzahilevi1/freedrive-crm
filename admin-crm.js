@@ -2823,7 +2823,9 @@
     var txt = String(body || '');
     txt = txt.replace(/\{\{\s*([a-z_]+)\s*\}\}/g, function (m, k) {
       var v = data[k];
-      return (v == null || v === '') ? '____________' : esc(String(v));
+      //  בלי esc כאן! עיבוד-השורות למטה כבר מריץ esc() על כל טקסט. esc כפול
+      //  הפך מירכאות בערך (למשל "עסקת 01") ל-&quot; שהוצג כטקסט גולמי בהסכם.
+      return (v == null || v === '') ? '____________' : String(v);
     });
     var blocks = txt.split(/\n{2,}/);
     return blocks.map(function (blk) {
