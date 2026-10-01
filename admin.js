@@ -6521,8 +6521,15 @@
   window.C2B_renderOrgs = renderOrgs;
 
   //  עורך מיתוג פר-ארגון (סופר-אדמין): צבע + לוגו → orgs.branding.
+  //  רענון השורה בפתיחה: supabase_url/anon_key/ingest_url/ready נכתבים ע"י ה-worker
+  //  של fleet-ops *אחרי* שהרשימה נטענה, ולכן האובייקט ב-cache ישן ושדות-הצי נראו ריקים.
   function editOrgBranding(o) {
     if (!o) return;
+    db.from('orgs').select('id,name,slug,plan,active,created_at,branding,supabase_url,anon_key,ingest_url,ready').eq('id', o.id).maybeSingle().then(function (fr) {
+      _editOrgBrandingRender((fr && fr.data) || o);
+    }, function () { _editOrgBrandingRender(o); });
+  }
+  function _editOrgBrandingRender(o) {
     var b = o.branding || {};
     openDrawer('<div class="dw-head"><h3 style="margin:0">🎨 מיתוג · ' + esc(o.name) + '</h3></div>' +
       '<div class="dw-body">' +
@@ -7284,6 +7291,20 @@
     { key: 'icredit', icon: '💳', title: 'iCredit (ריווחית) — סליקת אשראי', desc: 'יצירת לינקי תשלום לחיוב כרטיס אשראי והפקת חשבונית מס-קבלה אוטומטית בריווחית. הטוקן הפרטי (GroupPrivateToken) נשלח אליך במייל מ-iCredit. התחל ב-Test — עבור ל-prod רק אחרי בדיקה.',
       fields: [{ k: 'group_token', l: 'GroupPrivateToken (מזהה קבוצה פרטי)', s: true }, { k: 'mode', l: 'סביבה — test או prod (ברירת מחדל: test)' }] }
   ];
+  //  קישור ישיר לעמוד שבו משיגים את הנתונים לכל חיבור (נפתח בכרטיס).
+  var CONN_HELP = {
+    resend:    { u: 'https://resend.com/api-keys',                        l: 'מפתח API ב-Resend' },
+    openai:    { u: 'https://platform.openai.com/api-keys',               l: 'מפתח API ב-OpenAI' },
+    voicenter: { u: 'https://cp.voicenter.co.il',                         l: 'לוח הבקרה של Voicenter' },
+    facebook:  { u: 'https://business.facebook.com/settings/system-users', l: 'משתמשי מערכת ב-Meta Business' },
+    whatsapp:  { u: 'https://heyy.ai',                                    l: 'לוח הבקרה של Heyy' },
+    icredit:   { u: 'https://icredit.rivhit.co.il',                       l: 'iCredit (ריווחית)' }
+  };
+  //  טיפ ייעודי: הטוקן של פייסבוק צריך גם הרשאות וגם שיוך חשבון-מודעות, אחרת
+  //  שמות הקמפיין/הסדרה/המודעה לא נמשכים (יוצג שם-הטופס בלבד) — מקור טעות נפוץ.
+  var CONN_TIP = {
+    facebook: '💡 לטוקן צריכות להיות ההרשאות <b>pages_show_list · leads_retrieval · ads_read</b>, ויש לשייך למשתמש-המערכת גם את <b>הדף וגם את חשבון-המודעות</b> שמריץ את הקמפיין — אחרת שם הקמפיין/הסדרה/המודעה לא יימשכו (יוצג שם-הטופס בלבד). את ה-Page ID לוקחים מעמוד "אודות" של הדף (או מרשימת הדפים של הטוקן).'
+  };
   function renderConnections() {
     var host = $('connBox'); if (!host) return;
     if (!(window.C2B.role === 'admin' || window.C2B.isSuper)) { host.innerHTML = '<div class="card"><div class="sec-note">רק מנהל מערכת של הארגון מגדיר חיבורים.</div></div>'; return; }
@@ -7319,8 +7340,11 @@
             return '<div class="field" style="margin:0 0 8px"><label>' + esc(fd.l) + '</label><input class="inp ltr" data-cf="' + p.key + ':' + fd.k + '" value="' + esc(cfg[fd.k] || '') + '"></div>';
           }).join('');
           var badge = live[p.key] ? '<span class="cl-yes">מחובר ✓</span>' : '<span class="cl-no">לא מחובר</span>';
-          return '<div class="card cl-sub" style="margin-bottom:14px"><div class="row-between" style="align-items:center"><h3 class="cl-h" style="margin:0">' + p.icon + ' ' + esc(p.title) + '</h3>' + badge + '</div>' +
-            '<p class="muted" style="font-size:12.5px;margin:6px 0 12px">' + esc(p.desc) + '</p>' + fh +
+          var hp = CONN_HELP[p.key];
+          var helpBtn = hp ? '<a class="btn btn-ghost btn-sm" href="' + hp.u + '" target="_blank" rel="noopener" title="פתח את העמוד להשגת הנתונים" style="text-decoration:none;font-size:11.5px;white-space:nowrap">↗ ' + esc(hp.l) + '</a>' : '';
+          var tip = CONN_TIP[p.key] ? '<p class="muted" style="font-size:12px;line-height:1.7;background:var(--surface-2);padding:9px 11px;border-radius:9px;margin:0 0 12px">' + CONN_TIP[p.key] + '</p>' : '';
+          return '<div class="card cl-sub" style="margin-bottom:14px"><div class="row-between" style="align-items:center;gap:8px"><h3 class="cl-h" style="margin:0">' + p.icon + ' ' + esc(p.title) + '</h3><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">' + helpBtn + badge + '</div></div>' +
+            '<p class="muted" style="font-size:12.5px;margin:6px 0 12px">' + esc(p.desc) + '</p>' + tip + fh +
             (p.hook ? '<div class="field" style="margin:8px 0 0"><label>כתובת Webhook להגדרה בפלטפורמה</label><input class="inp ltr" readonly value="' + esc(base + p.hook + '?org=' + oid) + '" onclick="this.select()"></div>' : '') +
             '<div style="margin-top:12px"><button class="btn btn-sm" data-connsave="' + p.key + '">💾 שמור חיבור</button> <span data-cm="' + p.key + '" style="font-size:12px;margin-inline-start:8px"></span></div></div>';
         }).join('');
