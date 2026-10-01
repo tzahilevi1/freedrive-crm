@@ -6506,9 +6506,11 @@
           btn.disabled = false;
           if (r.error || (r.data && r.data.error)) { msg.style.color = 'var(--danger)'; msg.textContent = 'שגיאה: ' + esc((r.error && r.error.message) || r.data.error); return; }
           var d = r.data || {}; msg.textContent = '';
-          $('orgResult').innerHTML = '<div class="card" style="box-shadow:none;border:1px solid var(--line);margin:0"><b>✅ הארגון נוצר (מזהה ' + esc(d.org_id) + ')</b>' +
-            '<div style="margin-top:8px;font-family:monospace;font-size:13px;background:var(--surface);padding:10px;border-radius:8px">מנהל: ' + esc(d.admin_email) + '<br>סיסמה זמנית: <b>' + esc(d.password || '') + '</b></div>' +
-            '<div class="muted" style="font-size:12px;margin-top:8px">' + (d.emailed ? 'נשלח מייל עם פרטי ההתחברות למנהל.' : 'שמרו את הסיסמה — שליחת המייל לא הוגדרה.') + '</div></div>';
+          //  מודל-צי: ההקמה (פרויקט Supabase + CRM מלא) רצה אוטומטית ברקע (worker של
+          //  fleet-ops). אין סיסמה זמנית כאן — המנהל-על נכנס עם הסיסמה הרגילה, והזמנה
+          //  למנהל שהוזן נשלחת במייל כשהמותג מוכן, עם כתובת /<slug> הנכונה.
+          $('orgResult').innerHTML = '<div class="card" style="box-shadow:none;border:1px solid var(--line);margin:0"><b>✅ הארגון נוצר — מוקם אוטומטית</b>' +
+            '<div class="muted" style="font-size:12.5px;margin-top:8px;line-height:1.7">ההקמה המלאה (פרויקט + CRM) רצה ברקע ותסתיים בעוד כמה דקות. כשתהיה מוכנה, ה-CRM יהיה חי בכתובת <b class="ltr">crm.freedrive.co.il/' + esc(d.slug || slug) + '</b>. התחברות עם המשתמש והסיסמה הרגילים שלך; הזמנה למנהל שהוזן תישלח במייל עם הכתובת הנכונה.</div></div>';
           $('orgName').value = ''; $('orgSlug').value = ''; $('orgAdminName').value = ''; $('orgAdminEmail').value = ''; $('orgRegNo').value = '';
           setTimeout(renderOrgs, 2500);   // הפרופיל נוצר אסינכרונית — מרעננים אחרי רגע
         }, function (e) { btn.disabled = false; msg.style.color = 'var(--danger)'; msg.textContent = 'שגיאה: ' + esc((e && e.message) || e); });
