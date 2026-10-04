@@ -7398,6 +7398,19 @@
             if (fd && fd.s) { if (v) cfg[fk] = v; } else cfg[fk] = v;   // סוד: מעדכנים רק אם הוזן מחדש
           });
           var msg = host.querySelector('[data-cm="' + key + '"]'); msg.style.color = 'var(--muted)'; msg.textContent = 'שומר…';
+          //  מיילים (Resend): עובר דרך resend-apply — מאמת אוטומטית את הדומיין מול Resend,
+          //  ואם מאומת שולח ממנו; אחרת נופל ל-newcar@freedrive.co.il כך שמיילים תמיד יוצאים.
+          if (key === 'resend') {
+            msg.textContent = 'מאמת דומיין מול Resend…';
+            db.functions.invoke('resend-apply', { body: { from_name: cfg.from_name || '', from_email: cfg.from_email || '', api_key: cfg.api_key || '' } }).then(function (r) {
+              var d = (r && r.data) || {};
+              if ((r && r.error) || d.error) { msg.style.color = 'var(--danger)'; msg.textContent = 'שגיאה: ' + ((r.error && r.error.message) || d.error); return; }
+              msg.style.color = d.verified ? 'var(--ok)' : 'var(--warn)';
+              msg.textContent = d.message || '✔ נשמר';
+              setTimeout(renderConnections, 1400);
+            }, function (e) { msg.style.color = 'var(--danger)'; msg.textContent = 'שגיאה: ' + ((e && e.message) || e); });
+            return;
+          }
           db.from('org_integrations').upsert({ org_id: oid, platform: key, config: cfg, connected: true, updated_at: new Date().toISOString() }, { onConflict: 'org_id,platform' }).then(function (u) {
             if (u.error) { msg.style.color = 'var(--danger)'; msg.textContent = 'שגיאה: ' + u.error.message; return; }
             msg.style.color = 'var(--ok)'; msg.textContent = '✔ נשמר'; by[key] = { platform: key, config: cfg, connected: true };
