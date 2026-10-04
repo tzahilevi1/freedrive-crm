@@ -578,27 +578,33 @@
     var _fc = window.__fleetCfg;
     var isDefault = _fc ? !!_fc.isMaster : (!window.C2B.orgId || window.C2B.orgId === 1);
     if (isDefault) return;   // המאסטר (פרי דרייב) — נשאר כפי שהוטמע (logo.png + CRM)
+    //  הדר נקי: הלוגו כבר נושא את שם-המותג, לכן מציגים *או* לוגו *או* שם — בלי "CRM"
+    //  ובלי כפילות שם+לוגו שיצרה הדר צפוף/שבור (השם נחתך ל-"...On").
     var img = sb.querySelector('img'), crm = sb.querySelector('span:not(.brand-nm)');
-    //  שם הארגון ליד ה-CRM (לפניו), מוצג גם כשיש לוגו.
-    function ensureName() {
-      var nm = sb.querySelector('.brand-nm');
-      if (!nm) { nm = document.createElement('span'); nm.className = 'brand-nm'; nm.style.cssText = 'font-weight:800;font-size:16px;color:var(--side-txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:150px'; if (crm) sb.insertBefore(nm, crm); else sb.appendChild(nm); }
-      nm.textContent = b.name || '';
-    }
-    //  לוגו על צ'יפ לבן מעוגל — נראה נקי על הסיידבר הכהה, בגודל אחיד.
-    function niceLogo() { if (img) img.style.cssText = 'height:46px;width:auto;max-width:150px;object-fit:contain;background:#fff;border-radius:10px;padding:6px 10px;display:block;box-shadow:0 1px 3px rgba(0,0,0,.25)'; }
     var url = logoUrl(b.logo);
-    //  גם הלוגו במסך-ההתחברות (h1 בתוך #login) — כדי שכל המסכים ממותגים.
-    var loginImg = document.querySelector('#login img');
-    if (loginImg) { if (url) { loginImg.onerror = function () { loginImg.style.display = 'none'; }; loginImg.src = url; } else { loginImg.style.display = 'none'; } }
+    if (crm) crm.style.display = 'none';   // להסיר את מילת "CRM"
+    function setName(host, color, size) {
+      var nm = host.querySelector('.brand-nm');
+      if (!nm) { nm = document.createElement('span'); nm.className = 'brand-nm'; host.appendChild(nm); }
+      nm.style.cssText = 'font-weight:800;font-size:' + size + 'px;color:' + color + ';white-space:nowrap';
+      nm.textContent = b.name || ''; nm.style.display = '';
+    }
+    function hideName(host) { var nm = host.querySelector('.brand-nm'); if (nm) nm.style.display = 'none'; }
+    var CHIP = 'height:46px;width:auto;max-width:180px;object-fit:contain;background:#fff;border-radius:10px;padding:6px 10px;display:block;box-shadow:0 1px 3px rgba(0,0,0,.25)';
+    //  --- סיידבר ---
     if (url && img) {
-      img.onerror = function () { img.style.display = 'none'; ensureName(); };  // לוגו שנכשל → שם בלבד
-      img.onload = niceLogo;
-      niceLogo(); img.src = url;
-      ensureName();
-    } else {
-      if (img) img.style.display = 'none';
-      ensureName();
+      img.onerror = function () { img.style.display = 'none'; setName(sb, 'var(--side-txt)', 17); };
+      img.onload = function () { img.style.cssText = CHIP; };
+      img.style.cssText = CHIP; img.src = url; hideName(sb);
+    } else { if (img) img.style.display = 'none'; setName(sb, 'var(--side-txt)', 17); }
+    //  --- מסך התחברות (h1 בתוך #login): לוגו בלבד, בלי "CRM" ---
+    var loginH = document.querySelector('#login h1');
+    var loginImg = loginH ? loginH.querySelector('img') : null;
+    var loginCrm = loginH ? loginH.querySelector('span:not(.brand-nm)') : null;
+    if (loginCrm) loginCrm.style.display = 'none';
+    if (loginImg) {
+      if (url) { loginImg.onerror = function () { loginImg.style.display = 'none'; if (loginH) setName(loginH, 'var(--txt)', 22); }; loginImg.style.cssText = 'height:56px;width:auto;max-width:230px;object-fit:contain;display:block'; loginImg.src = url; if (loginH) hideName(loginH); }
+      else { loginImg.style.display = 'none'; if (loginH) setName(loginH, 'var(--txt)', 22); }
     }
   }
   //  מחליף ארגונים בהדר — לסופר-אדמין בלבד. מציג את שם הארגון הנוכחי;
