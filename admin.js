@@ -515,9 +515,11 @@
     //  לוגו שהועלה ל-Storage של הפרויקט כבר מוגש עם CORS → טוענים ישירות (בלי proxy,
     //  שה-allowlist שלו לא כולל את מארח ה-Storage). כל השאר עובר דרך img-proxy.
     var SB = SUPABASE_URL;
-    var prox = (url.indexOf(SB + '/storage/') === 0)
-      ? url
-      : SB + '/functions/v1/img-proxy?u=' + encodeURIComponent(url);
+    //  כל URL של Supabase Storage ציבורי מוגש עם CORS → טוענים ישירות, גם storage
+    //  של מותג אחר בצי (לא רק המאסטר). קודם נבדק רק מול SB=המאסטר, ולכן לוגו של מותג
+    //  (בפרויקט Supabase אחר) נותב ל-img-proxy שלא מכיר את המארח והזיהוי נכשל.
+    var isSbStorage = /^https:\/\/[a-z0-9-]+\.supabase\.co\/storage\/v1\/object\/public\//.test(url);
+    var prox = isSbStorage ? url : (SB + '/functions/v1/img-proxy?u=' + encodeURIComponent(url));
     var im = new Image(); im.crossOrigin = 'anonymous';
     im.onload = function () {
       try {
