@@ -98,7 +98,12 @@
   .bell-badge{position:absolute;top:-4px;inset-inline-start:-4px;background:var(--danger);color:#fff;font-size:10px;font-weight:800;min-width:16px;height:16px;border-radius:999px;display:flex;align-items:center;justify-content:center;padding:0 3px}
   /*  400px קבועים גלשו מתחת למסך בחלון נמוך. החישוב משאיר
       שוליים מתחת ומשאיר את כל הפריטים נגישים בגלילה.  */
-  .bell-menu{position:absolute;top:52px;inset-inline-start:0;width:340px;max-height:calc(100vh - 90px);overflow:auto;overscroll-behavior:contain;background:var(--surface);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);z-index:40;padding:12px}
+  .bell-menu{position:absolute;top:52px;inset-inline-start:0;width:340px;max-width:calc(100vw - 24px);max-height:calc(100vh - 90px);overflow:auto;overscroll-behavior:contain;background:var(--surface);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);z-index:40;padding:12px}
+  /*  פעמון-המשימות יושב משמאל-מרכז ההדר; פתיחה שמאלה הצמידה אותו לקצה. פותחים ימינה
+      (עוגן בקצה-ההתחלה של הפעמון, מתפרש לכיוון המרכז). לא משפיע על מחליף-הארגונים. */
+  #bellMenu{inset-inline-start:auto;inset-inline-end:0}
+  /*  כפתור ההגדרות בקצה-השמאלי של ההדר → התפריט נפתח פנימה (ימינה) שלא ייחתך. */
+  #settingsMenu{inset-inline-start:auto;inset-inline-end:0}
   .bell-menu .bt{padding:12px;border-radius:10px;display:flex;gap:8px;align-items:flex-start;cursor:pointer;margin-top:5px}
   .bell-menu .bt:hover{background:var(--surface-2)}
   .bell-menu .bt.muted{justify-content:center;text-align:center;padding:30px 12px;cursor:default}
@@ -725,7 +730,20 @@
       </div>
       <button class="icon-btn" id="themeToggle" title="מצב כהה/בהיר">🌙</button>
       <span class="who" id="whoami"></span>
-      <button class="btn btn-ghost btn-sm" id="logout">יציאה</button>
+      <div style="position:relative">
+        <button class="icon-btn" id="settingsBtn" title="הגדרות" aria-label="הגדרות">⚙️</button>
+        <div id="settingsMenu" class="bell-menu hidden" style="width:250px">
+          <div style="padding:4px 4px 12px;border-bottom:1px solid var(--line)">
+            <div style="font-weight:700;font-size:12.5px;margin-bottom:7px">✏️ עריכת שם</div>
+            <input id="meName" class="inp" style="width:100%;font-size:13px" placeholder="השם שלך" autocomplete="off">
+            <div style="display:flex;align-items:center;gap:8px;margin-top:8px">
+              <button class="btn btn-sm" id="meSave">💾 שמור</button>
+              <span id="meMsg" style="font-size:12px"></span>
+            </div>
+          </div>
+          <button class="btn btn-ghost" id="logout" style="width:100%;margin-top:10px;justify-content:center">🚪 התנתקות</button>
+        </div>
+      </div>
     </header>
     <div class="content"><nav class="tabs" id="subnav" style="margin-bottom:14px;flex-wrap:wrap;display:none"></nav><section id="view"><div class="loading">טוען…</div></section></div>
   </main>
@@ -737,6 +755,6 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js" integrity="sha384-0w2KAL2YHP6wKOkUDzkCDGgVvfmHnj02DHeQ6XcHOgTfFsGyonKOpShMH1x6nk9o" crossorigin="anonymous"></script>
 <!--  fleet-boot בוחר את פרויקט המותג לפי ה-path ואז טוען את admin.js/admin-crm.js/admin-modules.js
       בסדר הנכון. שורש (בלי /מותג) = המאסטר (פרי דרייב) — תואם-לאחור. -->
-<script src="/fleet-boot.js?v=202610041043"></script>
+<script src="/fleet-boot.js?v=202610041049"></script>
 </body>
 </html>

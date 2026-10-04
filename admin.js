@@ -751,6 +751,34 @@
     });
   });
   $('logout').addEventListener('click', function () { db.auth.signOut().then(showLogin); });
+  //  ---- תפריט הגדרות (⚙️): עריכת-שם-עצמי + התנתקות ----
+  (function () {
+    var sBtn = $('settingsBtn'), sMenu = $('settingsMenu'); if (!sBtn || !sMenu) return;
+    sBtn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      var opening = sMenu.classList.contains('hidden');
+      sMenu.classList.toggle('hidden');
+      if (opening) { var mn = $('meName'); if (mn) mn.value = window.C2B.userName || ''; var mm = $('meMsg'); if (mm) mm.textContent = ''; if (mn) mn.focus(); }
+    });
+    sMenu.addEventListener('click', function (e) { e.stopPropagation(); });   // קליק בתוך התפריט לא סוגר
+    document.addEventListener('click', function () { sMenu.classList.add('hidden'); });
+    var save = $('meSave');
+    if (save) save.addEventListener('click', function () {
+      var v = (($('meName') && $('meName').value) || '').trim(), mm = $('meMsg');
+      if (!v) { mm.style.color = 'var(--danger)'; mm.textContent = 'הזינו שם'; return; }
+      if (v === (window.C2B.userName || '')) { sMenu.classList.add('hidden'); return; }
+      mm.style.color = 'var(--muted)'; mm.textContent = 'שומר…';
+      //  מתעדכן ישירות ב-profiles (RLS org_isolation מתיר עדכון-עצמי) → נראה בכל מקום
+      //  שקורא profiles, כולל מסך ניהול-המשתמשים.
+      db.from('profiles').update({ full_name: v }).eq('user_id', window.C2B.userId).then(function (r) {
+        if (r.error) { mm.style.color = 'var(--danger)'; mm.textContent = 'שגיאה: ' + r.error.message; return; }
+        window.C2B.userName = v;
+        var w = $('whoami'); if (w) w.textContent = v + (window.C2B.role ? ' · ' + roleLabel(window.C2B.role) : '');
+        mm.style.color = 'var(--ok)'; mm.textContent = '✔ נשמר — עודכן בכל המקומות';
+        setTimeout(function () { sMenu.classList.add('hidden'); }, 900);
+      });
+    });
+  })();
   // forgot password → Supabase recovery email → reset.html
   $('forgot').addEventListener('click', function (e) {
     e.preventDefault();
