@@ -784,12 +784,13 @@
     e.preventDefault();
     var em = $('email').value.trim();
     if (!em) { $('loginErr').style.color = 'var(--danger)'; $('loginErr').textContent = 'הזינו אימייל למעלה ואז לחצו "שכחתי סיסמה".'; return; }
-    var _fc = window.__fleetCfg || {};
-    var redirect = 'https://crm.freedrive.co.il/reset.html' + (_fc.slug && !_fc.isMaster ? '?org=' + encodeURIComponent(_fc.slug) : '');
-    db.auth.resetPasswordForEmail(em, { redirectTo: redirect }).then(function (r) {
-      $('loginErr').style.color = r.error ? 'var(--danger)' : 'var(--ok)';
-      $('loginErr').textContent = r.error ? ('שגיאה: ' + r.error.message) : 'נשלח מייל לאיפוס סיסמה (אם החשבון קיים). בדקו את תיבת הדואר.';
-    });
+    $('loginErr').style.color = 'var(--muted)'; $('loginErr').textContent = 'שולח מייל איפוס…';
+    //  מייל איפוס מעוצב בעברית דרך reset-request (resend ישיר) — עוקף את מייל ה-Auth
+    //  האנגלי הלא-מעוצב של Supabase. הפונקציה מייצרת קישור-שחזור ושולחת מייל משלנו.
+    db.functions.invoke('reset-request', { body: { email: em } }).then(function (r) {
+      $('loginErr').style.color = (r && r.error) ? 'var(--danger)' : 'var(--ok)';
+      $('loginErr').textContent = (r && r.error) ? ('שגיאה: ' + r.error.message) : 'נשלח מייל לאיפוס סיסמה (אם החשבון קיים). בדקו את תיבת הדואר.';
+    }, function (e2) { $('loginErr').style.color = 'var(--danger)'; $('loginErr').textContent = 'שגיאה: ' + ((e2 && e2.message) || e2); });
   });
   // activity screen now lives in the header (next to the bell)
   $('activityBtn').addEventListener('click', function () { go('activity'); });
@@ -6835,9 +6836,8 @@
       // password reset for a user
       $('view').querySelectorAll('button[data-reset]').forEach(function (b) {
         b.addEventListener('click', function () {
-          var _fc = window.__fleetCfg || {};
-          var email = b.dataset.reset, redirect = 'https://crm.freedrive.co.il/reset.html' + (_fc.slug && !_fc.isMaster ? '?org=' + encodeURIComponent(_fc.slug) : '');
-          db.auth.resetPasswordForEmail(email, { redirectTo: redirect }).then(function (r) { alert(r.error ? ('שגיאה: ' + r.error.message) : ('נשלח מייל לאיפוס סיסמה אל ' + email)); });
+          var email = b.dataset.reset;
+          db.functions.invoke('reset-request', { body: { email: email } }).then(function (r) { alert((r && r.error) ? ('שגיאה: ' + r.error.message) : ('נשלח מייל לאיפוס סיסמה אל ' + email)); }, function (e2) { alert('שגיאה: ' + ((e2 && e2.message) || e2)); });
         });
       });
     });
