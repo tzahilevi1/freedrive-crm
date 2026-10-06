@@ -6508,6 +6508,9 @@
       //  מעשירים כל שורה דרך fleet_resolve הציבורי כדי שעמודת "צי" תציג "מחובר" נכון.
       var _fcO = window.__fleetCfg || {}, MO = window.__fleetMaster;
       function build() {
+      //  פתיחת-ארגון מותרת רק מהקשר המאסטר. מאסטר = הדגל מ-fleet-boot (שורש/נתיב-שמור),
+      //  או זיהוי עמיד לפי התאמת ה-URL למאסטר (מכסה גם גישה דרך /freedrive).
+      var isMaster = !!(_fcO.isMaster || (MO && _fcO.url && MO.url === _fcO.url));
       var orgById = {}; orgs.forEach(function (o) { orgById[o.id] = o; });
       var uCount = {}; profs.forEach(function (p) { uCount[p.org_id] = (uCount[p.org_id] || 0) + 1; });
       var rows = orgs.map(function (o) {
@@ -6524,7 +6527,7 @@
         '<p class="muted" style="font-size:12.5px;margin:0 0 14px;line-height:1.7">כל ארגון עובד על אותה מערכת עם נתונים מופרדים לחלוטין (org_id + RLS). פתיחת ארגון יוצרת גם מנהל ראשון ושולחת לו פרטי התחברות.</p>' +
         //  טופס פתיחת-ארגון ראשון (למעלה), שדות לרוחב ב-3 עמודות (מקס 2 שורות),
         //  ואז טבלת הארגונים. "שם המותג" (=orgs.name) הוא חובה.
-        '<div class="card cl-sub" style="margin:0 0 16px"><h3 class="cl-h">➕ פתיחת ארגון חדש</h3>' +
+        (isMaster ? ('<div class="card cl-sub" style="margin:0 0 16px"><h3 class="cl-h">➕ פתיחת ארגון חדש</h3>' +
           '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px 14px">' +
             '<div class="field" style="margin:0"><label>שם המותג <span style="color:var(--danger)">*</span></label><input class="inp" id="orgName" placeholder="למשל: אלפא ליסינג"></div>' +
             '<div class="field" style="margin:0"><label>מזהה באנגלית (slug)</label><input class="inp ltr" id="orgSlug" placeholder="alpha"></div>' +
@@ -6534,11 +6537,11 @@
           '</div>' +
           '<div style="margin-top:14px"><button class="btn" id="orgCreate">צור ארגון ושלח הזמנה למנהל</button> <span id="orgMsg" style="font-size:13px;margin-inline-start:10px"></span></div>' +
           '<div id="orgResult" style="margin-top:12px"></div>' +
-        '</div>' +
+        '</div>') : ('<div class="card cl-sub" style="margin:0 0 16px"><div class="sec-note">➕ פתיחת ארגון חדש זמינה רק מהקשר <b>המאסטר (פרי דרייב)</b>. עברו אליו דרך מתג-המותג למעלה, ושם פתחו את הארגון — כדי שייכנס לרישום-הצי ולא לתוך מותג בודד.</div></div>')) +
         '<div class="table-scroll"><table><thead><tr><th>#</th><th>ארגון</th><th>מזהה</th><th>ח.פ</th><th>משתמשים</th><th>נוצר</th><th>סטטוס</th><th>צי</th><th>מיתוג</th></tr></thead>' +
         '<tbody>' + (rows || '<tr><td colspan="9" class="empty">אין ארגונים</td></tr>') + '</tbody></table></div>' +
         '</div>');
-      $('orgCreate').addEventListener('click', function () {
+      if (isMaster && $('orgCreate')) $('orgCreate').addEventListener('click', function () {
         var name = $('orgName').value.trim(), slug = $('orgSlug').value.trim(), an = $('orgAdminName').value.trim(), ae = $('orgAdminEmail').value.trim(), regno = $('orgRegNo').value.trim();
         var msg = $('orgMsg');
         if (!name) { msg.style.color = 'var(--danger)'; msg.textContent = 'הזינו שם ארגון'; return; }
