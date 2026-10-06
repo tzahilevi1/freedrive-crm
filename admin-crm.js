@@ -545,12 +545,17 @@
         ? '📥 לידים לחלוקה' + (distOwner.name ? ' \u00b7 ' + distOwner.name : '')
         : (statusFilter ? stDef(statusFilter).label : 'כל הלידים');
       view('<div class="card"><div class="row-between"><h3>' + esc(title) + ' <span class="muted" id="lcount"></span></h3>' +
-        '<div><input class="inp" id="lq" placeholder="חיפוש חופשי…" style="width:170px"> <button class="btn btn-sm" id="lnew">+ ליד חדש</button> ' + (C.role === 'admin' ? '<button class="btn btn-ghost btn-sm" id="limport">⬆️ ייבוא</button> ' : '') + '<button class="btn btn-ghost btn-sm" id="lcsv">CSV</button> ' + leadCols.button() + '</div></div>' +
+        '<div><input class="inp" id="lq" placeholder="חיפוש חופשי…" style="width:170px"> <button class="btn btn-sm" id="lnew">+ ליד חדש</button> ' + (C.role === 'admin' ? '<button class="btn btn-ghost btn-sm" id="limport">⬆️ ייבוא</button> ' : '') + '<button class="btn btn-ghost btn-sm" id="lcsv">CSV</button> <button class="btn btn-ghost btn-sm" id="lxls">📊 אקסל</button> ' + leadCols.button() + '</div></div>' +
         '<div id="leadsBody"></div></div>');
       C.$('lnew').addEventListener('click', newLeadForm);
       if (C.$('limport')) C.$('limport').addEventListener('click', leadImportForm);
       C.$('lq').addEventListener('input', draw);
       C.$('lcsv').addEventListener('click', function () { C.exportCsv(listRows(), ['created_at', 'name', 'phone', 'email', 'car', 'source', 'status', 'city', 'brand', 'marketing_company', 'utm_source', 'utm_campaign', 'message'], 'free-drive-leads'); });
+      C.$('lxls').addEventListener('click', function () {
+        var xcols = ['created_at', 'name', 'phone', 'email', 'car', 'source', 'status', 'city', 'brand', 'marketing_company', 'utm_source', 'utm_campaign', 'utm_medium', 'campaign', 'adset_name', 'ad_name', 'message'];
+        var xlabels = { created_at: 'תאריך', name: 'שם', phone: 'טלפון', email: 'אימייל', car: 'רכב', source: 'מקור הגעה', status: 'סטטוס', city: 'עיר', brand: 'מותג', marketing_company: 'חברת שיווק', utm_source: 'פלטפורמה', utm_campaign: 'קמפיין', utm_medium: 'סוג תנועה', campaign: 'שם קמפיין', adset_name: 'סדרת מודעות', ad_name: 'מודעה', message: 'הודעה' };
+        C.exportXlsx(listRows(), xcols, 'free-drive-leads', xlabels);
+      });
       leadCols.bind();
       draw();
     });

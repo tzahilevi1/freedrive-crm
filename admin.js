@@ -8026,6 +8026,40 @@
     var a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }));
     a.download = name + '-' + new Date().toISOString().slice(0, 10) + '.csv'; a.click();
   };
+
+  // ---------- Excel (xlsx) export helper (shared) ----------
+  //  xlsx אמיתי (לא CSV בתחפושת) עם כותרות קריאות ו-RTL. הספרייה (SheetJS)
+  //  נטענת בעצלתיים רק בלחיצה הראשונה — מ-cdn.jsdelivr.net, שה-CSP כבר מתיר
+  //  (אותו host של supabase-js). labels: מפה אופציונלית col→כותרת עברית;
+  //  בלעדיה הכותרת היא שם השדה (כמו ב-CSV).
+  window.C2B.exportXlsx = function (rows, cols, name, labels) {
+    if (!rows || !rows.length) { alert('אין נתונים לייצוא'); return; }
+    function run() {
+      var header = cols.map(function (c) { return (labels && labels[c]) || c; });
+      var aoa = [header].concat(rows.map(function (r) {
+        return cols.map(function (c) { var v = r[c]; return v == null ? '' : (typeof v === 'object' ? JSON.stringify(v) : v); });
+      }));
+      var ws = XLSX.utils.aoa_to_sheet(aoa);
+      //  רוחב עמודה גמיש לפי אורך התוכן (בין 10 ל-50 תווים)
+      ws['!cols'] = header.map(function (h, i) {
+        var max = String(h).length;
+        aoa.forEach(function (row) { var l = String(row[i] == null ? '' : row[i]).length; if (l > max) max = l; });
+        return { wch: Math.min(Math.max(max + 2, 10), 50) };
+      });
+      var wb = XLSX.utils.book_new();
+      wb.Workbook = { Views: [{ RTL: true }] };   // גיליון מימין-לשמאל לעברית
+      XLSX.utils.book_append_sheet(wb, ws, 'נתונים');
+      XLSX.writeFile(wb, name + '-' + new Date().toISOString().slice(0, 10) + '.xlsx');
+    }
+    if (window.XLSX) return run();
+    //  טעינה עצלה — הספרייה (~400KB) נמשכת רק כשבאמת מייצאים לאקסל
+    var s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
+    s.onload = run;
+    s.onerror = function () { alert('טעינת מנוע האקסל נכשלה — נסו שוב, או השתמשו ב-CSV'); };
+    document.head.appendChild(s);
+  };
+
   window.C2B.refreshBadges = refreshBadges;
 
   // ---------- boot ----------
