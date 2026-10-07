@@ -6703,7 +6703,12 @@
 
   function renderUsers() {
     loading();
-    db.from('profiles').select('*').order('created_at', { ascending: true }).then(function (r) {
+    Promise.all([
+      db.from('profiles').select('*').order('created_at', { ascending: true }),
+      db.from('admin_config').select('value').eq('key', 'default_owner').maybeSingle()   // בעל-הלידים הנוכחי (למתג בעורך)
+    ]).then(function (res) {
+      var r = res[0];
+      window.C2B._leadOwner = (res[1] && res[1].data && res[1].data.value) || {};
       if (r.error) return errBox(r.error.message);
       var ps = r.data || [];
       //  מנהל סניף מנהל את הצוות שלו ולכן עורך משתמשים, אבל המסד חוסם
@@ -6894,6 +6899,15 @@
         '</label>' +
         '<span class="muted" style="font-size:11px;display:block;margin-top:2px">' + (p.role === 'branch' ? 'מנהל סניף אינו מקבל מיילי-לידים כברירת-מחדל — סמן כדי שיקבל. ' : 'כבה כדי להפסיק לקבל. ') + 'לא משפיע על מסך הלידים — הם ממשיכים להיכנס כרגיל.</span>'
         : '') +
+      // בעל-הלידים: כל ליד שנכנס בלי שיוך מפורש מוקצה אוטומטית למשתמש המסומן כאן
+      // (admin_config.default_owner + טריגר leads_default_owner). ערך יחיד = בחירת-יחיד:
+      // סימון משתמש אחר פשוט מעביר את התפקיד אליו. אדמין בלבד (RLS על admin_config).
+      ((window.C2B && window.C2B.role === 'admin') ?
+        '<label style="display:flex;gap:8px;align-items:center;margin-top:12px;font-size:13px">' +
+          '<input type="checkbox" id="ue_leadOwner"' + ((window.C2B._leadOwner && window.C2B._leadOwner.user_id === uid) ? ' checked' : '') + '> 📥 כל הלידים הנכנסים משויכים אליו (בעל-הלידים)' +
+        '</label>' +
+        '<span class="muted" style="font-size:11px;display:block;margin-top:2px">רק משתמש אחד יכול להיות מסומן — סימון כאן מעביר אליו את כל הלידים הנכנסים. לידים שכבר שויכו לא מושפעים; ביטול הסימון → לידים נכנסים נשארים לא-משויכים.</span>'
+        : '') +
       '<div class="field" style="margin-top:10px"><label>הערות</label><textarea class="inp" id="ue_notes" style="height:64px;width:100%">' + esc(p.notes || '') + '</textarea></div>' +
       '<div style="margin-top:12px"><button class="btn btn-sm" id="ue_save">💾 שמור פרטים</button> <button class="btn btn-ghost btn-sm" id="ue_close">✕ סגור</button> <span id="ue_msg" style="font-size:12.5px;margin-inline-start:8px"></span></div>' +
       '<p class="muted" style="font-size:11px;margin-top:8px">שדות אלו (שלוחת SIP, טלפון, סניף…) זמינים לחיבור אוטומציות, חיוג וניתוב בהמשך.</p>' +
@@ -6930,7 +6944,13 @@
         btn.disabled = false;
         if (u.error) { $('ue_msg').style.color = 'var(--danger)'; $('ue_msg').textContent = 'שגיאה: ' + u.error.message; return; }
         if (!u.data || !u.data.length) { $('ue_msg').style.color = 'var(--danger)'; $('ue_msg').textContent = 'לא נשמר — ודאו שאתם מחוברים כמנהל מערכת.'; return; }
-        $('ue_msg').style.color = 'var(--ok)'; $('ue_msg').textContent = '✔ נשמר'; renderUsers();
+        //  בעל-הלידים (default_owner) — ערך יחיד ב-admin_config = בחירת-יחיד בין כל המשתמשים.
+        var lo = $('ue_leadOwner'), owned = !!(window.C2B._leadOwner && window.C2B._leadOwner.user_id === uid), ownerVal = null;
+        if (lo && lo.checked && !owned) ownerVal = { user_id: uid, name: patch.full_name };
+        else if (lo && !lo.checked && owned) ownerVal = { user_id: null, name: null };
+        var done = function () { $('ue_msg').style.color = 'var(--ok)'; $('ue_msg').textContent = '✔ נשמר'; renderUsers(); };
+        if (ownerVal) db.from('admin_config').update({ value: ownerVal }).eq('key', 'default_owner').then(done, done);
+        else done();
       });
     });
   }
