@@ -725,6 +725,7 @@
     if (nav && nav.indexOf(':') > 0) nav = nav.split(':')[0];
     if (role === 'admin' || !role) return true;
     if (nav === 'activity' || nav === 'dashboard') return true;   // always available
+    if (nav === 'inventory' || nav === 'yad2stock') return true;  // מלאי יד2 — פתוח לכל הצוות (גידור ה-slug נפרד)
     if (nav && nav.indexOf('soon:') === 0) return false;
     if (SENIOR_VIEWS[nav]) return role === 'branch';   // מנהל מערכת כבר חזר true למעלה
     var views = (window.C2B && window.C2B.views) || DEFAULT_VIEWS[role] || ['dashboard'];
@@ -740,6 +741,10 @@
       if (it.dataset.senior && role !== 'admin' && role !== 'branch') { it.style.display = 'none'; return; }
       it.style.display = navAllowed(it.dataset.nav, role) ? '' : 'none';
     });
+    //  מלאי יד2: מסך הניהול רק בפרויקט yad2; מסך הקריאה רק בשאר המותגים.
+    var _slug = (window.__fleetCfg && window.__fleetCfg.slug) || '';
+    $('nav').querySelectorAll('[data-yad2]').forEach(function (it) { if (_slug !== 'yad2') it.style.display = 'none'; });
+    $('nav').querySelectorAll('[data-notyad2]').forEach(function (it) { if (_slug === 'yad2') it.style.display = 'none'; });
   }
   window.C2B.GRANTABLE_VIEWS = GRANTABLE_VIEWS;
   window.C2B.DEFAULT_VIEWS = DEFAULT_VIEWS;
@@ -964,6 +969,8 @@
     if (nav === 'activity') return window.C2B_renderActivity && window.C2B_renderActivity();
     if (navBase(nav) === 'calls') return renderCalls(nav.indexOf(':') > 0 ? nav.split(':')[1] : 'overview');
     if (nav === 'cars') return renderCars();
+    if (nav === 'inventory') return window.C2B_renderInventory && window.C2B_renderInventory();
+    if (nav === 'yad2stock') return window.C2B_renderYad2Stock && window.C2B_renderYad2Stock();
     if (nav === 'appointments') return renderAppointments();
     if (nav === 'tasks') return renderTasks();
     if (nav === 'analytics') return renderAnalytics();

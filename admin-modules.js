@@ -301,4 +301,113 @@
       $('view').querySelectorAll('[data-del]').forEach(function (b) { b.addEventListener('click', function () { db.from('field_options').delete().eq('id', b.dataset.del).then(function () { window.C2B_renderBranches(); }); }); });
     });
   };
+
+  /* ============================ מלאי יד2 ============================
+     yad2-Global הוא מקור-האמת היחיד. מסך הניהול (C2B_renderInventory) רק
+     בפרויקט yad2; מסך הקריאה (C2B_renderYad2Stock) בשאר המותגים — קורא חי
+     מ-yad2 (published+available), כך שמכירה/הוספה מתעדכנת מיד בכולם. */
+  var INV_ST = { intake: ['קליטה', '#8b6f2e'], available: ['זמין', '#1f8a4c'], reserved: ['שמור', '#b8860b'], sold: ['נמכר', '#c0392b'], hidden: ['מוסתר', '#6b7280'] };
+  function invImgs(car) { try { return Array.isArray(car.images) ? car.images : JSON.parse(car.images || '[]'); } catch (e) { return []; } }
+  function invCover(car) { var im = invImgs(car); return im.length ? im[Math.min(car.cover_idx || 0, im.length - 1)] : null; }
+  function invTitle(car) { return [car.make, car.model, car.year].filter(Boolean).join(' ') || 'רכב ללא שם'; }
+  function invBg(cov) { return "height:160px;background:#0b0f14;background-size:cover;background-position:center" + (cov ? ";background-image:url('" + esc(cov) + "')" : ""); }
+
+  window.C2B_renderInventory = function (statusFilter) {
+    view('<div class="loading">טוען מלאי…</div>');
+    db.from('inventory').select('*').order('created_at', { ascending: false }).then(function (r) {
+      if (r.error) return view('<div class="card"><h3>מלאי יד2</h3><p class="muted">שגיאה: ' + esc(r.error.message) + '</p></div>');
+      var rows = r.data || [], counts = {};
+      rows.forEach(function (c) { counts[c.status] = (counts[c.status] || 0) + 1; });
+      function chip(k, label) { return '<button class="btn btn-ghost btn-sm' + ((statusFilter || '') === k ? ' active' : '') + '" data-if="' + k + '">' + label + ' (' + (k ? (counts[k] || 0) : rows.length) + ')</button>'; }
+      var shown = statusFilter ? rows.filter(function (c) { return c.status === statusFilter; }) : rows;
+      var cards = shown.map(function (c) {
+        var cov = invCover(c), st = INV_ST[c.status] || ['—', '#888'];
+        return '<div class="card" data-edit="' + c.id + '" style="cursor:pointer;padding:0;overflow:hidden">' +
+          '<div style="' + invBg(cov) + ';position:relative">' + (cov ? '' : '<div style="height:100%;display:flex;align-items:center;justify-content:center;color:#44505f;font-size:13px">אין תמונה</div>') +
+            '<span style="position:absolute;top:8px;inset-inline-start:8px;background:' + st[1] + ';color:#fff;font-size:11px;font-weight:700;padding:2px 9px;border-radius:999px">' + st[0] + '</span>' +
+            (c.published ? '<span style="position:absolute;top:8px;inset-inline-end:8px;background:#111;color:#fff;font-size:11px;padding:2px 8px;border-radius:999px">● מפורסם</span>' : '') + '</div>' +
+          '<div style="padding:11px 13px"><div style="font-weight:800;font-size:15px">' + esc(invTitle(c)) + '</div>' +
+            '<div class="muted" style="font-size:12.5px;margin-top:2px">' + [c.hand ? 'יד ' + esc(c.hand) : '', c.km != null ? Number(c.km).toLocaleString('en-US') + ' ק"מ' : '', c.plate ? esc(c.plate) : ''].filter(Boolean).join(' · ') + '</div>' +
+            '<div style="font-weight:800;margin-top:6px">' + (c.price != null ? money(c.price) : '<span class="muted" style="font-weight:400">ללא מחיר</span>') + '</div>' +
+            (c.source === 'trade-in' ? '<div class="muted" style="font-size:11px;margin-top:4px">↩︎ טרייד-אין · ' + esc(c.source_org || '') + '</div>' : '') + '</div></div>';
+      }).join('');
+      view('<div class="row-between" style="margin-bottom:12px;align-items:center;flex-wrap:wrap;gap:8px"><h2 style="margin:0">🚗 מלאי יד2</h2><button class="btn btn-sm" id="invAdd">➕ הוסף רכב</button></div>' +
+        '<div id="invEdit"></div>' +
+        '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">' + chip('', 'הכל') + chip('intake', 'קליטה') + chip('available', 'זמין') + chip('reserved', 'שמור') + chip('sold', 'נמכר') + chip('hidden', 'מוסתר') + '</div>' +
+        '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px">' + (cards || '<div class="empty">אין רכבים בסטטוס זה</div>') + '</div>');
+      $('invAdd').addEventListener('click', function () { openInvEdit(null); });
+      $('view').querySelectorAll('[data-if]').forEach(function (b) { b.addEventListener('click', function () { window.C2B_renderInventory(b.dataset.if || ''); }); });
+      $('view').querySelectorAll('[data-edit]').forEach(function (b) { b.addEventListener('click', function () { openInvEdit(rows.filter(function (x) { return x.id === b.dataset.edit; })[0]); }); });
+    });
+  };
+
+  function invF(label, id, val, type) { return '<div class="field" style="margin:0"><label>' + label + '</label><input class="inp" id="' + id + '" type="' + (type || 'text') + '" value="' + esc(val == null ? '' : val) + '" style="width:100%"></div>'; }
+  function openInvEdit(car) {
+    car = car || {}; var isNew = !car.id, box = $('invEdit'); if (!box) return;
+    box.innerHTML = '<div class="card" style="border:1px solid var(--line);background:var(--surface-2)">' +
+      '<div class="row-between" style="margin-bottom:12px"><b>' + (isNew ? '➕ רכב חדש' : '✏️ ' + esc(invTitle(car))) + '</b><button class="btn btn-ghost btn-sm" id="invClose">✕ סגור</button></div>' +
+      '<div class="grid2">' + invF('יצרן', 'iv_make', car.make) + invF('דגם', 'iv_model', car.model) + invF('רמת גימור', 'iv_trim', car.trim) + invF('שנה', 'iv_year', car.year, 'number') + invF('יד', 'iv_hand', car.hand) + invF('ק"מ', 'iv_km', car.km, 'number') + invF('צבע', 'iv_color', car.color) + invF('סוג דלק', 'iv_fuel', car.fuel) + invF('מספר רכב', 'iv_plate', car.plate) + invF('מחיר (₪)', 'iv_price', car.price, 'number') + '</div>' +
+      '<div class="field" style="margin-top:10px"><label>תיאור</label><textarea class="inp" id="iv_desc" style="height:70px;width:100%">' + esc(car.description || '') + '</textarea></div>' +
+      '<div style="margin-top:12px"><label style="font-size:13px;color:var(--muted);display:block;margin-bottom:6px">תמונות (לחיצה על תמונה = קביעת שער)</label><div id="iv_imgs" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px"></div><input type="file" id="iv_file" accept="image/*" multiple style="font-size:13px"> <span id="iv_upmsg" class="muted" style="font-size:12px"></span></div>' +
+      '<div class="grid2" style="margin-top:12px"><div class="field" style="margin:0"><label>סטטוס</label><select class="inp" id="iv_status" style="width:100%">' + ['intake', 'available', 'reserved', 'sold', 'hidden'].map(function (s) { return '<option value="' + s + '"' + ((car.status || 'intake') === s ? ' selected' : '') + '>' + INV_ST[s][0] + '</option>'; }).join('') + '</select></div>' +
+        '<label style="display:flex;align-items:center;gap:8px;margin-top:22px;font-size:14px"><input type="checkbox" id="iv_pub"' + (car.published ? ' checked' : '') + '> מפורסם (מוצג באתרים וב-CRM-ים)</label></div>' +
+      '<div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-sm" id="iv_save">💾 שמור</button>' + (isNew ? '' : '<button class="btn btn-ghost btn-sm" id="iv_del" style="color:var(--danger)">🗑 מחק</button>') + '<span id="iv_msg" style="font-size:13px;margin-inline-start:8px"></span></div></div>';
+    box.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    var state = { images: invImgs(car).slice(), cover: car.cover_idx || 0 };
+    function paintImgs() {
+      $('iv_imgs').innerHTML = state.images.length ? state.images.map(function (u, i) {
+        return '<div style="position:relative;width:88px;height:66px;border-radius:8px;overflow:hidden;border:2px solid ' + (i === state.cover ? 'var(--brand)' : 'transparent') + '"><img src="' + esc(u) + '" style="width:100%;height:100%;object-fit:cover;cursor:pointer" data-cover="' + i + '"><button data-rmimg="' + i + '" style="position:absolute;top:1px;inset-inline-end:1px;background:rgba(0,0,0,.6);color:#fff;border:none;border-radius:50%;width:18px;height:18px;cursor:pointer;line-height:1">×</button></div>';
+      }).join('') : '<span class="muted" style="font-size:12px">אין תמונות עדיין</span>';
+      $('iv_imgs').querySelectorAll('[data-cover]').forEach(function (im) { im.addEventListener('click', function () { state.cover = +im.dataset.cover; paintImgs(); }); });
+      $('iv_imgs').querySelectorAll('[data-rmimg]').forEach(function (b) { b.addEventListener('click', function () { state.images.splice(+b.dataset.rmimg, 1); if (state.cover >= state.images.length) state.cover = 0; paintImgs(); }); });
+    }
+    paintImgs();
+    $('invClose').addEventListener('click', function () { box.innerHTML = ''; });
+    $('iv_file').addEventListener('change', function () {
+      var files = Array.prototype.slice.call(this.files || []); if (!files.length) return;
+      $('iv_upmsg').textContent = 'מעלה ' + files.length + '…'; var done = 0, errs = 0;
+      files.forEach(function (f) {
+        var path = (car.id || 'new') + '/' + Date.now() + '_' + Math.random().toString(36).slice(2, 7) + '.' + ((f.name.split('.').pop() || 'jpg').toLowerCase());
+        db.storage.from('inventory').upload(path, f, { upsert: true, contentType: f.type || 'image/jpeg' }).then(function (res) {
+          done++; if (res.error) errs++; else state.images.push(db.storage.from('inventory').getPublicUrl(path).data.publicUrl);
+          if (done === files.length) { $('iv_upmsg').textContent = errs ? (errs + ' נכשלו') : '✔ הועלו'; paintImgs(); }
+        });
+      });
+      this.value = '';
+    });
+    function val(id) { var e = $(id); return e && e.value.trim() ? e.value.trim() : null; }
+    function numv(id) { var e = $(id); return e && e.value !== '' ? Number(e.value) : null; }
+    $('iv_save').addEventListener('click', function () {
+      var patch = { make: val('iv_make'), model: val('iv_model'), trim: val('iv_trim'), year: numv('iv_year'), hand: val('iv_hand'), km: numv('iv_km'), color: val('iv_color'), fuel: val('iv_fuel'), plate: val('iv_plate'), price: numv('iv_price'), description: val('iv_desc'), images: state.images, cover_idx: state.cover, status: $('iv_status').value, published: $('iv_pub').checked };
+      var btn = this; btn.disabled = true; $('iv_msg').style.color = 'var(--muted)'; $('iv_msg').textContent = 'שומר…';
+      var p = car.id ? db.from('inventory').update(patch).eq('id', car.id) : db.from('inventory').insert(patch);
+      p.then(function (u) { btn.disabled = false; if (u.error) { $('iv_msg').style.color = 'var(--danger)'; $('iv_msg').textContent = 'שגיאה: ' + u.error.message; return; } $('iv_msg').style.color = 'var(--ok)'; $('iv_msg').textContent = '✔ נשמר'; window.C2B_renderInventory(); });
+    });
+    if ($('iv_del')) $('iv_del').addEventListener('click', function () { if (confirm('למחוק את הרכב?')) db.from('inventory').delete().eq('id', car.id).then(function () { window.C2B_renderInventory(); }); });
+  }
+
+  window.C2B_renderYad2Stock = function () {
+    view('<div class="loading">טוען מלאי יד2…</div>');
+    var M = window.__fleetMaster;
+    if (!M || !M.url) return view('<div class="card"><p class="muted">מאגר יד2 אינו זמין.</p></div>');
+    fetch(M.url + '/rest/v1/rpc/fleet_resolve', { method: 'POST', headers: { apikey: M.anon, Authorization: 'Bearer ' + M.anon, 'Content-Type': 'application/json' }, body: JSON.stringify({ p_slug: 'yad2' }) })
+      .then(function (r) { return r.json(); })
+      .then(function (res) {
+        var cfg = Array.isArray(res) ? res[0] : res;
+        var url = cfg && (cfg.supabase_url || cfg.url), anon = cfg && (cfg.anon_key || cfg.anon);
+        if (!url || !anon) return view('<div class="card"><p class="muted">מאגר יד2 לא נמצא.</p></div>');
+        return fetch(url + '/rest/v1/inventory?select=*&published=eq.true&status=eq.available&order=created_at.desc', { headers: { apikey: anon, Authorization: 'Bearer ' + anon } })
+          .then(function (r) { return r.json(); })
+          .then(function (cars) {
+            cars = Array.isArray(cars) ? cars : [];
+            var cards = cars.map(function (c) {
+              var cov = invCover(c);
+              return '<div class="card" style="padding:0;overflow:hidden"><div style="' + invBg(cov) + '">' + (cov ? '' : '<div style="height:100%;display:flex;align-items:center;justify-content:center;color:#44505f;font-size:13px">אין תמונה</div>') + '</div>' +
+                '<div style="padding:11px 13px"><div style="font-weight:800">' + esc(invTitle(c)) + '</div><div class="muted" style="font-size:12.5px;margin-top:2px">' + [c.hand ? 'יד ' + esc(c.hand) : '', c.km != null ? Number(c.km).toLocaleString('en-US') + ' ק"מ' : ''].filter(Boolean).join(' · ') + '</div><div style="font-weight:800;margin-top:6px">' + (c.price != null ? money(c.price) : '—') + '</div></div></div>';
+            }).join('');
+            view('<h2 style="margin:0 0 12px">🚗 מלאי יד2 <span class="muted" style="font-size:13px;font-weight:400">· ' + cars.length + ' רכבים זמינים · מתעדכן אוטומטית מ-יד2-Global</span></h2><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px">' + (cards || '<div class="empty">אין רכבים זמינים כרגע</div>') + '</div>');
+          });
+      })
+      .catch(function (e) { view('<div class="card"><p class="muted">שגיאה בטעינת מלאי יד2: ' + esc(String(e && e.message || e)) + '</p></div>'); });
+  };
 })();
