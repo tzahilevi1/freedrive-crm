@@ -6885,6 +6885,15 @@
         '<label id="ue_viewsWrap" class="hidden" style="display:flex;gap:8px;align-items:center;margin-top:10px;font-size:13px">' +
           '<input type="checkbox" id="ue_resetViews" checked> עדכן גם את המסכים לברירת המחדל של התפקיד החדש' +
         '</label>') +
+      // התראות-מייל על ליד חדש נשלחות למנהלי-המערכת של המותג (notify_staff). המתג
+      // מאפשר לכל מנהל לבחור אם לקבל אותן — בלי לגעת בהרשאות או בתפקיד. לא-אדמינים
+      // לא נמענים ממילא, ולכן המתג מוצג רק עבורם כדי לא להציג פקד שאינו עושה דבר.
+      ((p.role === 'admin') ?
+        '<label style="display:flex;gap:8px;align-items:center;margin-top:12px;font-size:13px">' +
+          '<input type="checkbox" id="ue_notifyLeads"' + (p.notify_leads === false ? '' : ' checked') + '> 📧 מקבל מייל על כל ליד חדש שנכנס' +
+        '</label>' +
+        '<span class="muted" style="font-size:11px;display:block;margin-top:2px">כבה כדי להפסיק לקבל התראות מייל על לידים חדשים. לא משפיע על מסך הלידים — הלידים ממשיכים להיכנס כרגיל.</span>'
+        : '') +
       '<div class="field" style="margin-top:10px"><label>הערות</label><textarea class="inp" id="ue_notes" style="height:64px;width:100%">' + esc(p.notes || '') + '</textarea></div>' +
       '<div style="margin-top:12px"><button class="btn btn-sm" id="ue_save">💾 שמור פרטים</button> <button class="btn btn-ghost btn-sm" id="ue_close">✕ סגור</button> <span id="ue_msg" style="font-size:12.5px;margin-inline-start:8px"></span></div>' +
       '<p class="muted" style="font-size:11px;margin-top:8px">שדות אלו (שלוחת SIP, טלפון, סניף…) זמינים לחיבור אוטומציות, חיוג וניתוב בהמשך.</p>' +
@@ -6906,6 +6915,7 @@
         branch: ($('ue_branch').value || '').trim() || null,
         notes: ($('ue_notes').value || '').trim() || null
       };
+      if ($('ue_notifyLeads')) patch.notify_leads = $('ue_notifyLeads').checked;
       var newRole = newRoleValue();
       if (!isSelf && newRole && newRole !== p.role) {
         patch.role = newRole;
