@@ -2064,7 +2064,17 @@
       C.$('view').addEventListener('input', onFieldEdit);
       C.$('view').addEventListener('change', onFieldEdit);
     }
-    $('dlContract').addEventListener('click', function () { contractView(lead, Object.assign({ id: deal.id, order_no: deal.order_no }, readForm())); });
+    $('dlContract').addEventListener('click', function () {
+      function openContract() { contractView(lead, Object.assign({ id: deal.id, order_no: deal.order_no }, readForm())); }
+      if (deal.id) { openContract(); return; }
+      //  עסקה חדשה שטרם נשמרה (מרוץ מול ה-auto-save בן 700ms) — שומרים קודם, אחרת
+      //  נפתח מסך-הסכם בלי id וה-contract_html לא יישמר (באג קישור-חתימה ריק).
+      clearTimeout(saveTimer); setState('💾 שומר עסקה…'); doSave();
+      var tries = 0, t = setInterval(function () {
+        if (deal.id) { clearInterval(t); openContract(); }
+        else if (++tries > 40) { clearInterval(t); setState('⚠ שמירה נכשלה — נסו שוב'); }
+      }, 150);
+    });
     // trade-in: pull vehicle details by plate number from the Ministry of Transport open dataset
     if ($('dlPlateLookup')) $('dlPlateLookup').addEventListener('click', function () {
       var plate = ($('dl_ti_plate').value || '').replace(/\D/g, ''); var msg = $('dlPlateMsg');
