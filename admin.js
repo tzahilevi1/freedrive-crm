@@ -725,7 +725,7 @@
     if (nav && nav.indexOf(':') > 0) nav = nav.split(':')[0];
     if (role === 'admin' || !role) return true;
     if (nav === 'activity' || nav === 'dashboard') return true;   // always available
-    if (nav === 'inventory' || nav === 'yad2stock') return true;  // מלאי יד2 — פתוח לכל הצוות (גידור ה-slug נפרד)
+    if (nav === 'inventory') return true;  // ניהול מלאי יד2 (yad2 בלבד; גידור ה-slug נפרד)
     if (nav && nav.indexOf('soon:') === 0) return false;
     if (SENIOR_VIEWS[nav]) return role === 'branch';   // מנהל מערכת כבר חזר true למעלה
     var views = (window.C2B && window.C2B.views) || DEFAULT_VIEWS[role] || ['dashboard'];
@@ -970,7 +970,6 @@
     if (navBase(nav) === 'calls') return renderCalls(nav.indexOf(':') > 0 ? nav.split(':')[1] : 'overview');
     if (nav === 'cars') return renderCars();
     if (nav === 'inventory') return window.C2B_renderInventory && window.C2B_renderInventory();
-    if (nav === 'yad2stock') return window.C2B_renderYad2Stock && window.C2B_renderYad2Stock();
     if (nav === 'appointments') return renderAppointments();
     if (nav === 'tasks') return renderTasks();
     if (nav === 'analytics') return renderAnalytics();
@@ -3260,11 +3259,34 @@
     };
   }
   window.C2B.mapCar = mapCar;
+  //  רכבי יד2 נמשכים מ-yad2-Global (מקור-יחיד) → ממופים לצורת-רכב עם condition='יד 2'.
+  //  כך הטאב "יד 2" בתצוגת "רכבים" מציג את המלאי המרכזי, בלי מסך נפרד.
+  function fetchYad2Used(cb) {
+    var M = window.__fleetMaster;
+    if (!M || !M.url) return cb([]);
+    fetch(M.url + '/rest/v1/rpc/fleet_resolve', { method: 'POST', headers: { apikey: M.anon, Authorization: 'Bearer ' + M.anon, 'Content-Type': 'application/json' }, body: JSON.stringify({ p_slug: 'yad2' }) })
+      .then(function (r) { return r.json(); })
+      .then(function (res) {
+        var cfg = Array.isArray(res) ? res[0] : res, url = cfg && (cfg.supabase_url || cfg.url), anon = cfg && (cfg.anon_key || cfg.anon);
+        if (!url || !anon) return cb([]);
+        return fetch(url + '/rest/v1/inventory?select=make,model,trim,year,km,hand,color,fuel,body_type,price,monthly,plate,images,cover_idx&published=eq.true&status=eq.available&order=created_at.desc', { headers: { apikey: anon, Authorization: 'Bearer ' + anon } })
+          .then(function (r) { return r.json(); })
+          .then(function (inv) {
+            cb((Array.isArray(inv) ? inv : []).map(function (v) {
+              var imgs = Array.isArray(v.images) ? v.images : [], cover = imgs.length ? imgs[Math.min(v.cover_idx || 0, imgs.length - 1)] : '';
+              return { brand: v.make, name: v.model, nameEn: '', trim: v.trim, engine: v.fuel || '', seats: '', colors: v.color || '', m: +v.monthly || 0, p: v.price, commission: 0, down: 0, code: v.plate || '', img: cover, condition: 'יד 2', year: v.year, cat: v.category, fuel: v.body_type || v.fuel, km: v.km, hand: v.hand, extra: {} };
+            }));
+          });
+      }).catch(function () { cb([]); });
+  }
   function renderCars() {
     loading();
     db.from('cars').select('*').order('brand', { ascending: true }).order('name', { ascending: true }).then(function (r) {
       if (r.error) { errBox(r.error.message); return; }
-      var cars = (r.data || []).map(mapCar);
+      var local = (r.data || []).map(mapCar);
+      var isYad2 = (window.__fleetCfg && window.__fleetCfg.slug) === 'yad2';
+      if (isYad2) { build(local); } else { fetchYad2Used(function (used) { build(local.filter(function (c) { return (c.condition || 'חדש') !== 'יד 2'; }).concat(used)); }); }
+      function build(cars) {
       var newN = cars.filter(function (c) { return c.condition !== 'יד 2'; }).length;
       var usedN = cars.length - newN;
       var curCond = 'חדש';   // טאב פעיל: חדש / יד 2
@@ -3307,6 +3329,7 @@
       $('cq').addEventListener('input', draw);
       //  אין כפתור סנכרון: pg_cron מריץ את sync-cars כל 15 דקות
       draw();
+      }   // end build()
     }).catch(function (e) { errBox(e.message || e); });
   }
 
