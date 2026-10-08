@@ -3023,9 +3023,17 @@
       //  רק לעסקה קיימת שאינה חתומה, ולא בריענון שאחרי שמירה (justSaved) כדי לא ליצור לולאה.
       if (deal.id && !deal.signature && !justSaved) {
         var _autoHtml = contractHTML(deal, null);
-        if (_autoHtml && _autoHtml.length > 50 && _autoHtml !== deal.contract_html) {
-          db.from('deals').update({ contract_html: _autoHtml }).eq('id', deal.id).then(function (r) {
-            if (!(r && r.error)) deal.contract_html = _autoHtml;
+        if (_autoHtml && _autoHtml.length > 50) {
+          db.from('deals').select('has_contract').eq('id', deal.id).single().then(function (pre) {
+            var wasContract = !!(pre && pre.data && pre.data.has_contract);
+            db.from('deals').update({ contract_html: _autoHtml }).eq('id', deal.id).then(function (r) {
+              if (r && r.error) return;
+              deal.contract_html = _autoHtml;
+              if (!wasContract) {   // יצירה ראשונה → רישום פעילות + קידום סטטוס (במקום מה ש-cSend עשה)
+                logActivity(lead.id, 'contract', 'נוצר הסכם לחתימה' + (deal.order_no ? ' #' + deal.order_no : ''));
+                if (lead.status !== 'quote_sent' && lead.status !== 'won' && lead.status !== 'lost') changeStatus(lead.id, 'quote_sent', lead);
+              }
+            });
           });
         }
       }
@@ -3076,7 +3084,7 @@
               }).join('') + '</select>' : '') +
           (signed ? '' : '<label style="font-size:12.5px;color:var(--muted)">בעלות:</label><select class="inp" id="cOwnership" style="width:auto;padding:5px 8px"><option value="01"' + (curOwn === '01' ? ' selected' : '') + '>בעלים 01</option><option value="00"' + (curOwn === '00' ? ' selected' : '') + '>בעלים 00</option></select>') +
           '<button class="btn btn-sm" id="cPdf">⬇ הורד PDF</button>' +
-          '<button class="btn btn-ghost btn-sm" id="cPrint" title="פותח את חלון ההדפסה של הדפדפן — איכות טקסט מיטבית">🖨 הדפסה</button>' + (signed ? '' : '<button class="btn btn-ghost btn-sm" id="cSend">💾 שמור הסכם</button>') + '</div></div>' +
+          '<button class="btn btn-ghost btn-sm" id="cPrint" title="פותח את חלון ההדפסה של הדפדפן — איכות טקסט מיטבית">🖨 הדפסה</button>' + '</div></div>' +
       (justSaved && !signed ? '<div class="card" style="border:2px solid var(--ok);background:rgba(22,163,74,.07);text-align:center;padding:22px">' +'<div style="font-size:40px;line-height:1">✅</div>' +'<h2 style="margin:10px 0 4px;font-size:22px">ההסכם נוצר בהצלחה' + (deal.order_no ? ' #' + esc(deal.order_no) : '') + '</h2>' +'<p class="muted" style="margin:0;font-size:14px">השלב הבא: שלחו אותו ללקוח לחתימה באחת הדרכים שלמטה.</p></div>' : '') +
       (signed ? '<div class="card" style="border:1px solid var(--ok);background:rgba(22,163,74,.06)"><b style="color:var(--ok)">✅ ההסכם נחתם על ידי הלקוח' + (deal.signed_at ? ' בתאריך ' + fmt(deal.signed_at) : '') + '</b><span class="muted"> — למטה ההסכם המלא עם חתימת הלקוח.</span></div>' : '') +
       // תצוגה כ"דף A4" ממורכז — בדיוק כפי שהלקוח והמסמך המודפס נראים; overflow-x מונע גלישת טקסט מחוץ למסמך
@@ -3102,7 +3110,7 @@
                 '<button class="btn btn-ghost btn-sm" id="cCopy" style="width:100%;justify-content:center">העתק קישור</button></div>' +
             '</div>' +
             '<div id="cLinkMsg" style="font-size:13px;margin-top:12px"></div>'
-            : '<p class="muted">לחצו <b>💾 שמור הסכם</b> תחילה — לאחר השמירה יופיעו כאן דרכי השליחה ללקוח (מייל / וואטסאפ / SMS / העתקת קישור).</p>') + '</div>')
+            : '<p class="muted">השלימו את פרטי העסקה — ההסכם נשמר אוטומטית, ואז יופיעו כאן דרכי השליחה ללקוח (מייל / וואטסאפ / SMS / קישור).</p>') + '</div>')
     );
     var $ = C.$;
     $('cBack').addEventListener('click', function () { dealForm(lead, deal); });
