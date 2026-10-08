@@ -3008,6 +3008,17 @@
                 || act.filter(function (t) { return t.is_default; })[0]
                 || act[0] || null;
       CT_ACTIVE_BODY = chosen ? (chosen.body || '') : '';
+      //  שמירה-אוטומטית: ברגע ש"יצירת הסכם לחתימה" נפתח, ההסכם נשמר מיד (contract_html) →
+      //  has_contract הופך ל-✅, ולא ניתן יותר לשלוח קישור-חתימה עם הסכם ריק (באג #4752).
+      //  רק לעסקה קיימת שאינה חתומה, ולא בריענון שאחרי שמירה (justSaved) כדי לא ליצור לולאה.
+      if (deal.id && !deal.signature && !justSaved) {
+        var _autoHtml = contractHTML(deal, null);
+        if (_autoHtml && _autoHtml.length > 50 && _autoHtml !== deal.contract_html) {
+          db.from('deals').update({ contract_html: _autoHtml }).eq('id', deal.id).then(function (r) {
+            if (!(r && r.error)) deal.contract_html = _autoHtml;
+          });
+        }
+      }
       contractViewInner(lead, deal, justSaved, act, chosen);
     });
   }

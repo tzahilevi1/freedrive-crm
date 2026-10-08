@@ -6,7 +6,7 @@
   'use strict';
   var MASTER_URL = 'https://gfwopgoydfqiouratcpc.supabase.co';
   var MASTER_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdmd29wZ295ZGZxaW91cmF0Y3BjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc2NDg0NTUsImV4cCI6MjEwMzIyNDQ1NX0.ukPDUGS7KjYgD7jAhzSqAEKo_eJ8gQwsHMqTBGXeux8';
-  var V = '202610080639';
+  var V = '202610081124';
   var APP = ['/admin.js', '/admin-crm.js', '/admin-modules.js'];
   //  נתיבים שאינם slug של מותג — נטענים כמאסטר (שורש/דפים ישנים).
   var RESERVED = { '': 1, 'admin.html': 1, 'index.html': 1, 'reset.html': 1, 'sign.html': 1, 'back.html': 1 };
