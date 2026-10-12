@@ -7103,7 +7103,10 @@
       db.from('appointments').select('status,appt_at'),
       db.from('profiles').select('user_id,full_name'),
       //  ההיסטוריה שלי בלבד — RLS מסנן, ולכן אין צורך בתנאי כאן
-      db.from('ai_messages').select('*').order('created_at', { ascending: true }).limit(600)
+      db.from('ai_messages').select('*').order('created_at', { ascending: true }).limit(600),
+      //  סכומי-על היסטוריים (ספירה בלבד, זול) — שהעוזר יכיר את התמונה המלאה ולא רק 90 יום
+      db.from('leads').select('id', { count: 'exact', head: true }).is('deleted_at', null),
+      db.from('deals').select('id', { count: 'exact', head: true })
     ]).then(function (res) {
       if (res[0].error) return errBox(res[0].error.message);
       var leads = res[0].data || [], deals = res[1].data || [], pays = res[2].data || [],
@@ -7126,6 +7129,23 @@
                           .sort(function (a, b) { return new Date(a.status_changed_at || a.created_at) - new Date(b.status_changed_at || b.created_at); });
       var overdue = tasks.filter(function (t) { return !t.done && t.due_at && new Date(t.due_at) < now; });
       var head = 'נתוני ' + bn() + ' · ' + new Date().toLocaleDateString('he-IL') + ' · 90 הימים האחרונים' + '\n';
+
+      // ---- חלונות-זמן, פילוח יומי וסכומי-על (שהעוזר "ידע הכל"); מחושב מה-leads המסוננים-RLS → בטוח-תפקיד ----
+      var d0 = new Date(); d0.setHours(0, 0, 0, 0);
+      var today0 = d0.getTime(), lt = function (l) { return new Date(l.created_at).getTime(); };
+      var inWin = function (from, to) { return leads.filter(function (l) { var t = lt(l); return t >= from && (to == null || t < to); }); };
+      var ansCnt = function (arr) { return arr.filter(function (l) { return l.first_response_at; }).length; };
+      var wToday = inWin(today0, null), wYest = inWin(today0 - 864e5, today0),
+          w7 = inWin(today0 - 6 * 864e5, null), w30 = inWin(today0 - 29 * 864e5, null);
+      var totalAll = (res[7] && typeof res[7].count === 'number') ? res[7].count : leads.length;
+      var dealsAll = (res[8] && typeof res[8].count === 'number') ? res[8].count : deals.length;
+      var daily = [];
+      for (var di = 13; di >= 0; di--) { var da = today0 - di * 864e5; daily.push({ d: new Date(da), c: inWin(da, da + 864e5).length }); }
+      var dailyTxt = daily.map(function (x) { return x.d.getDate() + '/' + (x.d.getMonth() + 1) + '=' + x.c; }).join(', ');
+      head += '- לידים לפי זמן: היום ' + wToday.length + ' (נענו ' + ansCnt(wToday) + '), אתמול ' + wYest.length +
+          ', 7 ימים ' + w7.length + ', 30 יום ' + w30.length + ', 90 יום ' + leads.length + ', סה"כ היסטורי ' + totalAll + '.\n' +
+        '- פילוח יומי (14 ימים אחרונים, יום/חודש=כמות): ' + dailyTxt + '.\n' +
+        '- סה"כ עסקאות היסטורי: ' + dealsAll + '.\n';
 
       var ctx;
       if (role === 'sales') {
