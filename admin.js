@@ -310,6 +310,9 @@
     $('login').classList.add('hidden'); $('app').classList.remove('hidden'); $('whoami').textContent = session.user.email;
     window.C2B.userId = session.user.id;
     window.C2B.userName = session.user.email;
+    //  עסקאות-Global (/orders): סכימה אחרת לגמרי (global_deals, בלי leads/field_options) —
+    //  המודול admin-orders.js משתלט, ושום טעינת-מותג למטה לא רצה (הייתה נכשלת שם).
+    if (_FC.slug === 'orders' && window.C2B_startOrders) { window.C2B_startOrders(session); return; }
     window.C2B.lists = {};
     loadLists();
     loadConfig();
