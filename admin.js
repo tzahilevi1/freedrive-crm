@@ -244,7 +244,7 @@
     if (!el) {
       el = document.createElement('div'); el.id = 'mfaGate';
       el.style.cssText = 'position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;background:rgba(15,20,25,.6)';
-      el.innerHTML = '<div dir="rtl" style="background:#fff;max-width:390px;width:92%;border-radius:16px;padding:24px;box-shadow:0 20px 60px rgba(0,0,0,.35)"><div id="mfaInner"></div></div>';
+      el.innerHTML = '<div dir="rtl" style="background:#fff;max-width:390px;width:92%;border-radius:16px;padding:24px;box-shadow:0 20px 60px rgba(0,0,0,.35);text-align:center"><div id="mfaInner"></div></div>';
       document.body.appendChild(el);
     }
     return el.querySelector('#mfaInner');
