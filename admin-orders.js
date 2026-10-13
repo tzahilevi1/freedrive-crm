@@ -104,6 +104,7 @@
   // ---------- מעטפת: מחליף את תפריט-המותג ----------
   function navItems() {
     var it = [['dash', '📊', 'דשבורד הזמנות'], ['deals', '📦', 'עסקאות להזמנה'], ['suppliers', '🏭', 'ספקים']];
+    if (canFin()) it.push(['stock', '🏬', 'מלאי רכש']);
     if (canFin()) it.push(['profit', '💰', 'רווחיות']);
     it.push(['log', '🕒', 'יומן פעולות']);
     if (isAdmin()) { it.push(['statuses', '🎨', 'סטטוסים']); it.push(['users', '👥', 'משתמשים והרשאות']); }
@@ -140,7 +141,7 @@
     try { sessionStorage.setItem('orders_view', r); } catch (e) {}
     Array.prototype.forEach.call(document.querySelectorAll('#onav [data-onav]'), function (el) { el.classList.toggle('active', el.dataset.onav === r); });
     C.closeDrawer && C.closeDrawer();
-    ({ dash: renderDash, deals: renderDeals, suppliers: renderSuppliers, profit: renderProfit, log: renderLog,
+    ({ dash: renderDash, deals: renderDeals, suppliers: renderSuppliers, stock: renderStock, profit: renderProfit, log: renderLog,
        statuses: renderStatuses, users: renderUsers })[r]();
   }
   function rerender() { route(S.cur); }
@@ -383,6 +384,7 @@
       '<div style="align-self:end"><button class="btn btn-sm" id="dSaveDeal">💾 שמור</button></div></div>' : '') + '</div>';
 
     h += '<div class="osec"><h4>🚚 הזמנת רכב מספק</h4><div class="oform">' +
+      '<div><label>שייך למלאי רכש <span class="muted" style="font-weight:400">· ממלא ספק+עלות ומוריד יחידה</span></label><select class="inp" id="vStock"' + (w ? '' : ' disabled') + '><option value="">— ללא שיוך —</option></select></div>' +
       '<div><label>ספק</label><select class="inp" id="vSup"' + (w ? '' : ' disabled') + '>' + opt('', '— בחר ספק —', v.supplier_id || '') +
         S.suppliers.map(function (s) { return opt(s.id, s.name, v.supplier_id || ''); }).join('') + '</select></div>' +
       fld('איש קשר בספק', 'vContact', v.supplier_contact, 'text', !w) + fld('טלפון ספק', 'vPhone', v.supplier_phone, 'tel', !w) +
@@ -417,6 +419,18 @@
   function val(id) { var el = $(id); return el ? el.value : ''; }
   function wireDeal(id) {
     $('dClose').addEventListener('click', function () { C.closeDrawer(); });
+    //  בורר-מלאי: רשימת לוטים זמינים (stock_pick — בלי עלות, פתוח גם לנציג)
+    var vst = $('vStock');
+    if (vst) db.rpc('stock_pick').then(function (r) {
+      var cur = (S.vo[id] || {}).stock_item_id || '';
+      var list = (r && r.data) || [], seen = false;
+      var html = '<option value="">— ללא שיוך —</option>' + list.map(function (x) {
+        if (String(x.id) === String(cur)) seen = true;
+        return '<option value="' + esc(x.id) + '"' + (String(x.id) === String(cur) ? ' selected' : '') + '>' + esc(x.label) + ' · זמין ' + x.available + '</option>';
+      }).join('');
+      if (cur && !seen) html += '<option value="' + esc(cur) + '" selected>(הלוט המשויך — לא פעיל/אזל)</option>';
+      vst.innerHTML = html;
+    }, function () {});
     var dSt = $('dSt'); if (dSt) dSt.addEventListener('change', function () { setStatus([id], +dSt.value, function () { refresh(id); }); });
     var sd = $('dSaveDeal');
     if (sd) sd.addEventListener('click', function () {
@@ -429,7 +443,8 @@
       var p = { supplier_id: val('vSup') ? +val('vSup') : null, supplier_contact: val('vContact').trim() || null, supplier_phone: val('vPhone').trim() || null,
         order_no: val('vOrder').trim() || null, ordered_at: val('vOrdered') || null, eta: val('vEta') || null, delivered_at: val('vDelivered') || null,
         vin: val('vVin').trim() || null, plate: val('vPlate').trim() || null, color_ordered: val('vColorO').trim() || null,
-        color_received: val('vColorR').trim() || null, internal_notes: val('vNotes').trim() || null, updated_at: new Date().toISOString() };
+        color_received: val('vColorR').trim() || null, internal_notes: val('vNotes').trim() || null,
+        stock_item_id: val('vStock') || null, updated_at: new Date().toISOString() };
       var cur = S.vo[id];
       (cur ? db.from('vehicle_orders').update(p).eq('id', cur.id) : db.from('vehicle_orders').insert(Object.assign({ deal_id: id }, p))).then(function (r) {
         if (r.error) return toast('שגיאה: ' + r.error.message, true); refresh(id, 'ההזמנה נשמרה');
@@ -538,6 +553,83 @@
           db.from('suppliers').delete().eq('id', b.dataset.sd).then(function (r) {
             if (r.error) return toast('לא ניתן למחוק (ספק בשימוש בהזמנה): ' + r.error.message, true); toast('נמחק'); renderSuppliers();
           });
+        });
+      });
+    });
+  }
+
+  // ================= מלאי רכש =================
+  function renderStock() {
+    loading(); var tk = S.token;
+    loadAll(function () {   // S.byId (סטטוסי-עסקאות) לחישוב "משויך"
+      if (tk !== S.token) return;
+      Promise.all([
+        db.from('stock_items').select('*').order('created_at', { ascending: false }),
+        db.from('vehicle_orders').select('deal_id,stock_item_id')
+      ]).then(function (r) {
+        if (r[0].error) return errBox(r[0].error.message);
+        var items = r[0].data || [];
+        //  משויך = עסקאות לא-מבוטלות שקושרו ללוט (נמסר עדיין "צורך" יחידה)
+        var alloc = {};
+        (r[1].data || []).forEach(function (v) {
+          if (!v.stock_item_id) return;
+          var d = S.byId[v.deal_id], s = d && stById(d.global_status_id);
+          if (s && s.key === 'cancelled') return;
+          alloc[v.stock_item_id] = (alloc[v.stock_item_id] || 0) + 1;
+        });
+        var totUnits = 0, totAvail = 0, totVal = 0;
+        items.forEach(function (it) { var a = alloc[it.id] || 0; totUnits += it.qty; totAvail += Math.max(0, it.qty - a); totVal += (+it.unit_cost || 0) * it.qty; });
+        var label = function (it) { return esc([it.make, it.model, it.trim, it.year, it.color].filter(Boolean).join(' ')); };
+
+        var h = '<div class="row-between" style="margin-bottom:12px"><h2 style="margin:0">🏬 מלאי רכש <span class="muted onum" style="font-size:15px">(' + totAvail + ' זמין מתוך ' + totUnits + ')</span></h2><button class="btn btn-ghost btn-sm" id="stX">📥 ייצוא Excel</button></div>' +
+          '<p class="muted" style="margin:-4px 0 14px;font-size:13px">כל לוט = רכבים שרכשנו מראש. "זמין" = כמה שנרכש פחות כמה ששויכו לעסקאות (עסקה שבוטלה משחררת יחידה). שיוך נעשה בכרטיס העסקה → "הזמנת רכב".</p>' +
+          '<div class="cards">' + C.stat('סה"כ יחידות', totUnits) + C.stat('זמינות', totAvail, null, null, (totUnits - totAvail) + ' שויכו') + C.stat('שווי מלאי (עלות)', nis(totVal)) + '</div>';
+        h += '<div class="card"><h3>לוט חדש</h3><div class="oform">' +
+          fld('יצרן', 'nkMake', '') + fld('דגם *', 'nkModel', '') + fld('גימור', 'nkTrim', '') + fld('שנה', 'nkYear', '', 'number') + fld('צבע', 'nkColor', '') +
+          '<div><label>ספק</label><select class="inp" id="nkSup">' + opt('', '— ללא —', '') + S.suppliers.map(function (s) { return opt(s.id, s.name, ''); }).join('') + '</select></div>' +
+          fld('עלות ליחידה ₪', 'nkCost', '', 'number') + fld('כמות שנרכשה', 'nkQty', '1', 'number') +
+          '<div style="align-self:end"><button class="btn btn-sm" id="nkAdd">➕ הוסף לוט</button></div></div></div>';
+        h += '<div class="card" style="padding:0"><div class="table-scroll"><table><thead><tr><th>פריט</th><th>ספק</th><th>עלות ליחידה</th><th>נרכש</th><th>שויך</th><th>זמין</th><th>שווי לוט</th><th></th></tr></thead><tbody>' +
+          (items.map(function (it) {
+            var a = alloc[it.id] || 0, av = it.qty - a;
+            return '<tr><td><b>' + label(it) + '</b>' + (it.active ? '' : ' <span class="muted">(לא פעיל)</span>') + '</td>' +
+              '<td>' + esc(supName(it.supplier_id)) + '</td>' +
+              '<td><input class="inp onum" type="number" data-cost="' + it.id + '" value="' + (it.unit_cost == null ? '' : it.unit_cost) + '" style="width:110px"></td>' +
+              '<td><input class="inp onum" type="number" data-qty="' + it.id + '" value="' + it.qty + '" style="width:80px"></td>' +
+              '<td class="onum">' + a + '</td>' +
+              '<td class="onum" style="font-weight:700;color:' + (av > 0 ? 'var(--ok)' : 'var(--danger)') + '">' + av + '</td>' +
+              '<td class="onum">' + nis((+it.unit_cost || 0) * it.qty) + '</td>' +
+              '<td><button class="btn btn-sm" data-sk="' + it.id + '">💾</button> ' + (a ? '' : '<button class="btn btn-ghost btn-sm" data-skd="' + it.id + '">🗑</button>') + '</td></tr>';
+          }).join('') || '<tr><td colspan="8" class="muted" style="padding:24px;text-align:center">אין מלאי עדיין — הוסף לוט ראשון למעלה</td></tr>') + '</tbody></table></div></div>';
+        view(h);
+        var q = function (a, i) { return $('view').querySelector('[' + a + '="' + i + '"]'); };
+        $('nkAdd').addEventListener('click', function () {
+          var model = val('nkModel').trim(); if (!model) return toast('הזן דגם', true);
+          db.from('stock_items').insert({ make: val('nkMake').trim() || null, model: model, trim: val('nkTrim').trim() || null,
+            year: num(val('nkYear')), color: val('nkColor').trim() || null, supplier_id: val('nkSup') ? +val('nkSup') : null,
+            unit_cost: num(val('nkCost')), qty: parseInt(val('nkQty'), 10) || 1, created_by: S.uid }).then(function (r) {
+            if (r.error) return toast('שגיאה: ' + r.error.message, true); toast('הלוט נוסף'); renderStock();
+          });
+        });
+        $('view').querySelectorAll('[data-sk]').forEach(function (b) {
+          b.addEventListener('click', function () {
+            var i = b.dataset.sk;
+            db.from('stock_items').update({ unit_cost: q('data-cost', i).value === '' ? null : (parseFloat(q('data-cost', i).value) || 0), qty: parseInt(q('data-qty', i).value, 10) || 0 }).eq('id', i).then(function (r) {
+              if (r.error) return toast('שגיאה: ' + r.error.message, true); toast('נשמר (מחיר-הרכישה בעסקאות המשויכות יתעדכן בשיוך הבא)');
+            });
+          });
+        });
+        $('view').querySelectorAll('[data-skd]').forEach(function (b) {
+          b.addEventListener('click', function () {
+            db.from('stock_items').delete().eq('id', b.dataset.skd).then(function (r) {
+              if (r.error) return toast('לא ניתן למחוק (לוט משויך לעסקה): ' + r.error.message, true); toast('נמחק'); renderStock();
+            });
+          });
+        });
+        $('stX').addEventListener('click', function () {
+          C.exportXlsx(items.map(function (it) { var a = alloc[it.id] || 0; return { item: [it.make, it.model, it.trim, it.year, it.color].filter(Boolean).join(' '), supplier: supName(it.supplier_id), unit_cost: it.unit_cost, qty: it.qty, allocated: a, available: it.qty - a, value: (+it.unit_cost || 0) * it.qty }; }),
+            ['item', 'supplier', 'unit_cost', 'qty', 'allocated', 'available', 'value'], 'stock',
+            { item: 'פריט', supplier: 'ספק', unit_cost: 'עלות ליחידה', qty: 'נרכש', allocated: 'שויך', available: 'זמין', value: 'שווי לוט' });
         });
       });
     });
