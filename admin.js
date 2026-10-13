@@ -289,16 +289,17 @@
   //  force=true (כניסה חדשה עם סיסמה) → תמיד קוד. force=false/undefined (רענון) →
   //  דילוג אם כבר אומת ב-12 השעות האחרונות בדפדפן הזה (כדי לא לשלוח קוד בכל רענון).
   function ensureMfa(session, onOk, force) {
-    if (force) {
-      //  כניסה חדשה עם סיסמה: מבטלים כל חלון-דילוג ישן. אחרת אימות מסשן קודם
-      //  (otpOkUntil גלובלי) היה מאפשר לעקוף את הקוד ברענון של מסך-הקוד — הכניסה
-      //  לארגון בלי אימות. החלון נשמר מחדש רק אחרי verify_login_otp מוצלח.
-      try { localStorage.removeItem('otpOkUntil'); } catch (e) { }
-    } else {
-      var okUntil = 0; try { okUntil = +localStorage.getItem('otpOkUntil') || 0; } catch (e) { }
-      if (Date.now() < okUntil) { onOk(); return; }
-    }
-    otpSendAndPrompt(onOk);
+    //  מקור-האמת הוא ה-DB: otp_ok() בבסיס-הנתונים בודק שהסשן הנוכחי אימת קוד,
+    //  וה-RLS כולו תלוי בכך — כך שאי-אפשר לעקוף את הקוד בכניסה ישירה ל-API.
+    //  force (כניסה חדשה עם סיסמה) → תמיד מבקשים קוד. פרויקט שבו otp_ok עדיין
+    //  לא קיים (מותג שטרם הוסב) → נפילה להתנהגות-ה-localStorage הישנה, בלי רגרסיה.
+    if (force) { try { localStorage.removeItem('otpOkUntil'); } catch (e) { } otpSendAndPrompt(onOk); return; }
+    var byLocal = function () { var u = 0; try { u = +localStorage.getItem('otpOkUntil') || 0; } catch (e) { } return Date.now() < u; };
+    db.rpc('otp_ok').then(function (r) {
+      if (r && !r.error && r.data === true) { onOk(); return; }           // הסשן אומת ב-DB
+      if (r && r.error && byLocal()) { onOk(); return; }                   // otp_ok חסר (מותג ישן) → מנגנון ישן
+      otpSendAndPrompt(onOk);
+    }, function () { if (byLocal()) onOk(); else otpSendAndPrompt(onOk); });
   }
   //  showApp נקראה פעמיים: פעם מטופס ההתחברות, ופעם מ-getSession של טעינת
   //  העמוד שהבטחתו נפתרת אחרי ההתחברות ומוצאת סשן קיים. התוצאה הייתה 24
