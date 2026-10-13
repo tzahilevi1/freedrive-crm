@@ -386,6 +386,160 @@
     if ($('iv_del')) $('iv_del').addEventListener('click', function () { if (confirm('למחוק את הרכב?')) db.from('inventory').delete().eq('id', car.id).then(function () { window.C2B_renderInventory(); }); });
   }
 
+  /* ============================ ספקי יד2 ============================ */
+  window.C2B_renderTenderSuppliers = function () {
+    view('<div class="loading">טוען ספקים…</div>');
+    db.from('tender_suppliers').select('*').order('name').then(function (r) {
+      if (r.error) return view('<div class="card"><h3>ספקי יד2</h3><p class="muted">שגיאה: ' + esc(r.error.message) + '</p></div>');
+      var rows = r.data || [];
+      var list = rows.map(function (s) {
+        return '<div class="card" style="padding:12px 14px;display:flex;justify-content:space-between;align-items:center;gap:10px">' +
+          '<div><div style="font-weight:700">' + esc(s.name) + (s.active ? '' : ' <span class="muted" style="font-weight:400">(לא פעיל)</span>') + '</div>' +
+          '<div class="muted" style="font-size:12.5px;margin-top:2px">' + [s.phone ? '📱 ' + esc(s.phone) : '', s.email ? '✉ ' + esc(s.email) : '', s.region ? esc(s.region) : ''].filter(Boolean).join(' · ') + '</div></div>' +
+          '<div style="display:flex;gap:6px"><button class="btn btn-ghost btn-sm" data-sedit="' + s.id + '">✏️</button><button class="btn btn-ghost btn-sm" data-sdel="' + s.id + '" style="color:var(--danger)">🗑</button></div></div>';
+      }).join('');
+      view('<div class="row-between" style="margin-bottom:12px;align-items:center"><h2 style="margin:0">🤝 ספקי יד2 <span class="muted" style="font-size:13px;font-weight:400">· ' + rows.length + '</span></h2><button class="btn btn-sm" id="supAdd">➕ ספק חדש</button></div>' +
+        '<div id="supEdit"></div><div style="display:flex;flex-direction:column;gap:8px">' + (list || '<div class="empty">אין ספקים עדיין</div>') + '</div>');
+      $('supAdd').addEventListener('click', function () { openSupEdit(null); });
+      $('view').querySelectorAll('[data-sedit]').forEach(function (b) { b.addEventListener('click', function () { openSupEdit(rows.filter(function (x) { return x.id == b.dataset.sedit; })[0]); }); });
+      $('view').querySelectorAll('[data-sdel]').forEach(function (b) { b.addEventListener('click', function () { if (confirm('למחוק את הספק?')) db.from('tender_suppliers').delete().eq('id', b.dataset.sdel).then(function () { window.C2B_renderTenderSuppliers(); }); }); });
+    });
+  };
+  function supF(label, id, val, type) { return '<div class="field" style="margin:0"><label>' + label + '</label><input class="inp" id="' + id + '" type="' + (type || 'text') + '" value="' + esc(val == null ? '' : val) + '" style="width:100%"></div>'; }
+  function openSupEdit(s) {
+    s = s || {}; var isNew = !s.id, box = $('supEdit'); if (!box) return;
+    box.innerHTML = '<div class="card" style="border:1px solid var(--line);background:var(--surface-2)">' +
+      '<div class="row-between" style="margin-bottom:12px"><b>' + (isNew ? '➕ ספק חדש' : '✏️ ' + esc(s.name)) + '</b><button class="btn btn-ghost btn-sm" id="supClose">✕</button></div>' +
+      '<div class="grid2">' + supF('שם', 'sp_name', s.name) + supF('טלפון WhatsApp', 'sp_phone', s.phone, 'tel') + supF('מייל', 'sp_email', s.email, 'email') + supF('אזור', 'sp_region', s.region) + '</div>' +
+      '<div class="field" style="margin-top:10px"><label>הערות</label><textarea class="inp" id="sp_notes" style="height:54px;width:100%">' + esc(s.notes || '') + '</textarea></div>' +
+      '<label style="display:flex;align-items:center;gap:8px;margin-top:12px;font-size:14px"><input type="checkbox" id="sp_active"' + (s.active === false ? '' : ' checked') + '> פעיל (מקבל מכרזים)</label>' +
+      '<div style="margin-top:14px;display:flex;gap:8px"><button class="btn btn-sm" id="sp_save">💾 שמור</button><span id="sp_msg" style="font-size:13px"></span></div></div>';
+    box.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    $('supClose').addEventListener('click', function () { box.innerHTML = ''; });
+    function v(id) { var e = $(id); return e && e.value.trim() ? e.value.trim() : null; }
+    $('sp_save').addEventListener('click', function () {
+      if (!v('sp_name')) { $('sp_msg').textContent = 'חובה שם'; return; }
+      var patch = { name: v('sp_name'), phone: v('sp_phone'), email: v('sp_email'), region: v('sp_region'), notes: v('sp_notes'), active: $('sp_active').checked };
+      var p = s.id ? db.from('tender_suppliers').update(patch).eq('id', s.id) : db.from('tender_suppliers').insert(patch);
+      p.then(function (u) { if (u.error) { $('sp_msg').style.color = 'var(--danger)'; $('sp_msg').textContent = u.error.message; return; } window.C2B_renderTenderSuppliers(); });
+    });
+  }
+
+  /* ============================ מכרזי יד2 ============================ */
+  var TND_ST = { draft: ['טיוטה', '#8b6f2e'], open: ['פתוח', '#1f8a4c'], awarded: ['הוכרז זוכה', '#2563eb'], closed: ['נסגר', '#6b7280'], cancelled: ['בוטל', '#c0392b'] };
+  function tndTitle(t) { return [t.car_make, t.car_model, t.car_trim, t.car_year].filter(Boolean).join(' ') || 'רכב ללא שם'; }
+  function remainTxt(t) {
+    if (t.status !== 'open' || !t.closes_at) return '';
+    var ms = new Date(t.closes_at).getTime() - Date.now();
+    if (ms <= 0) return 'נסגר ברגעים הקרובים';
+    var m = Math.round(ms / 60000); return 'נותרו ~' + (m >= 60 ? Math.floor(m / 60) + ' ש\'' : m + ' דק\'');
+  }
+  window.C2B_renderTenders = function (statusFilter) {
+    view('<div class="loading">טוען מכרזים…</div>');
+    db.from('tenders').select('*').order('created_at', { ascending: false }).then(function (r) {
+      if (r.error) return view('<div class="card"><h3>מכרזים</h3><p class="muted">שגיאה: ' + esc(r.error.message) + '</p></div>');
+      var rows = r.data || [], counts = {};
+      rows.forEach(function (t) { counts[t.status] = (counts[t.status] || 0) + 1; });
+      function chip(k, label) { return '<button class="btn btn-ghost btn-sm' + ((statusFilter || '') === k ? ' active' : '') + '" data-tf="' + k + '">' + label + ' (' + (k ? (counts[k] || 0) : rows.length) + ')</button>'; }
+      var shown = statusFilter ? rows.filter(function (t) { return t.status === statusFilter; }) : rows;
+      var cards = shown.map(function (t) {
+        var st = TND_ST[t.status] || ['—', '#888'], rem = remainTxt(t);
+        return '<div class="card" data-topen="' + t.id + '" style="cursor:pointer;padding:13px 15px">' +
+          '<div class="row-between" style="align-items:flex-start"><div style="font-weight:800;font-size:15px">' + esc(tndTitle(t)) + '</div>' +
+          '<span style="background:' + st[1] + ';color:#fff;font-size:11px;font-weight:700;padding:2px 9px;border-radius:999px;white-space:nowrap">' + st[0] + '</span></div>' +
+          '<div class="muted" style="font-size:12.5px;margin-top:4px">' + [t.agent_name ? '👤 ' + esc(t.agent_name) : '', t.agent_org ? esc(t.agent_org) : '', t.car_plate ? esc(t.car_plate) : ''].filter(Boolean).join(' · ') + '</div>' +
+          (rem ? '<div style="font-size:12px;color:var(--brand);margin-top:4px">⏱ ' + rem + '</div>' : '') + '</div>';
+      }).join('');
+      view('<div class="row-between" style="margin-bottom:12px;align-items:center;flex-wrap:wrap;gap:8px"><h2 style="margin:0">🔨 מכרזים</h2><button class="btn btn-sm" id="tndAdd">➕ מכרז חדש</button></div>' +
+        '<div id="tndEdit"></div>' +
+        '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">' + chip('', 'הכל') + chip('draft', 'טיוטה') + chip('open', 'פתוח') + chip('awarded', 'זוכה') + chip('closed', 'נסגר') + '</div>' +
+        '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px">' + (cards || '<div class="empty">אין מכרזים בסטטוס זה</div>') + '</div>');
+      $('tndAdd').addEventListener('click', function () { openTndCreate(); });
+      $('view').querySelectorAll('[data-tf]').forEach(function (b) { b.addEventListener('click', function () { window.C2B_renderTenders(b.dataset.tf || ''); }); });
+      $('view').querySelectorAll('[data-topen]').forEach(function (b) { b.addEventListener('click', function () { openTnd(rows.filter(function (x) { return x.id === b.dataset.topen; })[0]); }); });
+    });
+  };
+  function tndF(label, id, val, type) { return '<div class="field" style="margin:0"><label>' + label + '</label><input class="inp" id="' + id + '" type="' + (type || 'text') + '" value="' + esc(val == null ? '' : val) + '" style="width:100%"></div>'; }
+  function openTndCreate() {
+    var box = $('tndEdit'); if (!box) return;
+    box.innerHTML = '<div class="card" style="border:1px solid var(--line);background:var(--surface-2)">' +
+      '<div class="row-between" style="margin-bottom:12px"><b>➕ מכרז חדש</b><button class="btn btn-ghost btn-sm" id="tndClose">✕</button></div>' +
+      '<div style="font-size:13px;color:var(--brand);font-weight:600;margin-bottom:6px">פרטי הרכב</div>' +
+      '<div class="grid2">' + tndF('יצרן', 'tn_make') + tndF('דגם', 'tn_model') + tndF('רמת גימור', 'tn_trim') + tndF('שנה', 'tn_year', '', 'number') + tndF('ק"מ', 'tn_km', '', 'number') + tndF('יד', 'tn_hand') + tndF('צבע', 'tn_color') + tndF('מספר רכב', 'tn_plate') + '</div>' +
+      '<div class="field" style="margin-top:10px"><label>תיאור / הערות</label><textarea class="inp" id="tn_desc" style="height:54px;width:100%"></textarea></div>' +
+      '<div style="font-size:13px;color:var(--brand);font-weight:600;margin:14px 0 6px">הסוכן המבקש</div>' +
+      '<div class="grid2">' + tndF('שם הסוכן', 'tn_aname') + tndF('טלפון', 'tn_aphone', '', 'tel') + tndF('מייל (לתוצאה)', 'tn_aemail', '', 'email') + tndF('מותג/סניף', 'tn_aorg') + '</div>' +
+      '<div style="margin-top:14px;display:flex;gap:8px"><button class="btn btn-sm" id="tn_create">💾 צור מכרז</button><span id="tn_msg" style="font-size:13px"></span></div></div>';
+    box.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    $('tndClose').addEventListener('click', function () { box.innerHTML = ''; });
+    function v(id) { var e = $(id); return e && e.value.trim() ? e.value.trim() : null; }
+    function nv(id) { var e = $(id); return e && e.value !== '' ? Number(e.value) : null; }
+    $('tn_create').addEventListener('click', function () {
+      if (!v('tn_make') || !v('tn_aname')) { $('tn_msg').textContent = 'חובה יצרן ושם סוכן'; return; }
+      var patch = { car_make: v('tn_make'), car_model: v('tn_model'), car_trim: v('tn_trim'), car_year: nv('tn_year'), car_km: nv('tn_km'), car_hand: v('tn_hand'), car_color: v('tn_color'), car_plate: v('tn_plate'), car_description: v('tn_desc'), agent_name: v('tn_aname'), agent_phone: v('tn_aphone'), agent_email: v('tn_aemail'), agent_org: v('tn_aorg'), status: 'draft' };
+      this.disabled = true;
+      db.from('tenders').insert(patch).then(function (u) { if (u.error) { $('tn_msg').style.color = 'var(--danger)'; $('tn_msg').textContent = u.error.message; return; } window.C2B_renderTenders(); });
+    });
+  }
+  function openTnd(t) {
+    if (!t) return; var box = $('tndEdit'); if (!box) return;
+    box.innerHTML = '<div class="card" style="border:1px solid var(--line);background:var(--surface-2)"><div class="loading">טוען…</div></div>';
+    box.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    db.from('tender_bids').select('*').eq('tender_id', t.id).order('amount', { ascending: false }).order('created_at', { ascending: true }).then(function (r) {
+      var bids = (r && r.data) || [], st = TND_ST[t.status] || ['—', '#888'];
+      var bidRows = bids.map(function (b, i) {
+        var win = (t.winner_bid_id && b.id === t.winner_bid_id) || (!t.winner_bid_id && i === 0 && t.status === 'open');
+        return '<tr style="' + (win ? 'background:rgba(37,99,235,.12)' : '') + '"><td style="padding:6px 8px">' + (i + 1) + (win ? ' 🏆' : '') + '</td><td style="padding:6px 8px">' + esc(b.supplier_name || '—') + '</td><td style="padding:6px 8px;font-weight:700;text-align:left">' + money(b.amount) + '</td><td style="padding:6px 8px;color:var(--muted);font-size:12px">' + when(b.created_at) + '</td></tr>';
+      }).join('');
+      var spec = [t.car_hand ? 'יד ' + esc(t.car_hand) : '', t.car_km != null ? Number(t.car_km).toLocaleString('en-US') + ' ק"מ' : '', t.car_color ? esc(t.car_color) : '', t.car_plate ? esc(t.car_plate) : ''].filter(Boolean).join(' · ');
+      var canSend = (t.status === 'draft' || t.status === 'open'), canClose = (t.status === 'open' || t.status === 'draft');
+      box.innerHTML = '<div class="card" style="border:1px solid var(--line);background:var(--surface-2)">' +
+        '<div class="row-between" style="margin-bottom:8px"><b>🔨 ' + esc(tndTitle(t)) + ' <span style="background:' + st[1] + ';color:#fff;font-size:11px;padding:2px 9px;border-radius:999px;margin-inline-start:6px">' + st[0] + '</span></b><button class="btn btn-ghost btn-sm" id="tndClose">✕</button></div>' +
+        '<div class="muted" style="font-size:13px">' + spec + '</div>' +
+        (t.car_description ? '<div style="font-size:13px;margin-top:6px">' + esc(t.car_description) + '</div>' : '') +
+        '<div class="muted" style="font-size:12.5px;margin-top:8px">👤 ' + esc(t.agent_name || '—') + [t.agent_phone ? ' · ' + esc(t.agent_phone) : '', t.agent_email ? ' · ' + esc(t.agent_email) : '', t.agent_org ? ' · ' + esc(t.agent_org) : ''].join('') + '</div>' +
+        (t.closes_at ? '<div class="muted" style="font-size:12.5px;margin-top:4px">⏱ סגירה: ' + when(t.closes_at) + ' · ' + remainTxt(t) + '</div>' : '') +
+        '<div style="display:flex;gap:8px;flex-wrap:wrap;margin:14px 0">' +
+          (canSend ? '<button class="btn btn-sm" id="tnd_send">📤 שלח לכל הסוחרים</button>' : '') +
+          (t.status === 'open' ? '<button class="btn btn-ghost btn-sm" id="tnd_ext">⏱ הארך שעה</button>' : '') +
+          (canClose ? '<button class="btn btn-ghost btn-sm" id="tnd_award">🏁 סגור והכרז זוכה</button>' : '') +
+        '</div><div id="tnd_sendout"></div>' +
+        '<div style="font-weight:700;margin:12px 0 6px">הצעות (' + bids.length + ')</div>' +
+        (bids.length ? '<div style="overflow:auto"><table style="width:100%;border-collapse:collapse;font-size:14px"><thead><tr style="color:var(--muted);text-align:right;font-size:12px"><th style="padding:6px 8px">#</th><th style="padding:6px 8px">סוחר</th><th style="padding:6px 8px;text-align:left">סכום</th><th style="padding:6px 8px">זמן</th></tr></thead><tbody>' + bidRows + '</tbody></table></div>' : '<div class="muted" style="font-size:13px">אין הצעות עדיין.</div>') +
+        '</div>';
+      $('tndClose').addEventListener('click', function () { box.innerHTML = ''; });
+      if ($('tnd_send')) $('tnd_send').addEventListener('click', function () {
+        var btn = this; btn.disabled = true; btn.textContent = 'שולח…';
+        db.rpc('tender_send', { p_tender_id: t.id }).then(function (res) {
+          btn.disabled = false; btn.textContent = '📤 שלח שוב';
+          if (res.error || !res.data || !res.data.ok) { $('tnd_sendout').innerHTML = '<div class="muted" style="color:var(--danger);font-size:13px">שגיאה: ' + esc((res.error && res.error.message) || (res.data && res.data.error) || 'נכשל') + '</div>'; return; }
+          var sups = res.data.suppliers || [], car = res.data.car || tndTitle(t);
+          var items = sups.map(function (s) {
+            var waTxt = encodeURIComponent('בקשת הצעת מחיר לרכב: ' + car + '\nלהגשת הצעה (עד שעה): ' + s.link);
+            var wa = s.phone ? 'https://wa.me/' + intlPhone(s.phone) + '?text=' + waTxt : null;
+            return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:7px 10px;border-bottom:1px solid var(--line)">' +
+              '<div style="font-size:13px">' + esc(s.name) + (s.emailed ? ' <span style="color:var(--ok);font-size:11px">✓ מייל נשלח</span>' : (s.phone ? '' : ' <span class="muted" style="font-size:11px">אין טלפון/מייל</span>')) + '</div>' +
+              (wa ? '<a class="btn btn-sm" href="' + wa + '" target="_blank" rel="noopener" style="white-space:nowrap">🟢 שלח WhatsApp</a>' : '') + '</div>';
+          }).join('');
+          $('tnd_sendout').innerHTML = '<div class="card" style="padding:0;margin-top:4px"><div style="padding:8px 10px;font-weight:700;font-size:13px;background:var(--surface-2)">נשלח ל-' + sups.length + ' סוחרים · לחץ לשליחת WhatsApp אישית</div>' + (items || '') + '</div>';
+          db.from('tenders').select('status,closes_at').eq('id', t.id).single().then(function (u) { if (u.data) { t.status = u.data.status; t.closes_at = u.data.closes_at; } });
+        });
+      });
+      if ($('tnd_ext')) $('tnd_ext').addEventListener('click', function () {
+        var nc = new Date(Date.now() + 3600000).toISOString();
+        db.from('tenders').update({ closes_at: nc }).eq('id', t.id).then(function () { t.closes_at = nc; openTnd(t); });
+      });
+      if ($('tnd_award')) $('tnd_award').addEventListener('click', function () {
+        if (!confirm('לסגור את המכרז ולהכריז על ההצעה הגבוהה כזוכה?')) return;
+        var btn = this; btn.disabled = true;
+        db.rpc('tender_award_now', { p_tender_id: t.id }).then(function (res) {
+          if (res.error || !res.data || !res.data.ok) { alert('שגיאה: ' + ((res.error && res.error.message) || (res.data && res.data.error) || 'נכשל')); btn.disabled = false; return; }
+          window.C2B_renderTenders();
+        });
+      });
+    });
+  }
+
   window.C2B_renderYad2Stock = function () {
     view('<div class="loading">טוען מלאי יד2…</div>');
     var M = window.__fleetMaster;

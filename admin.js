@@ -730,6 +730,7 @@
     if (role === 'admin' || !role) return true;
     if (nav === 'activity' || nav === 'dashboard') return true;   // always available
     if (nav === 'inventory') return true;  // ניהול מלאי יד2 (yad2 בלבד; גידור ה-slug נפרד)
+    if (nav === 'tenders' || nav === 'tender_suppliers') return true;  // מכרזי יד2 (yad2 בלבד; גידור ה-slug נפרד)
     if (nav && nav.indexOf('soon:') === 0) return false;
     if (SENIOR_VIEWS[nav]) return role === 'branch';   // מנהל מערכת כבר חזר true למעלה
     var views = (window.C2B && window.C2B.views) || DEFAULT_VIEWS[role] || ['dashboard'];
@@ -974,6 +975,8 @@
     if (navBase(nav) === 'calls') return renderCalls(nav.indexOf(':') > 0 ? nav.split(':')[1] : 'overview');
     if (nav === 'cars') return renderCars();
     if (nav === 'inventory') return window.C2B_renderInventory && window.C2B_renderInventory();
+    if (nav === 'tenders') return window.C2B_renderTenders && window.C2B_renderTenders();
+    if (nav === 'tender_suppliers') return window.C2B_renderTenderSuppliers && window.C2B_renderTenderSuppliers();
     if (nav === 'appointments') return renderAppointments();
     if (nav === 'tasks') return renderTasks();
     if (nav === 'analytics') return renderAnalytics();

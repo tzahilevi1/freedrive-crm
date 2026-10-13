@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>הגשת הצעת מחיר</title>
+<style>
+  :root{--bg:#0e1117;--card:#171c26;--line:#2a3140;--txt:#e9edf4;--mut:#9aa6b8;--accent:#ffd21a;--ok:#2ec77a}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:"Segoe UI",Arial,sans-serif;background:var(--bg);color:var(--txt);
+       min-height:100vh;display:flex;align-items:flex-start;justify-content:center;padding:24px 16px}
+  .wrap{width:100%;max-width:520px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:22px;margin-bottom:16px}
+  h1{font-size:20px;margin:0 0 4px}
+  .sub{color:var(--mut);font-size:13px;margin-bottom:16px}
+  .car{font-size:18px;font-weight:700;margin:0 0 6px}
+  .spec{color:var(--mut);font-size:14px;line-height:1.7}
+  .spec b{color:var(--txt);font-weight:600}
+  label{display:block;font-size:13px;color:var(--mut);margin:14px 0 6px}
+  input,textarea{width:100%;background:#0e131b;border:1px solid var(--line);border-radius:10px;
+       color:var(--txt);padding:13px 14px;font-size:16px;font-family:inherit}
+  input:focus,textarea:focus{outline:none;border-color:var(--accent)}
+  .amount{font-size:22px;font-weight:700;letter-spacing:.5px}
+  button{width:100%;margin-top:18px;background:var(--accent);color:#111;border:0;border-radius:12px;
+       padding:15px;font-size:17px;font-weight:700;cursor:pointer}
+  button:disabled{opacity:.5;cursor:default}
+  .msg{padding:14px;border-radius:12px;font-size:15px;text-align:center}
+  .msg.ok{background:rgba(46,199,122,.12);color:var(--ok);border:1px solid rgba(46,199,122,.3)}
+  .msg.err{background:rgba(255,80,80,.1);color:#ff8a8a;border:1px solid rgba(255,80,80,.3)}
+  .cur{position:relative}.cur:after{content:"₪";position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--mut)}
+  .prev{font-size:13px;color:var(--mut);margin-top:10px;text-align:center}
+  .imgs{display:flex;gap:6px;overflow:auto;margin:10px 0}
+  .imgs img{height:92px;border-radius:8px;flex:0 0 auto}
+</style>
+</head>
+<body>
+<div class="wrap" id="app"><div class="card"><div class="sub">טוען…</div></div></div>
+<script>
+const SB_URL="https://xppsvottiwbjsjlusief.supabase.co";
+const SB_ANON="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhwcHN2b3R0aXdianNqbHVzaWVmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTEzNzg5NzYsImV4cCI6MjEwNjk1NDk3Nn0.b9WaudA0bbKQiEVHtdnChETITTq4Tl2oPEHPnzwWsZo";
+async function rpc(fn,body){
+  const r=await fetch(SB_URL+"/rest/v1/rpc/"+fn,{method:"POST",
+    headers:{apikey:SB_ANON,Authorization:"Bearer "+SB_ANON,"Content-Type":"application/json"},
+    body:JSON.stringify(body||{})});
+  if(!r.ok) throw new Error("http "+r.status);
+  return r.json();
+}
+const qs=new URLSearchParams(location.search), TOK=qs.get("t")||"";
+const app=document.getElementById("app");
+function el(tag,cls,txt){const e=document.createElement(tag);if(cls)e.className=cls;if(txt!=null)e.textContent=txt;return e;}
+function card(){const c=el("div","card");app.innerHTML="";app.appendChild(c);return c;}
+function money(n){return Number(n||0).toLocaleString("he-IL");}
+function specLine(k,v){if(v==null||v==="")return null;const d=el("div");d.appendChild(el("span",null,k+": "));const b=el("b");b.textContent=v;d.appendChild(b);return d;}
+
+async function load(){
+  if(!TOK){card().appendChild(el("div","msg err","קישור לא תקין."));return;}
+  let d;
+  try{ d=await rpc("tender_public_get",{p_token:TOK}); }catch(e){ card().appendChild(el("div","msg err","שגיאה בטעינה. נסה שוב.")); return; }
+  if(!d||!d.ok){card().appendChild(el("div","msg err","הקישור לא נמצא או פג תוקף."));return;}
+  const c=card();
+  c.appendChild(el("h1","","בקשת הצעת מחיר"));
+  c.appendChild(el("div","sub","הצעתך אישית וחסויה — לא נחשפת לסוחרים אחרים."));
+  const car=d.car||{};
+  const title=[car.make,car.model,car.trim,car.year].filter(Boolean).join(" ");
+  c.appendChild(el("div","car",title||"רכב"));
+  const spec=el("div","spec");
+  [["יד",car.hand],["ק\"מ",car.km!=null?money(car.km):null],["צבע",car.color],["מספר רישוי",car.plate]]
+    .forEach(([k,v])=>{const l=specLine(k,v);if(l)spec.appendChild(l);});
+  if(car.description){const p=el("div");p.style.marginTop="8px";p.textContent=car.description;spec.appendChild(p);}
+  c.appendChild(spec);
+  if(Array.isArray(car.images)&&car.images.length){
+    const box=el("div","imgs");
+    car.images.slice(0,8).forEach(u=>{if(typeof u==="string"&&u.startsWith("https")){const im=el("img");im.src=u;im.loading="lazy";box.appendChild(im);}});
+    if(box.children.length)c.appendChild(box);
+  }
+
+  if(!d.open){
+    const m=el("div","msg err",d.status==="awarded"||d.status==="closed"?"המכרז נסגר — תודה.":"המכרז אינו פתוח כעת.");
+    m.style.marginTop="16px";c.appendChild(m);
+    if(d.my_bid)c.appendChild(el("div","prev","ההצעה שלך: "+money(d.my_bid.amount)+" ₪"));
+    return;
+  }
+
+  const lab=el("label","","סכום ההצעה שלך (₪)");c.appendChild(lab);
+  const wrapCur=el("div","cur");
+  const amt=el("input");amt.type="number";amt.inputMode="numeric";amt.min="1";amt.className="amount";amt.placeholder="0";
+  if(d.my_bid)amt.value=d.my_bid.amount;
+  wrapCur.appendChild(amt);c.appendChild(wrapCur);
+  c.appendChild(el("label","","הערה (לא חובה)"));
+  const note=el("textarea");note.rows=2;note.maxLength=300;if(d.my_bid&&d.my_bid.note)note.value=d.my_bid.note;c.appendChild(note);
+  const btn=el("button","",d.my_bid?"עדכון ההצעה":"שליחת הצעה");c.appendChild(btn);
+  if(d.my_bid)c.appendChild(el("div","prev","הצעה קיימת: "+money(d.my_bid.amount)+" ₪ — אפשר לעדכן עד סגירה."));
+  btn.onclick=async()=>{
+    const v=Number(amt.value);
+    if(!v||v<=0){amt.focus();return;}
+    btn.disabled=true;btn.textContent="שולח…";
+    try{
+      const res=await rpc("tender_bid_submit",{p_token:TOK,p_amount:v,p_note:note.value||null});
+      if(res&&res.ok){
+        const cc=card();cc.appendChild(el("h1","","✓ ההצעה נקלטה"));
+        cc.appendChild(el("div","msg ok","הצעתך על סך "+money(v)+" ₪ התקבלה. נעדכן אותך אם תזכה."));
+      }else{
+        btn.disabled=false;btn.textContent="שליחת הצעה";
+        c.appendChild(el("div","msg err",res&&res.error==="closed"?"המכרז נסגר.":"שליחה נכשלה, נסה שוב."));
+      }
+    }catch(e){btn.disabled=false;btn.textContent="שליחת הצעה";c.appendChild(el("div","msg err","שגיאת רשת, נסה שוב."));}
+  };
+}
+load();
+</script>
+</body>
+</html>
