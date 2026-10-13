@@ -405,7 +405,8 @@
         '<div style="margin-top:10px"><button class="btn btn-sm" id="fSave">💾 שמור מחיר</button></div></div>';
     }
 
-    h += '<div class="osec"><h4>📎 מסמכים</h4><div id="dDocs" class="muted">טוען…</div>' +
+    h += '<div class="osec"><h4>📎 מסמכים מהמותג <span class="muted" style="font-weight:400;font-size:12px">· הסכם + מה שהסוכן העלה (ת"ז, תמונות…)</span></h4><div id="dBrandDocs" class="muted">טוען…</div></div>';
+    h += '<div class="osec"><h4>📎 מסמכי הזמנה <span class="muted" style="font-weight:400;font-size:12px">· נוספו כאן במחלקת ההזמנות</span></h4><div id="dDocs" class="muted">טוען…</div>' +
       '<div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;align-items:center"><select class="inp" id="docKind" style="width:160px">' +
       DOC_KINDS.map(function (k) { return opt(k, k, ''); }).join('') + '</select><input type="file" id="docFile"><button class="btn btn-ghost btn-sm" id="docUp">⬆ העלה</button></div></div>';
     h += '<div class="osec"><h4>🕒 היסטוריה</h4><ul class="otl" id="dTl"><li class="muted">טוען…</li></ul></div>';
@@ -419,17 +420,35 @@
   function val(id) { var el = $(id); return el ? el.value : ''; }
   function wireDeal(id) {
     $('dClose').addEventListener('click', function () { C.closeDrawer(); });
-    //  בורר-מלאי: רשימת לוטים זמינים (stock_pick — בלי עלות, פתוח גם לנציג)
-    var vst = $('vStock');
+    //  אוטו-מילוי פרטי-הספק (איש-קשר+טלפון) בבחירת ספק — חוסך הקלדה, נשאר נ-ער.
+    var supMap = {}; S.suppliers.forEach(function (s) { supMap[s.id] = s; });
+    var fillSup = function (sid) {
+      var s = supMap[sid]; if (!s) return;
+      var c = $('vContact'), ph = $('vPhone');
+      if (c) c.value = s.contact || ''; if (ph) ph.value = s.phone || '';
+    };
+    var vsup = $('vSup');
+    if (vsup) vsup.addEventListener('change', function () { fillSup(+vsup.value); });
+
+    //  בורר-מלאי: בחירת לוט ממלאת ספק (→ואיש-קשר/טלפון) + צבע-שהוזמן; מחיר-הרכישה
+    //  מוזן בשמירה (טריגר vo_stock_sync). stock_pick מחזיר פרטי-רכב בלי עלות.
+    var vst = $('vStock'), stockMap = {};
     if (vst) db.rpc('stock_pick').then(function (r) {
       var cur = (S.vo[id] || {}).stock_item_id || '';
       var list = (r && r.data) || [], seen = false;
       var html = '<option value="">— ללא שיוך —</option>' + list.map(function (x) {
+        stockMap[x.id] = x;
         if (String(x.id) === String(cur)) seen = true;
         return '<option value="' + esc(x.id) + '"' + (String(x.id) === String(cur) ? ' selected' : '') + '>' + esc(x.label) + ' · זמין ' + x.available + '</option>';
       }).join('');
       if (cur && !seen) html += '<option value="' + esc(cur) + '" selected>(הלוט המשויך — לא פעיל/אזל)</option>';
       vst.innerHTML = html;
+      vst.addEventListener('change', function () {
+        var it = stockMap[vst.value]; if (!it) return;
+        if (it.supplier_id && vsup) { vsup.value = String(it.supplier_id); fillSup(it.supplier_id); }
+        var co = $('vColorO'); if (co && it.color) co.value = it.color;
+        toast('מולא מהמלאי: ספק, צבע · מחיר-הרכישה יוזן בשמירה');
+      });
     }, function () {});
     var dSt = $('dSt'); if (dSt) dSt.addEventListener('change', function () { setStatus([id], +dSt.value, function () { refresh(id); }); });
     var sd = $('dSaveDeal');
@@ -467,7 +486,7 @@
         if (r.error) return toast('שגיאה: ' + r.error.message, true); refresh(id, 'המחיר נשמר וסונכרן למותג');
       });
     });
-    loadDocs(id);
+    loadDocs(id); loadBrandDocs(id);
     $('docUp').addEventListener('click', function () {
       var file = $('docFile').files[0]; if (!file) return toast('בחר קובץ', true);
       var safe = file.name.replace(/[^\w.\-]+/g, '_'), path = id + '/' + Date.now() + '_' + safe;
@@ -502,6 +521,27 @@
         });
       });
     });
+  }
+  function loadBrandDocs(id) {
+    db.functions.invoke('order-docs', { body: { deal_id: id } }).then(function (r) {
+      var el = $('dBrandDocs'); if (!el) return;
+      var d = (r && r.data) || {}, docs = d.documents || [], c = d.contract, html = '';
+      if (c) html += '<div class="row-between" style="padding:6px 0;border-bottom:1px dashed var(--line)"><span>📝 הסכם ' + (c.signed ? 'חתום' : 'לחתימה') +
+        (c.signed_at ? ' <span class="muted" style="font-size:12px">· ' + dOnly(c.signed_at) + '</span>' : '') + '</span>' +
+        (c.html ? '<button class="btn btn-ghost btn-sm" id="dContract">פתח</button>' : '<span class="muted">—</span>') + '</div>';
+      html += docs.map(function (x) {
+        var link = /^https:\/\//.test(x.url || '') ? '<a class="btn btn-ghost btn-sm" target="_blank" rel="noopener" href="' + esc(x.url) + '">פתח</a>' : '<span class="muted">—</span>';
+        return '<div class="row-between" style="padding:6px 0;border-bottom:1px dashed var(--line)"><span>📄 ' + esc(x.name || 'מסמך') +
+          ' <span class="muted" style="font-size:12px">· ' + dOnly(x.created_at) + '</span></span>' + link + '</div>';
+      }).join('');
+      el.className = '';
+      el.innerHTML = html || '<span class="muted">אין מסמכים מהמותג' + (d.note ? ' · ' + esc(d.note) : '') + '</span>';
+      var cb = $('dContract');
+      if (cb && c && c.html) cb.addEventListener('click', function () {
+        try { window.open(URL.createObjectURL(new Blob([c.html], { type: 'text/html' })), '_blank'); }
+        catch (e) { toast('לא ניתן לפתוח את ההסכם', true); }
+      });
+    }, function () { var el = $('dBrandDocs'); if (el) { el.className = ''; el.innerHTML = '<span class="muted">לא ניתן לטעון מסמכים מהמותג כרגע</span>'; } });
   }
   function loadTl(id) {
     db.from('activity_logs').select('*').eq('deal_id', id).order('created_at', { ascending: false }).limit(200).then(function (r) {
