@@ -464,6 +464,7 @@
     var box = $('tndEdit'); if (!box) return;
     box.innerHTML = '<div class="card" style="border:1px solid var(--line);background:var(--surface-2)">' +
       '<div class="row-between" style="margin-bottom:12px"><b>➕ מכרז חדש</b><button class="btn btn-ghost btn-sm" id="tndClose">✕</button></div>' +
+      '<div class="field" style="margin:0 0 10px"><label>בחר רכב מהמלאי (לא חובה — אפשר גם למלא ידנית)</label><select class="inp" id="tn_inv" style="width:100%"><option value="">— ללא / מילוי ידני —</option></select></div>' +
       '<div style="font-size:13px;color:var(--brand);font-weight:600;margin-bottom:6px">פרטי הרכב</div>' +
       '<div class="grid2">' + tndF('יצרן', 'tn_make') + tndF('דגם', 'tn_model') + tndF('רמת גימור', 'tn_trim') + tndF('שנה', 'tn_year', '', 'number') + tndF('ק"מ', 'tn_km', '', 'number') + tndF('יד', 'tn_hand') + tndF('צבע', 'tn_color') + tndF('מספר רכב', 'tn_plate') + '</div>' +
       '<div class="field" style="margin-top:10px"><label>תיאור / הערות</label><textarea class="inp" id="tn_desc" style="height:54px;width:100%"></textarea></div>' +
@@ -472,11 +473,29 @@
       '<div style="margin-top:14px;display:flex;gap:8px"><button class="btn btn-sm" id="tn_create">💾 צור מכרז</button><span id="tn_msg" style="font-size:13px"></span></div></div>';
     box.scrollIntoView({ behavior: 'smooth', block: 'start' });
     $('tndClose').addEventListener('click', function () { box.innerHTML = ''; });
+    // טעינת רכבי מלאי לבחירה (מילוי-אוטומטי של השדות + קישור inventory_id)
+    var invMap = {};
+    db.from('inventory').select('id,make,model,trim,year,km,hand,color,plate,description,status').order('created_at', { ascending: false }).then(function (r) {
+      var sel = $('tn_inv'); if (!sel || !r || !r.data) return;
+      r.data.filter(function (c) { return c.status !== 'sold'; }).forEach(function (c) {
+        invMap[c.id] = c;
+        var o = document.createElement('option'); o.value = c.id;
+        o.textContent = [c.make, c.model, c.trim, c.year].filter(Boolean).join(' ') + (c.plate ? ' · ' + c.plate : '');
+        sel.appendChild(o);
+      });
+      sel.addEventListener('change', function () {
+        var c = invMap[sel.value]; if (!c) return;
+        var set = function (id, val) { var e = $(id); if (e) e.value = (val == null ? '' : val); };
+        set('tn_make', c.make); set('tn_model', c.model); set('tn_trim', c.trim); set('tn_year', c.year);
+        set('tn_km', c.km); set('tn_hand', c.hand); set('tn_color', c.color); set('tn_plate', c.plate); set('tn_desc', c.description);
+      });
+    });
     function v(id) { var e = $(id); return e && e.value.trim() ? e.value.trim() : null; }
     function nv(id) { var e = $(id); return e && e.value !== '' ? Number(e.value) : null; }
     $('tn_create').addEventListener('click', function () {
       if (!v('tn_make') || !v('tn_aname')) { $('tn_msg').textContent = 'חובה יצרן ושם סוכן'; return; }
-      var patch = { car_make: v('tn_make'), car_model: v('tn_model'), car_trim: v('tn_trim'), car_year: nv('tn_year'), car_km: nv('tn_km'), car_hand: v('tn_hand'), car_color: v('tn_color'), car_plate: v('tn_plate'), car_description: v('tn_desc'), agent_name: v('tn_aname'), agent_phone: v('tn_aphone'), agent_email: v('tn_aemail'), agent_org: v('tn_aorg'), status: 'draft' };
+      var invId = ($('tn_inv') && $('tn_inv').value) || null;
+      var patch = { inventory_id: invId, car_make: v('tn_make'), car_model: v('tn_model'), car_trim: v('tn_trim'), car_year: nv('tn_year'), car_km: nv('tn_km'), car_hand: v('tn_hand'), car_color: v('tn_color'), car_plate: v('tn_plate'), car_description: v('tn_desc'), agent_name: v('tn_aname'), agent_phone: v('tn_aphone'), agent_email: v('tn_aemail'), agent_org: v('tn_aorg'), status: 'draft' };
       this.disabled = true;
       db.from('tenders').insert(patch).then(function (u) { if (u.error) { $('tn_msg').style.color = 'var(--danger)'; $('tn_msg').textContent = u.error.message; return; } window.C2B_renderTenders(); });
     });
