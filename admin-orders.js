@@ -391,7 +391,11 @@
       fld('מס׳ הזמנה מהספק', 'vOrder', v.order_no, 'text', !w) + fld('תאריך הזמנה', 'vOrdered', dVal(v.ordered_at), 'date', !w) +
       fld('צפי אספקה', 'vEta', dVal(v.eta), 'date', !w) + fld('תאריך אספקה בפועל', 'vDelivered', dVal(v.delivered_at), 'date', !w) +
       fld('מס׳ שלדה (VIN)', 'vVin', v.vin, 'text', !w) + fld('לוחית', 'vPlate', v.plate, 'text', !w) +
-      fld('צבע שהוזמן', 'vColorO', v.color_ordered, 'text', !w) + fld('צבע שהתקבל', 'vColorR', v.color_received, 'text', !w) +
+      fld('יצרן (שהוזמן)', 'vMake', v.make_ordered || d.car_make, 'text', !w) +
+      fld('דגם (שהוזמן)', 'vModel', v.model_ordered || d.car_model, 'text', !w) +
+      fld('רמת גימור', 'vTrim', v.trim_ordered || d.car_trim, 'text', !w) +
+      fld('שנה', 'vYear', (v.year_ordered != null ? v.year_ordered : d.car_year), 'number', !w) +
+      fld('צבע שהוזמן', 'vColorO', v.color_ordered || d.car_color, 'text', !w) + fld('צבע שהתקבל', 'vColorR', v.color_received, 'text', !w) +
       '</div><div style="margin-top:10px"><label class="muted" style="font-size:12px">הערות פנימיות</label><textarea class="inp" id="vNotes" rows="2" style="width:100%;box-sizing:border-box"' + (w ? '' : ' disabled') + '>' + esc(v.internal_notes || '') + '</textarea></div>' +
       (w ? '<div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;align-items:center"><button class="btn btn-sm" id="vSave">💾 שמור הזמנה</button>' +
         '<span class="muted" style="font-size:12px">ספק חדש:</span><input class="inp" id="vNewSup" placeholder="שם הספק" style="height:32px;width:160px"><button class="btn btn-ghost btn-sm" id="vAddSup">➕ הוסף</button></div>' : '') + '</div>';
@@ -446,8 +450,10 @@
       vst.addEventListener('change', function () {
         var it = stockMap[vst.value]; if (!it) return;
         if (it.supplier_id && vsup) { vsup.value = String(it.supplier_id); fillSup(it.supplier_id); }
-        var co = $('vColorO'); if (co && it.color) co.value = it.color;
-        toast('מולא מהמלאי: ספק, צבע · מחיר-הרכישה יוזן בשמירה');
+        //  שדה לכל פריט — הרכב שהוזמן מתמלא מהלוט (ניתן לעריכה)
+        var set = function (id, val) { var e = $(id); if (e && val != null && val !== '') e.value = val; };
+        set('vMake', it.make); set('vModel', it.model); set('vTrim', it.trim); set('vYear', it.year); set('vColorO', it.color);
+        toast('מולא מהמלאי: יצרן · דגם · גימור · שנה · צבע · ספק · מחיר-רכישה (בשמירה)');
       });
     }, function () {});
     var dSt = $('dSt'); if (dSt) dSt.addEventListener('change', function () { setStatus([id], +dSt.value, function () { refresh(id); }); });
@@ -461,7 +467,10 @@
     if (vs) vs.addEventListener('click', function () {
       var p = { supplier_id: val('vSup') ? +val('vSup') : null, supplier_contact: val('vContact').trim() || null, supplier_phone: val('vPhone').trim() || null,
         order_no: val('vOrder').trim() || null, ordered_at: val('vOrdered') || null, eta: val('vEta') || null, delivered_at: val('vDelivered') || null,
-        vin: val('vVin').trim() || null, plate: val('vPlate').trim() || null, color_ordered: val('vColorO').trim() || null,
+        vin: val('vVin').trim() || null, plate: val('vPlate').trim() || null,
+        make_ordered: val('vMake').trim() || null, model_ordered: val('vModel').trim() || null,
+        trim_ordered: val('vTrim').trim() || null, year_ordered: num(val('vYear')),
+        color_ordered: val('vColorO').trim() || null,
         color_received: val('vColorR').trim() || null, internal_notes: val('vNotes').trim() || null,
         stock_item_id: val('vStock') || null, updated_at: new Date().toISOString() };
       var cur = S.vo[id];
