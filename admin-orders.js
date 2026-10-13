@@ -538,8 +538,18 @@
       el.innerHTML = html || '<span class="muted">אין מסמכים מהמותג' + (d.note ? ' · ' + esc(d.note) : '') + '</span>';
       var cb = $('dContract');
       if (cb && c && c.html) cb.addEventListener('click', function () {
-        try { window.open(URL.createObjectURL(new Blob([c.html], { type: 'text/html' })), '_blank'); }
-        catch (e) { toast('לא ניתן לפתוח את ההסכם', true); }
+        //  ההסכם מכיל נתוני-לקוח (שם וכו') ויכול להכיל HTML זדוני. מרנדרים ב-iframe
+        //  עם sandbox ריק: ה-HTML מוצג אבל סקריפטים לא רצים ואין גישה ל-origin שלנו.
+        var host = document.createElement('div');
+        host.style.cssText = 'position:fixed;inset:0;z-index:2147483600;background:rgba(15,23,42,.55);display:flex;align-items:center;justify-content:center;padding:20px';
+        host.innerHTML = '<div style="background:var(--surface);border-radius:14px;max-width:900px;width:100%;height:92vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.4)">' +
+          '<div class="row-between" style="padding:10px 14px;border-bottom:1px solid var(--line)"><b>📝 הסכם</b><button class="btn btn-ghost btn-sm" id="cxClose">✕ סגור</button></div>' +
+          '<iframe sandbox style="flex:1;min-height:0;width:100%;border:0;background:#fff"></iframe></div>';
+        document.body.appendChild(host);
+        host.querySelector('iframe').srcdoc = c.html;
+        var close = function () { host.remove(); };
+        host.querySelector('#cxClose').addEventListener('click', close);
+        host.addEventListener('click', function (e) { if (e.target === host) close(); });
       });
     }, function () { var el = $('dBrandDocs'); if (el) { el.className = ''; el.innerHTML = '<span class="muted">לא ניתן לטעון מסמכים מהמותג כרגע</span>'; } });
   }
