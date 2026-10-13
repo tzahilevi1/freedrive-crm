@@ -346,13 +346,19 @@
     car = car || {}; var isNew = !car.id, box = $('invEdit'); if (!box) return;
     box.innerHTML = '<div class="card" style="border:1px solid var(--line);background:var(--surface-2)">' +
       '<div class="row-between" style="margin-bottom:12px"><b>' + (isNew ? '➕ רכב חדש' : '✏️ ' + esc(invTitle(car))) + '</b><button class="btn btn-ghost btn-sm" id="invClose">✕ סגור</button></div>' +
-      '<div class="grid2">' + invF('יצרן', 'iv_make', car.make) + invF('דגם', 'iv_model', car.model) + invF('רמת גימור', 'iv_trim', car.trim) + invF('שנה', 'iv_year', car.year, 'number') + invF('יד', 'iv_hand', car.hand) + invF('ק"מ', 'iv_km', car.km, 'number') + invF('צבע', 'iv_color', car.color) + invF('סוג דלק', 'iv_fuel', car.fuel) + invF('מספר רכב', 'iv_plate', car.plate) + invF('מחיר (₪)', 'iv_price', car.price, 'number') + '</div>' +
+      '<div class="grid2">' + invF('יצרן', 'iv_make', car.make) + invF('דגם', 'iv_model', car.model) + invF('רמת גימור', 'iv_trim', car.trim) + invF('שנה', 'iv_year', car.year, 'number') + invF('יד', 'iv_hand', car.hand) + invF('ק"מ', 'iv_km', car.km, 'number') + invF('צבע', 'iv_color', car.color) + invF('סוג דלק', 'iv_fuel', car.fuel) + invF('מספר רכב', 'iv_plate', car.plate) + invF('מחיר מכירה (₪)', 'iv_price', car.price, 'number') + '</div>' +
+      '<div style="font-size:12px;color:var(--muted);font-weight:600;margin:12px 0 4px">💰 תמחור פנימי (לא מוצג באתרים)</div>' +
+      '<div class="grid2">' + invF('מחיר מחירון (₪)', 'iv_listprice', '', 'number') + invF('מחיר מינימום (₪)', 'iv_minprice', '', 'number') + invF('מחיר מנהל (₪)', 'iv_mgrprice', '', 'number') + '</div>' +
       '<div class="field" style="margin-top:10px"><label>תיאור</label><textarea class="inp" id="iv_desc" style="height:70px;width:100%">' + esc(car.description || '') + '</textarea></div>' +
       '<div style="margin-top:12px"><label style="font-size:13px;color:var(--muted);display:block;margin-bottom:6px">תמונות (לחיצה על תמונה = קביעת שער)</label><div id="iv_imgs" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px"></div><input type="file" id="iv_file" accept="image/*" multiple style="font-size:13px"> <span id="iv_upmsg" class="muted" style="font-size:12px"></span></div>' +
       '<div class="grid2" style="margin-top:12px"><div class="field" style="margin:0"><label>סטטוס</label><select class="inp" id="iv_status" style="width:100%">' + ['intake', 'available', 'reserved', 'sold', 'hidden'].map(function (s) { return '<option value="' + s + '"' + ((car.status || 'intake') === s ? ' selected' : '') + '>' + INV_ST[s][0] + '</option>'; }).join('') + '</select></div>' +
         '<label style="display:flex;align-items:center;gap:8px;margin-top:22px;font-size:14px"><input type="checkbox" id="iv_pub"' + (car.published ? ' checked' : '') + '> מפורסם (מוצג באתרים וב-CRM-ים)</label></div>' +
       '<div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-sm" id="iv_save">💾 שמור</button>' + (isNew ? '' : '<button class="btn btn-ghost btn-sm" id="iv_del" style="color:var(--danger)">🗑 מחק</button>') + '<span id="iv_msg" style="font-size:13px;margin-inline-start:8px"></span></div></div>';
     box.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    // טעינת תמחור פנימי קיים (טבלה נפרדת צוות-בלבד)
+    if (car.id) db.from('inventory_pricing').select('list_price,min_price,manager_price').eq('inventory_id', car.id).maybeSingle().then(function (pr) {
+      if (pr && pr.data) { var st = function (id, v) { var e = $(id); if (e) e.value = (v == null ? '' : v); }; st('iv_listprice', pr.data.list_price); st('iv_minprice', pr.data.min_price); st('iv_mgrprice', pr.data.manager_price); }
+    });
     var state = { images: invImgs(car).slice(), cover: car.cover_idx || 0 };
     function paintImgs() {
       $('iv_imgs').innerHTML = state.images.length ? state.images.map(function (u, i) {
@@ -380,8 +386,13 @@
     $('iv_save').addEventListener('click', function () {
       var patch = { make: val('iv_make'), model: val('iv_model'), trim: val('iv_trim'), year: numv('iv_year'), hand: val('iv_hand'), km: numv('iv_km'), color: val('iv_color'), fuel: val('iv_fuel'), plate: val('iv_plate'), price: numv('iv_price'), description: val('iv_desc'), images: state.images, cover_idx: state.cover, status: $('iv_status').value, published: $('iv_pub').checked };
       var btn = this; btn.disabled = true; $('iv_msg').style.color = 'var(--muted)'; $('iv_msg').textContent = 'שומר…';
-      var p = car.id ? db.from('inventory').update(patch).eq('id', car.id) : db.from('inventory').insert(patch);
-      p.then(function (u) { btn.disabled = false; if (u.error) { $('iv_msg').style.color = 'var(--danger)'; $('iv_msg').textContent = 'שגיאה: ' + u.error.message; return; } $('iv_msg').style.color = 'var(--ok)'; $('iv_msg').textContent = '✔ נשמר'; window.C2B_renderInventory(); });
+      var pricing = { list_price: numv('iv_listprice'), min_price: numv('iv_minprice'), manager_price: numv('iv_mgrprice') };
+      function savePricing(invId, done) {
+        if (!invId) return done();
+        db.from('inventory_pricing').upsert({ inventory_id: invId, list_price: pricing.list_price, min_price: pricing.min_price, manager_price: pricing.manager_price, updated_at: new Date().toISOString() }, { onConflict: 'inventory_id' }).then(function () { done(); });
+      }
+      var p = car.id ? db.from('inventory').update(patch).eq('id', car.id).select('id').single() : db.from('inventory').insert(patch).select('id').single();
+      p.then(function (u) { if (u.error) { btn.disabled = false; $('iv_msg').style.color = 'var(--danger)'; $('iv_msg').textContent = 'שגיאה: ' + u.error.message; return; } savePricing(u.data && u.data.id, function () { btn.disabled = false; $('iv_msg').style.color = 'var(--ok)'; $('iv_msg').textContent = '✔ נשמר'; window.C2B_renderInventory(); }); });
     });
     if ($('iv_del')) $('iv_del').addEventListener('click', function () { if (confirm('למחוק את הרכב?')) db.from('inventory').delete().eq('id', car.id).then(function () { window.C2B_renderInventory(); }); });
   }
@@ -460,6 +471,22 @@
     });
   };
   function tndF(label, id, val, type) { return '<div class="field" style="margin:0"><label>' + label + '</label><input class="inp" id="' + id + '" type="' + (type || 'text') + '" value="' + esc(val == null ? '' : val) + '" style="width:100%"></div>'; }
+  // העלאת תמונות משותפת (bucket inventory הציבורי); דוחף URLs ל-arr וקורא onDone
+  function tndUpload(fileEl, msgEl, arr, prefix, onDone) {
+    if (!fileEl) return;
+    fileEl.addEventListener('change', function () {
+      var files = Array.prototype.slice.call(this.files || []); if (!files.length) return;
+      if (msgEl) msgEl.textContent = 'מעלה ' + files.length + '…'; var done = 0, errs = 0;
+      files.forEach(function (f) {
+        var path = prefix + '/' + Date.now() + '_' + Math.random().toString(36).slice(2, 7) + '.' + ((f.name.split('.').pop() || 'jpg').toLowerCase());
+        db.storage.from('inventory').upload(path, f, { upsert: true, contentType: f.type || 'image/jpeg' }).then(function (res) {
+          done++; if (res.error) errs++; else arr.push(db.storage.from('inventory').getPublicUrl(path).data.publicUrl);
+          if (done === files.length) { if (msgEl) msgEl.textContent = errs ? (errs + ' נכשלו') : '✔ הועלו'; if (onDone) onDone(); }
+        });
+      });
+      this.value = '';
+    });
+  }
   function openTndCreate() {
     var box = $('tndEdit'); if (!box) return;
     box.innerHTML = '<div class="card" style="border:1px solid var(--line);background:var(--surface-2)">' +
@@ -468,14 +495,26 @@
       '<div style="font-size:13px;color:var(--brand);font-weight:600;margin-bottom:6px">פרטי הרכב</div>' +
       '<div class="grid2">' + tndF('יצרן', 'tn_make') + tndF('דגם', 'tn_model') + tndF('רמת גימור', 'tn_trim') + tndF('שנה', 'tn_year', '', 'number') + tndF('ק"מ', 'tn_km', '', 'number') + tndF('יד', 'tn_hand') + tndF('צבע', 'tn_color') + tndF('מספר רכב', 'tn_plate') + '</div>' +
       '<div class="field" style="margin-top:10px"><label>תיאור / הערות</label><textarea class="inp" id="tn_desc" style="height:54px;width:100%"></textarea></div>' +
+      '<div style="margin-top:12px"><label style="font-size:13px;color:var(--muted);display:block;margin-bottom:6px">תמונות (נשלחות לסוחרים במייל + מוצגות בקישור)</label><div id="tn_imgs" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px"></div><input type="file" id="tn_file" accept="image/*" multiple style="font-size:13px"> <span id="tn_upmsg" class="muted" style="font-size:12px"></span></div>' +
       '<div style="font-size:13px;color:var(--brand);font-weight:600;margin:14px 0 6px">הסוכן המבקש</div>' +
       '<div class="grid2">' + tndF('שם הסוכן', 'tn_aname') + tndF('טלפון', 'tn_aphone', '', 'tel') + tndF('מייל (לתוצאה)', 'tn_aemail', '', 'email') + tndF('מותג/סניף', 'tn_aorg') + '</div>' +
       '<div style="margin-top:14px;display:flex;gap:8px"><button class="btn btn-sm" id="tn_create">💾 צור מכרז</button><span id="tn_msg" style="font-size:13px"></span></div></div>';
     box.scrollIntoView({ behavior: 'smooth', block: 'start' });
     $('tndClose').addEventListener('click', function () { box.innerHTML = ''; });
-    // טעינת רכבי מלאי לבחירה (מילוי-אוטומטי של השדות + קישור inventory_id)
+    // תמונות: מצב + רינדור + העלאה (bucket inventory, נתיב tender/new)
+    var tnImgs = [];
+    function paintTnImgs() {
+      var el = $('tn_imgs'); if (!el) return;
+      el.innerHTML = tnImgs.length ? tnImgs.map(function (u, i) {
+        return '<div style="position:relative;width:88px;height:66px;border-radius:8px;overflow:hidden;border:1px solid var(--line)"><img src="' + esc(u) + '" style="width:100%;height:100%;object-fit:cover"><button data-rm="' + i + '" style="position:absolute;top:1px;inset-inline-end:1px;background:rgba(0,0,0,.6);color:#fff;border:none;border-radius:50%;width:18px;height:18px;cursor:pointer;line-height:1">×</button></div>';
+      }).join('') : '<span class="muted" style="font-size:12px">אין תמונות</span>';
+      el.querySelectorAll('[data-rm]').forEach(function (b) { b.addEventListener('click', function () { tnImgs.splice(+b.dataset.rm, 1); paintTnImgs(); }); });
+    }
+    paintTnImgs();
+    tndUpload($('tn_file'), $('tn_upmsg'), tnImgs, 'tender/new', paintTnImgs);
+    // טעינת רכבי מלאי לבחירה (מילוי-אוטומטי של השדות + תמונות + קישור inventory_id)
     var invMap = {};
-    db.from('inventory').select('id,make,model,trim,year,km,hand,color,plate,description,status').order('created_at', { ascending: false }).then(function (r) {
+    db.from('inventory').select('id,make,model,trim,year,km,hand,color,plate,description,images,status').order('created_at', { ascending: false }).then(function (r) {
       var sel = $('tn_inv'); if (!sel || !r || !r.data) return;
       r.data.filter(function (c) { return c.status !== 'sold'; }).forEach(function (c) {
         invMap[c.id] = c;
@@ -488,6 +527,7 @@
         var set = function (id, val) { var e = $(id); if (e) e.value = (val == null ? '' : val); };
         set('tn_make', c.make); set('tn_model', c.model); set('tn_trim', c.trim); set('tn_year', c.year);
         set('tn_km', c.km); set('tn_hand', c.hand); set('tn_color', c.color); set('tn_plate', c.plate); set('tn_desc', c.description);
+        tnImgs.length = 0; invImgs(c).forEach(function (u) { tnImgs.push(u); }); paintTnImgs();  // ירושת תמונות מהמלאי
       });
     });
     function v(id) { var e = $(id); return e && e.value.trim() ? e.value.trim() : null; }
@@ -495,7 +535,7 @@
     $('tn_create').addEventListener('click', function () {
       if (!v('tn_make') || !v('tn_aname')) { $('tn_msg').textContent = 'חובה יצרן ושם סוכן'; return; }
       var invId = ($('tn_inv') && $('tn_inv').value) || null;
-      var patch = { inventory_id: invId, car_make: v('tn_make'), car_model: v('tn_model'), car_trim: v('tn_trim'), car_year: nv('tn_year'), car_km: nv('tn_km'), car_hand: v('tn_hand'), car_color: v('tn_color'), car_plate: v('tn_plate'), car_description: v('tn_desc'), agent_name: v('tn_aname'), agent_phone: v('tn_aphone'), agent_email: v('tn_aemail'), agent_org: v('tn_aorg'), status: 'draft' };
+      var patch = { inventory_id: invId, car_make: v('tn_make'), car_model: v('tn_model'), car_trim: v('tn_trim'), car_year: nv('tn_year'), car_km: nv('tn_km'), car_hand: v('tn_hand'), car_color: v('tn_color'), car_plate: v('tn_plate'), car_description: v('tn_desc'), images: tnImgs.slice(), agent_name: v('tn_aname'), agent_phone: v('tn_aphone'), agent_email: v('tn_aemail'), agent_org: v('tn_aorg'), status: 'draft' };
       this.disabled = true;
       db.from('tenders').insert(patch).then(function (u) { if (u.error) { $('tn_msg').style.color = 'var(--danger)'; $('tn_msg').textContent = u.error.message; return; } window.C2B_renderTenders(); });
     });
@@ -518,6 +558,7 @@
         (t.car_description ? '<div style="font-size:13px;margin-top:6px">' + esc(t.car_description) + '</div>' : '') +
         '<div class="muted" style="font-size:12.5px;margin-top:8px">👤 ' + esc(t.agent_name || '—') + [t.agent_phone ? ' · ' + esc(t.agent_phone) : '', t.agent_email ? ' · ' + esc(t.agent_email) : '', t.agent_org ? ' · ' + esc(t.agent_org) : ''].join('') + '</div>' +
         (t.closes_at ? '<div class="muted" style="font-size:12.5px;margin-top:4px">⏱ סגירה: ' + when(t.closes_at) + ' · ' + remainTxt(t) + '</div>' : '') +
+        '<div style="margin:12px 0"><label style="font-size:13px;color:var(--muted);display:block;margin-bottom:6px">תמונות הרכב (נשלחות לסוחרים במייל + בקישור)</label><div id="td_imgs" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px"></div><input type="file" id="td_file" accept="image/*" multiple style="font-size:13px"> <span id="td_upmsg" class="muted" style="font-size:12px"></span></div>' +
         '<div style="display:flex;gap:8px;flex-wrap:wrap;margin:14px 0">' +
           (canSend ? '<button class="btn btn-sm" id="tnd_send">📤 שלח לכל הסוחרים</button>' : '') +
           (t.status === 'open' ? '<button class="btn btn-ghost btn-sm" id="tnd_ext">⏱ הארך שעה</button>' : '') +
@@ -527,6 +568,18 @@
         (bids.length ? '<div style="overflow:auto"><table style="width:100%;border-collapse:collapse;font-size:14px"><thead><tr style="color:var(--muted);text-align:right;font-size:12px"><th style="padding:6px 8px">#</th><th style="padding:6px 8px">סוחר</th><th style="padding:6px 8px;text-align:left">סכום</th><th style="padding:6px 8px">זמן</th></tr></thead><tbody>' + bidRows + '</tbody></table></div>' : '<div class="muted" style="font-size:13px">אין הצעות עדיין.</div>') +
         '</div>';
       $('tndClose').addEventListener('click', function () { box.innerHTML = ''; });
+      // מנהל תמונות הרכב — נשמר מיידית למכרז (כדי שישלח בתמונות)
+      var dImgs = invImgs(t).slice();
+      function paintDImgs() {
+        var el = $('td_imgs'); if (!el) return;
+        el.innerHTML = dImgs.length ? dImgs.map(function (u, i) {
+          return '<div style="position:relative;width:88px;height:66px;border-radius:8px;overflow:hidden;border:1px solid var(--line)"><img src="' + esc(u) + '" style="width:100%;height:100%;object-fit:cover"><button data-rm="' + i + '" style="position:absolute;top:1px;inset-inline-end:1px;background:rgba(0,0,0,.6);color:#fff;border:none;border-radius:50%;width:18px;height:18px;cursor:pointer;line-height:1">×</button></div>';
+        }).join('') : '<span class="muted" style="font-size:12px">אין תמונות — העלה כדי שהסוחרים יקבלו</span>';
+        el.querySelectorAll('[data-rm]').forEach(function (b) { b.addEventListener('click', function () { dImgs.splice(+b.dataset.rm, 1); saveDImgs(); paintDImgs(); }); });
+      }
+      function saveDImgs() { db.from('tenders').update({ images: dImgs.slice() }).eq('id', t.id).then(function () { t.images = dImgs.slice(); }); }
+      paintDImgs();
+      tndUpload($('td_file'), $('td_upmsg'), dImgs, 'tender/' + t.id, function () { saveDImgs(); paintDImgs(); });
       if ($('tnd_send')) $('tnd_send').addEventListener('click', function () {
         var btn = this; btn.disabled = true; btn.textContent = 'שולח…';
         db.rpc('tender_send', { p_tender_id: t.id }).then(function (res) {

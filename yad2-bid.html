@@ -2,39 +2,93 @@
 <html lang="he" dir="rtl">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>הגשת הצעת מחיר</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>בקשת הצעת מחיר</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;700;800;900&display=swap" rel="stylesheet">
 <style>
-  :root{--bg:#0e1117;--card:#171c26;--line:#2a3140;--txt:#e9edf4;--mut:#9aa6b8;--accent:#ffd21a;--ok:#2ec77a}
-  *{box-sizing:border-box}
-  body{margin:0;font-family:"Segoe UI",Arial,sans-serif;background:var(--bg);color:var(--txt);
-       min-height:100vh;display:flex;align-items:flex-start;justify-content:center;padding:24px 16px}
-  .wrap{width:100%;max-width:520px}
-  .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:22px;margin-bottom:16px}
-  h1{font-size:20px;margin:0 0 4px}
-  .sub{color:var(--mut);font-size:13px;margin-bottom:16px}
-  .car{font-size:18px;font-weight:700;margin:0 0 6px}
-  .spec{color:var(--mut);font-size:14px;line-height:1.7}
-  .spec b{color:var(--txt);font-weight:600}
-  label{display:block;font-size:13px;color:var(--mut);margin:14px 0 6px}
-  input,textarea{width:100%;background:#0e131b;border:1px solid var(--line);border-radius:10px;
-       color:var(--txt);padding:13px 14px;font-size:16px;font-family:inherit}
-  input:focus,textarea:focus{outline:none;border-color:var(--accent)}
-  .amount{font-size:22px;font-weight:700;letter-spacing:.5px}
-  button{width:100%;margin-top:18px;background:var(--accent);color:#111;border:0;border-radius:12px;
-       padding:15px;font-size:17px;font-weight:700;cursor:pointer}
-  button:disabled{opacity:.5;cursor:default}
-  .msg{padding:14px;border-radius:12px;font-size:15px;text-align:center}
-  .msg.ok{background:rgba(46,199,122,.12);color:var(--ok);border:1px solid rgba(46,199,122,.3)}
-  .msg.err{background:rgba(255,80,80,.1);color:#ff8a8a;border:1px solid rgba(255,80,80,.3)}
-  .cur{position:relative}.cur:after{content:"₪";position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--mut)}
-  .prev{font-size:13px;color:var(--mut);margin-top:10px;text-align:center}
-  .imgs{display:flex;gap:6px;overflow:auto;margin:10px 0}
-  .imgs img{height:92px;border-radius:8px;flex:0 0 auto}
+  :root{
+    --bg:#0a0c10; --bg2:#10141b; --card:rgba(255,255,255,.045); --line:rgba(255,255,255,.09);
+    --txt:#f2f5fa; --mut:#93a0b4; --gold1:#f3dd93; --gold2:#c9a349; --ok:#38d39f; --err:#ff8a8a;
+    --shadow:0 20px 60px rgba(0,0,0,.5);
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0}
+  body{font-family:"Heebo",system-ui,Arial,sans-serif;color:var(--txt);min-height:100vh;
+    background:
+      radial-gradient(1200px 600px at 80% -10%, rgba(201,163,73,.14), transparent 60%),
+      radial-gradient(900px 500px at -10% 10%, rgba(80,120,255,.08), transparent 55%),
+      linear-gradient(180deg,#0a0c10,#0a0c10 40%,#0c0f15);
+    background-attachment:fixed;}
+  .wrap{max-width:560px;margin:0 auto;padding:0 0 40px}
+  .brand{display:flex;align-items:center;gap:9px;padding:18px 20px 10px;font-weight:800;letter-spacing:.2px}
+  .brand .dot{width:28px;height:28px;border-radius:8px;background:linear-gradient(135deg,var(--gold1),var(--gold2));
+    display:grid;place-items:center;color:#1a1400;font-weight:900;font-size:15px;box-shadow:0 4px 14px rgba(201,163,73,.4)}
+  .brand small{color:var(--mut);font-weight:500;font-size:12px;margin-inline-start:auto}
+  /* hero gallery */
+  .hero{position:relative;margin:6px 16px 0;border-radius:20px;overflow:hidden;box-shadow:var(--shadow);background:#05070a}
+  .gal{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none;aspect-ratio:16/10}
+  .gal::-webkit-scrollbar{display:none}
+  .gal .slide{flex:0 0 100%;scroll-snap-align:center;position:relative;background:#05070a}
+  .gal .slide img{width:100%;height:100%;object-fit:cover;display:block}
+  .noimg{aspect-ratio:16/10;display:grid;place-items:center;color:#3a4454;font-size:14px;
+    background:repeating-linear-gradient(45deg,#0d1016,#0d1016 12px,#0f131a 12px,#0f131a 24px)}
+  .shade{position:absolute;inset:0;background:linear-gradient(0deg,rgba(5,7,10,.92) 2%,rgba(5,7,10,.25) 35%,transparent 60%);pointer-events:none}
+  .herocap{position:absolute;inset-inline:0;bottom:0;padding:16px 18px}
+  .herocap h1{margin:0;font-size:24px;font-weight:800;line-height:1.15;text-shadow:0 2px 20px rgba(0,0,0,.6)}
+  .chips{display:flex;gap:7px;flex-wrap:wrap;margin-top:9px}
+  .chip{font-size:12.5px;font-weight:600;color:#eef2f8;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.14);
+    padding:4px 11px;border-radius:999px;backdrop-filter:blur(6px)}
+  .dots{position:absolute;top:12px;inset-inline-start:0;inset-inline-end:0;display:flex;gap:5px;justify-content:center;pointer-events:none}
+  .dots i{width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,.4)}
+  .dots i.on{background:var(--gold1);width:18px;border-radius:3px}
+  /* cards */
+  .card{margin:16px;background:var(--card);border:1px solid var(--line);border-radius:18px;padding:20px;
+    backdrop-filter:blur(10px);box-shadow:0 10px 30px rgba(0,0,0,.25)}
+  .eyebrow{font-size:12px;font-weight:700;letter-spacing:1.5px;color:var(--gold2);text-transform:uppercase}
+  .lead{font-size:14.5px;color:var(--mut);line-height:1.6;margin-top:4px}
+  .timer{display:flex;align-items:center;gap:10px;margin:14px 16px 0;padding:12px 16px;border-radius:14px;
+    background:linear-gradient(90deg,rgba(201,163,73,.14),rgba(201,163,73,.05));border:1px solid rgba(201,163,73,.25)}
+  .timer .big{font-variant-numeric:tabular-nums;font-weight:800;font-size:18px;color:var(--gold1)}
+  .timer .lbl{font-size:12.5px;color:var(--mut)}
+  label.fld{display:block;font-size:13px;color:var(--mut);margin:0 0 9px;font-weight:500}
+  .amtwrap{position:relative}
+  .amtwrap .cur{position:absolute;inset-inline-start:18px;top:50%;transform:translateY(-50%);font-size:24px;color:var(--gold2);font-weight:700;pointer-events:none}
+  input#amt{width:100%;background:rgba(0,0,0,.35);border:1.5px solid var(--line);border-radius:14px;color:#fff;
+    padding:18px 48px 18px 18px;font-size:30px;font-weight:800;font-family:inherit;letter-spacing:.5px;
+    text-align:start;transition:border-color .2s,box-shadow .2s;font-variant-numeric:tabular-nums}
+  input#amt::placeholder{color:#3f4a5a;font-weight:700}
+  input#amt:focus{outline:none;border-color:var(--gold2);box-shadow:0 0 0 4px rgba(201,163,73,.15)}
+  textarea#note{width:100%;background:rgba(0,0,0,.3);border:1px solid var(--line);border-radius:12px;color:#fff;
+    padding:12px 14px;font-size:15px;font-family:inherit;margin-top:14px}
+  textarea#note:focus{outline:none;border-color:var(--gold2)}
+  button.cta{width:100%;margin-top:18px;border:0;border-radius:14px;padding:17px;font-size:18px;font-weight:800;
+    font-family:inherit;cursor:pointer;color:#1a1400;background:linear-gradient(135deg,var(--gold1),var(--gold2));
+    box-shadow:0 10px 26px rgba(201,163,73,.35);transition:transform .12s,box-shadow .2s}
+  button.cta:active{transform:translateY(1px)}
+  button.cta:disabled{opacity:.55;cursor:default;box-shadow:none}
+  .msg{padding:15px 16px;border-radius:14px;font-size:15px;text-align:center;font-weight:600}
+  .msg.ok{background:rgba(56,211,159,.12);color:var(--ok);border:1px solid rgba(56,211,159,.3)}
+  .msg.err{background:rgba(255,80,80,.1);color:var(--err);border:1px solid rgba(255,80,80,.3)}
+  .prev{margin-top:12px;text-align:center;font-size:13px;color:var(--mut)}
+  .prev b{color:var(--gold1)}
+  .foot{text-align:center;color:#566072;font-size:12px;margin-top:22px;padding:0 20px;line-height:1.6}
+  .big-ok{text-align:center;padding:14px 0 4px}
+  .big-ok .ring{width:72px;height:72px;border-radius:50%;margin:0 auto 14px;display:grid;place-items:center;
+    background:rgba(56,211,159,.12);border:2px solid rgba(56,211,159,.4);font-size:34px;color:var(--ok);
+    animation:pop .4s cubic-bezier(.2,1.4,.4,1)}
+  @keyframes pop{from{transform:scale(.4);opacity:0}to{transform:scale(1);opacity:1}}
+  .fade{animation:fade .5s ease both}
+  @keyframes fade{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+  @media(prefers-reduced-motion:reduce){.fade,.big-ok .ring{animation:none}}
 </style>
 </head>
 <body>
-<div class="wrap" id="app"><div class="card"><div class="sub">טוען…</div></div></div>
+<div class="wrap" id="app">
+  <div class="brand"><span class="dot">י2</span> יד2 · פרי דרייב <small>בקשת הצעת מחיר</small></div>
+  <div class="card"><div class="lead">טוען…</div></div>
+</div>
 <script>
 const SB_URL="https://xppsvottiwbjsjlusief.supabase.co";
 const SB_ANON="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhwcHN2b3R0aXdianNqbHVzaWVmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTEzNzg5NzYsImV4cCI6MjEwNjk1NDk3Nn0.b9WaudA0bbKQiEVHtdnChETITTq4Tl2oPEHPnzwWsZo";
@@ -47,58 +101,93 @@ async function rpc(fn,body){
 }
 const qs=new URLSearchParams(location.search), TOK=qs.get("t")||"";
 const app=document.getElementById("app");
-function el(tag,cls,txt){const e=document.createElement(tag);if(cls)e.className=cls;if(txt!=null)e.textContent=txt;return e;}
-function card(){const c=el("div","card");app.innerHTML="";app.appendChild(c);return c;}
+function el(t,c,x){const e=document.createElement(t);if(c)e.className=c;if(x!=null)e.textContent=x;return e;}
 function money(n){return Number(n||0).toLocaleString("he-IL");}
-function specLine(k,v){if(v==null||v==="")return null;const d=el("div");d.appendChild(el("span",null,k+": "));const b=el("b");b.textContent=v;d.appendChild(b);return d;}
+let brand;
+function shell(){ app.innerHTML=""; brand=el("div","brand"); const d=el("span","dot","י2"); brand.appendChild(d);
+  brand.appendChild(document.createTextNode(" יד2 · פרי דרייב ")); const s=el("small",null,"בקשת הצעת מחיר"); brand.appendChild(s);
+  app.appendChild(brand); }
+function msgCard(cls,txt){shell();const c=el("div","card fade");c.appendChild(el("div","msg "+cls,txt));app.appendChild(c);}
+
+function hero(car){
+  const h=el("div","hero fade");
+  const imgs=(car.images||[]).filter(u=>typeof u==="string"&&u.indexOf("https")===0).slice(0,10);
+  if(imgs.length){
+    const gal=el("div","gal");
+    imgs.forEach(u=>{const sl=el("div","slide");const im=el("img");im.src=u;im.loading="lazy";im.alt="";sl.appendChild(im);gal.appendChild(sl);});
+    h.appendChild(gal);
+    if(imgs.length>1){const dots=el("div","dots");imgs.forEach((_,i)=>dots.appendChild(el("i",i===0?"on":"")));h.appendChild(dots);
+      gal.addEventListener("scroll",()=>{const idx=Math.round(Math.abs(gal.scrollLeft)/gal.clientWidth);
+        [...dots.children].forEach((d,k)=>d.className=k===idx?"on":"");},{passive:true});}
+  }else{ h.appendChild(el("div","noimg","אין תמונות לרכב")); }
+  h.appendChild(el("div","shade"));
+  const cap=el("div","herocap");
+  const title=[car.make,car.model,car.trim,car.year].filter(Boolean).join(" ")||"רכב";
+  cap.appendChild(el("h1",null,title));
+  const chips=el("div","chips");
+  [["יד",car.hand],["ק\"מ",car.km!=null?money(car.km):null],["צבע",car.color],["מס' רישוי",car.plate]]
+    .forEach(([k,v])=>{if(v!=null&&v!=="")chips.appendChild(el("span","chip",k+" · "+v));});
+  cap.appendChild(chips); h.appendChild(cap);
+  return h;
+}
+function startTimer(node,closes){
+  function tick(){const ms=new Date(closes).getTime()-Date.now();
+    if(ms<=0){node.querySelector(".big").textContent="נסגר";return;}
+    const m=Math.floor(ms/60000),s=Math.floor(ms/1000)%60;
+    node.querySelector(".big").textContent=(m)+":"+String(s).padStart(2,"0");}
+  tick();const iv=setInterval(tick,1000);
+}
 
 async function load(){
-  if(!TOK){card().appendChild(el("div","msg err","קישור לא תקין."));return;}
-  let d;
-  try{ d=await rpc("tender_public_get",{p_token:TOK}); }catch(e){ card().appendChild(el("div","msg err","שגיאה בטעינה. נסה שוב.")); return; }
-  if(!d||!d.ok){card().appendChild(el("div","msg err","הקישור לא נמצא או פג תוקף."));return;}
-  const c=card();
-  c.appendChild(el("h1","","בקשת הצעת מחיר"));
-  c.appendChild(el("div","sub","הצעתך אישית וחסויה — לא נחשפת לסוחרים אחרים."));
-  const car=d.car||{};
-  const title=[car.make,car.model,car.trim,car.year].filter(Boolean).join(" ");
-  c.appendChild(el("div","car",title||"רכב"));
-  const spec=el("div","spec");
-  [["יד",car.hand],["ק\"מ",car.km!=null?money(car.km):null],["צבע",car.color],["מספר רישוי",car.plate]]
-    .forEach(([k,v])=>{const l=specLine(k,v);if(l)spec.appendChild(l);});
-  if(car.description){const p=el("div");p.style.marginTop="8px";p.textContent=car.description;spec.appendChild(p);}
-  c.appendChild(spec);
-  if(Array.isArray(car.images)&&car.images.length){
-    const box=el("div","imgs");
-    car.images.slice(0,8).forEach(u=>{if(typeof u==="string"&&u.startsWith("https")){const im=el("img");im.src=u;im.loading="lazy";box.appendChild(im);}});
-    if(box.children.length)c.appendChild(box);
-  }
+  if(!TOK){msgCard("err","קישור לא תקין.");return;}
+  let d; try{ d=await rpc("tender_public_get",{p_token:TOK}); }catch(e){ msgCard("err","שגיאה בטעינה. נסה שוב."); return; }
+  if(!d||!d.ok){msgCard("err","הקישור לא נמצא או פג תוקף.");return;}
+  shell();
+  app.appendChild(hero(d.car||{}));
 
   if(!d.open){
-    const m=el("div","msg err",d.status==="awarded"||d.status==="closed"?"המכרז נסגר — תודה.":"המכרז אינו פתוח כעת.");
-    m.style.marginTop="16px";c.appendChild(m);
-    if(d.my_bid)c.appendChild(el("div","prev","ההצעה שלך: "+money(d.my_bid.amount)+" ₪"));
-    return;
+    const c=el("div","card fade");
+    c.appendChild(el("div","eyebrow","המכרז נסגר"));
+    c.appendChild(el("div","lead",d.status==="awarded"||d.status==="closed"?"תודה על ההתעניינות — המכרז הסתיים.":"המכרז אינו פתוח כעת."));
+    if(d.my_bid){const p=el("div","prev");p.innerHTML="ההצעה שלך: <b>"+money(d.my_bid.amount)+" ₪</b>";c.appendChild(p);}
+    app.appendChild(c); addFoot(); return;
   }
 
-  const lab=el("label","","סכום ההצעה שלך (₪)");c.appendChild(lab);
-  const wrapCur=el("div","cur");
-  const amt=el("input");amt.type="number";amt.inputMode="numeric";amt.min="1";amt.className="amount";amt.placeholder="0";
-  if(d.my_bid)amt.value=d.my_bid.amount;
-  wrapCur.appendChild(amt);c.appendChild(wrapCur);
-  c.appendChild(el("label","","הערה (לא חובה)"));
-  const note=el("textarea");note.rows=2;note.maxLength=300;if(d.my_bid&&d.my_bid.note)note.value=d.my_bid.note;c.appendChild(note);
-  const btn=el("button","",d.my_bid?"עדכון ההצעה":"שליחת הצעה");c.appendChild(btn);
-  if(d.my_bid)c.appendChild(el("div","prev","הצעה קיימת: "+money(d.my_bid.amount)+" ₪ — אפשר לעדכן עד סגירה."));
+  if(d.closes_at){
+    const tm=el("div","timer fade");
+    tm.appendChild(el("span",null,"⏳"));
+    const col=el("div"); col.appendChild(el("div","big","—")); col.appendChild(el("div","lbl","נותר להגשת הצעה")); tm.appendChild(col);
+    app.appendChild(tm); startTimer(tm,d.closes_at);
+  }
+
+  const c=el("div","card fade");
+  c.appendChild(el("div","eyebrow","ההצעה שלך"));
+  c.appendChild(el("div","lead","הזן את הסכום שאתה מציע עבור הרכב. ההצעה אישית וחסויה — לא נחשפת לסוחרים אחרים."));
+  const lab=el("label","fld","סכום ההצעה");lab.style.marginTop="16px";lab.htmlFor="amt";c.appendChild(lab);
+  const aw=el("div","amtwrap");aw.appendChild(el("span","cur","₪"));
+  const amt=el("input");amt.id="amt";amt.type="text";amt.inputMode="numeric";amt.placeholder="0";
+  if(d.my_bid)amt.value=money(d.my_bid.amount);
+  aw.appendChild(amt);c.appendChild(aw);
+  amt.addEventListener("input",()=>{const raw=amt.value.replace(/[^\d]/g,"");amt.value=raw?Number(raw).toLocaleString("he-IL"):"";});
+  const note=el("textarea");note.id="note";note.rows=2;note.maxLength=300;note.placeholder="הערה (לא חובה)";
+  if(d.my_bid&&d.my_bid.note)note.value=d.my_bid.note;c.appendChild(note);
+  const btn=el("button","cta",d.my_bid?"עדכון ההצעה":"שליחת הצעה");c.appendChild(btn);
+  if(d.my_bid){const p=el("div","prev");p.innerHTML="הצעה קיימת: <b>"+money(d.my_bid.amount)+" ₪</b> · ניתן לעדכן עד הסגירה";c.appendChild(p);}
+  app.appendChild(c); addFoot();
   btn.onclick=async()=>{
-    const v=Number(amt.value);
-    if(!v||v<=0){amt.focus();return;}
+    const v=Number(amt.value.replace(/[^\d]/g,""));
+    if(!v||v<=0){amt.focus();amt.style.borderColor="var(--err)";return;}
     btn.disabled=true;btn.textContent="שולח…";
     try{
       const res=await rpc("tender_bid_submit",{p_token:TOK,p_amount:v,p_note:note.value||null});
       if(res&&res.ok){
-        const cc=card();cc.appendChild(el("h1","","✓ ההצעה נקלטה"));
-        cc.appendChild(el("div","msg ok","הצעתך על סך "+money(v)+" ₪ התקבלה. נעדכן אותך אם תזכה."));
+        shell(); app.appendChild(hero(d.car||{}));
+        const cc=el("div","card fade");
+        const bo=el("div","big-ok");bo.appendChild(el("div","ring","✓"));
+        bo.appendChild(el("div","eyebrow","ההצעה נקלטה"));
+        cc.appendChild(bo);
+        const p=el("div","lead");p.style.textAlign="center";p.innerHTML="הצעתך על סך <b style='color:var(--gold1)'>"+money(v)+" ₪</b> התקבלה.<br>אם תזכה — ניצור קשר.";
+        cc.appendChild(p); app.appendChild(cc); addFoot();
       }else{
         btn.disabled=false;btn.textContent="שליחת הצעה";
         c.appendChild(el("div","msg err",res&&res.error==="closed"?"המכרז נסגר.":"שליחה נכשלה, נסה שוב."));
@@ -106,6 +195,7 @@ async function load(){
     }catch(e){btn.disabled=false;btn.textContent="שליחת הצעה";c.appendChild(el("div","msg err","שגיאת רשת, נסה שוב."));}
   };
 }
+function addFoot(){const f=el("div","foot");f.innerHTML="מופעל על ידי <b style='color:#8b94a6'>פרי דרייב</b> · מערכת מכרזי יד2";app.appendChild(f);}
 load();
 </script>
 </body>

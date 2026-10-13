@@ -2,64 +2,79 @@
 <html lang="he" dir="rtl">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>מעקב בקשת הצעה</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;700;800;900&display=swap" rel="stylesheet">
 <style>
-  :root{--bg:#0e1117;--card:#171c26;--line:#2a3140;--txt:#e9edf4;--mut:#9aa6b8;--accent:#ffd21a;--ok:#2ec77a}
-  *{box-sizing:border-box}
-  body{margin:0;font-family:"Segoe UI",Arial,sans-serif;background:var(--bg);color:var(--txt);
-       min-height:100vh;display:flex;align-items:flex-start;justify-content:center;padding:24px 16px}
-  .wrap{width:100%;max-width:480px}
-  .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:24px;text-align:center}
-  h1{font-size:20px;margin:0 0 6px}
-  .car{font-size:17px;font-weight:700;margin:4px 0 16px}
-  .pill{display:inline-block;padding:6px 14px;border-radius:20px;font-size:14px;font-weight:600}
-  .pill.open{background:rgba(255,210,26,.15);color:var(--accent)}
-  .pill.done{background:rgba(46,199,122,.15);color:var(--ok)}
-  .pill.closed{background:rgba(255,80,80,.12);color:#ff8a8a}
-  .win{margin-top:18px;font-size:15px;color:var(--mut)}
-  .win b{color:var(--ok);font-size:26px;display:block;margin-top:4px}
-  .mut{color:var(--mut);font-size:13px;margin-top:14px}
+  :root{--bg:#0a0c10;--card:rgba(255,255,255,.045);--line:rgba(255,255,255,.09);--txt:#f2f5fa;--mut:#93a0b4;
+    --gold1:#f3dd93;--gold2:#c9a349;--ok:#38d39f;--err:#ff8a8a}
+  *{box-sizing:border-box}html,body{margin:0}
+  body{font-family:"Heebo",system-ui,Arial,sans-serif;color:var(--txt);min-height:100vh;display:flex;flex-direction:column;
+    background:radial-gradient(1200px 600px at 80% -10%,rgba(201,163,73,.14),transparent 60%),
+      radial-gradient(900px 500px at -10% 10%,rgba(80,120,255,.08),transparent 55%),
+      linear-gradient(180deg,#0a0c10,#0a0c10 40%,#0c0f15);background-attachment:fixed}
+  .wrap{max-width:460px;margin:0 auto;width:100%;padding:0 0 40px}
+  .brand{display:flex;align-items:center;gap:9px;padding:20px 20px 4px;font-weight:800}
+  .brand .dot{width:28px;height:28px;border-radius:8px;background:linear-gradient(135deg,var(--gold1),var(--gold2));
+    display:grid;place-items:center;color:#1a1400;font-weight:900;font-size:15px}
+  .brand small{color:var(--mut);font-weight:500;font-size:12px;margin-inline-start:auto}
+  .card{margin:16px;background:var(--card);border:1px solid var(--line);border-radius:18px;padding:26px 22px;text-align:center;
+    backdrop-filter:blur(10px);box-shadow:0 10px 30px rgba(0,0,0,.25)}
+  .eyebrow{font-size:12px;font-weight:700;letter-spacing:1.5px;color:var(--gold2);text-transform:uppercase}
+  .car{font-size:20px;font-weight:800;margin:8px 0 18px}
+  .pill{display:inline-flex;align-items:center;gap:7px;padding:8px 16px;border-radius:999px;font-size:14px;font-weight:700}
+  .pill.open{background:rgba(201,163,73,.14);color:var(--gold1);border:1px solid rgba(201,163,73,.3)}
+  .pill.done{background:rgba(56,211,159,.14);color:var(--ok);border:1px solid rgba(56,211,159,.3)}
+  .pill.closed{background:rgba(255,80,80,.1);color:var(--err);border:1px solid rgba(255,80,80,.3)}
+  .pill .b{width:8px;height:8px;border-radius:50%;background:currentColor;animation:pulse 1.6s infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+  .win{margin-top:22px;padding:20px;border-radius:16px;background:linear-gradient(135deg,rgba(201,163,73,.12),rgba(201,163,73,.04));
+    border:1px solid rgba(201,163,73,.25)}
+  .win .lbl{font-size:13px;color:var(--mut)}
+  .win .amt{font-weight:900;font-size:34px;color:var(--gold1);margin-top:6px;letter-spacing:.5px;font-variant-numeric:tabular-nums}
+  .mut{color:var(--mut);font-size:13.5px;margin-top:16px;line-height:1.6}
+  .foot{text-align:center;color:#566072;font-size:12px;margin-top:auto;padding:22px 20px 0;line-height:1.6}
+  .fade{animation:fade .5s ease both}@keyframes fade{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
 </style>
 </head>
 <body>
-<div class="wrap" id="app"><div class="card"><div class="mut">טוען…</div></div></div>
+<div class="wrap" id="app"><div class="brand"><span class="dot">י2</span> יד2 · פרי דרייב <small>מעקב בקשה</small></div><div class="card"><div class="mut">טוען…</div></div></div>
+<div class="foot" id="foot"></div>
 <script>
 const SB_URL="https://xppsvottiwbjsjlusief.supabase.co";
 const SB_ANON="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhwcHN2b3R0aXdianNqbHVzaWVmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTEzNzg5NzYsImV4cCI6MjEwNjk1NDk3Nn0.b9WaudA0bbKQiEVHtdnChETITTq4Tl2oPEHPnzwWsZo";
-async function rpc(fn,body){
-  const r=await fetch(SB_URL+"/rest/v1/rpc/"+fn,{method:"POST",
-    headers:{apikey:SB_ANON,Authorization:"Bearer "+SB_ANON,"Content-Type":"application/json"},
-    body:JSON.stringify(body||{})});
-  if(!r.ok) throw new Error("http "+r.status);
-  return r.json();
-}
-const qs=new URLSearchParams(location.search), TRK=qs.get("track")||"";
+async function rpc(fn,body){const r=await fetch(SB_URL+"/rest/v1/rpc/"+fn,{method:"POST",headers:{apikey:SB_ANON,Authorization:"Bearer "+SB_ANON,"Content-Type":"application/json"},body:JSON.stringify(body||{})});if(!r.ok)throw new Error("http "+r.status);return r.json();}
+const qs=new URLSearchParams(location.search),TRK=qs.get("track")||"";
 const app=document.getElementById("app");
-function el(tag,cls,txt){const e=document.createElement(tag);if(cls)e.className=cls;if(txt!=null)e.textContent=txt;return e;}
+document.getElementById("foot").innerHTML="מופעל על ידי <b style='color:#8b94a6'>פרי דרייב</b> · מערכת מכרזי יד2";
+function el(t,c,x){const e=document.createElement(t);if(c)e.className=c;if(x!=null)e.textContent=x;return e;}
 function money(n){return Number(n||0).toLocaleString("he-IL");}
+function brand(){const b=el("div","brand");const d=el("span","dot","י2");b.appendChild(d);b.appendChild(document.createTextNode(" יד2 · פרי דרייב "));b.appendChild(el("small",null,"מעקב בקשה"));return b;}
 async function load(){
-  if(!TRK){app.innerHTML="";app.appendChild(el("div","card")).appendChild(el("div","mut","קישור לא תקין."));return;}
+  if(!TRK){app.innerHTML="";app.appendChild(brand());const c=el("div","card");c.appendChild(el("div","mut","קישור לא תקין."));app.appendChild(c);return;}
   let d;try{d=await rpc("tender_track_get",{p_track_token:TRK});}catch(e){return;}
   if(!d||!d.ok)return;
-  const c=el("div","card");app.innerHTML="";app.appendChild(c);
-  c.appendChild(el("h1","","מעקב בקשת הצעה"));
-  const car=d.car||{};const title=[car.make,car.model,car.year].filter(Boolean).join(" ");
-  c.appendChild(el("div","car",title||"רכב"+(car.plate?" · "+car.plate:"")));
+  app.innerHTML="";app.appendChild(brand());
+  const c=el("div","card fade");
+  c.appendChild(el("div","eyebrow","מעקב בקשת הצעה"));
+  const car=d.car||{};const title=[car.make,car.model,car.year].filter(Boolean).join(" ")||"רכב";
+  c.appendChild(el("div","car",title+(car.plate?" · "+car.plate:"")));
   const map={draft:["ממתין לשליחה","open"],open:["המכרז פתוח — אוסף הצעות","open"],
     awarded:["נבחרה הצעה זוכה","done"],closed:["נסגר ללא הצעות","closed"],cancelled:["בוטל","closed"]};
   const st=map[d.status]||["—","open"];
-  c.appendChild(el("span","pill "+st[1],st[0]));
+  const pill=el("span","pill "+st[1]);if(st[1]!=="done")pill.appendChild(el("span","b"));pill.appendChild(el("span",null,st[0]));
+  c.appendChild(pill);
   if(d.winner){
-    const w=el("div","win","ההצעה הזוכה");
-    const b=el("b");b.textContent=money(d.winner.amount)+" ₪";w.appendChild(b);
-    c.appendChild(w);
+    const w=el("div","win");w.appendChild(el("div","lbl","ההצעה הזוכה"));
+    w.appendChild(el("div","amt",money(d.winner.amount)+" ₪"));c.appendChild(w);
   }else if(d.status==="open"){
-    c.appendChild(el("div","mut","הדף מתעדכן אוטומטית. התוצאה תופיע כאן בסגירת המכרז."));
+    c.appendChild(el("div","mut","הדף מתעדכן אוטומטית — התוצאה תופיע כאן ברגע שהמכרז ייסגר."));
   }
+  app.appendChild(c);
 }
-load();
-setInterval(load,30000);
+load();setInterval(load,30000);
 </script>
 </body>
 </html>

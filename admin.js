@@ -3296,7 +3296,7 @@
       function build(cars) {
       var newN = cars.filter(function (c) { return c.condition !== 'יד 2'; }).length;
       var usedN = cars.length - newN;
-      var curCond = 'חדש';   // טאב פעיל: חדש / יד 2
+      var curCond = isYad2 ? 'יד 2' : 'חדש';   // ב-yad2 אין רכבים חדשים — ברירת-מחדל יד 2
       var brands = Object.keys(cars.reduce(function (a, c) { if (c.brand) a[c.brand] = 1; return a; }, {})).sort();
       var filter = makeFilter([
         { key: 'brand', label: 'מותג', options: [{ v: '', l: 'הכל' }].concat(brands.map(function (b) { return { v: b, l: b }; })) },
@@ -3306,7 +3306,7 @@
       ], draw);
       if (!carCols) carCols = window.C2B.colPicker('cars', CAR_COL_DEFS, draw, { sortable: true });
       view('<div class="card"><div class="row-between"><h3>רכבים <span class="muted" id="ccount"></span></h3><div><input class="inp" id="cq" placeholder="חיפוש חופשי…" style="width:180px"> ' + carCols.button() + '</div></div>' +
-        '<div class="tabs2" id="carTabs" style="margin:8px 0 12px"><button class="active" data-cond="חדש">🚗 רכבים חדשים (' + newN + ')</button><button data-cond="יד 2">🔑 יד 2 (' + usedN + ')</button></div>' +
+        '<div class="tabs2" id="carTabs" style="margin:8px 0 12px">' + (isYad2 ? '' : '<button class="active" data-cond="חדש">🚗 רכבים חדשים (' + newN + ')</button>') + '<button class="' + (isYad2 ? 'active' : '') + '" data-cond="יד 2">🔑 יד 2 (' + usedN + ')</button></div>' +
         '<div id="carsBody"></div></div>');
       function list() {
         var q = ($('cq') && $('cq').value || '').trim().toLowerCase();
