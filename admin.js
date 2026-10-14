@@ -3671,7 +3671,72 @@
     }, 0);
   }
 
+  /* ===================== דוחות יד2 (מותאם לפעילות העסקית) =====================
+     משקף את כל פעילות יד2: מלאי + רווחיות/יומן-מסחר + מכרזים. סינון-תאריכים. */
+  function renderYad2Reports(opts) {
+    opts = opts || {}; loading();
+    var from = opts.from || '', to = opts.to || '';
+    function inRange(d) { if (!d) return false; d = String(d).slice(0, 10); if (from && d < from) return false; if (to && d > to) return false; return true; }
+    Promise.all([
+      db.from('inventory').select('id,make,price,status,published,created_at,sold_at'),
+      db.from('inventory_pricing').select('inventory_id,purchase_cost,purchased_at'),
+      db.from('tenders').select('status,created_at,winner_bid_id'),
+      db.from('tender_bids').select('id,tender_id,amount'),
+      db.from('tender_invites').select('tender_id,bid_id'),
+      db.from('tender_suppliers').select('id,active')
+    ]).then(function (R) {
+      var inv = R[0].data || [], prc = R[1].data || [], tnd = R[2].data || [], bids = R[3].data || [], invites = R[4].data || [], sup = R[5].data || [];
+      var pmap = {}; prc.forEach(function (p) { pmap[p.inventory_id] = p; });
+      var bmap = {}; bids.forEach(function (b) { bmap[b.id] = Number(b.amount) || 0; });
+      // ---- מלאי (מצב נוכחי) ----
+      var byStat = {}; inv.forEach(function (c) { byStat[c.status] = (byStat[c.status] || 0) + 1; });
+      var published = inv.filter(function (c) { return c.published; }).length;
+      var stockValue = inv.filter(function (c) { return c.status === 'available' && c.price != null; }).reduce(function (a, c) { return a + Number(c.price); }, 0);
+      var makeCnt = {}; inv.forEach(function (c) { if (c.make) makeCnt[c.make] = (makeCnt[c.make] || 0) + 1; });
+      var topMakes = Object.keys(makeCnt).map(function (k) { return [k, makeCnt[k]]; }).sort(function (a, b) { return b[1] - a[1]; }).slice(0, 6);
+      // ---- רווחיות / מסחר (נמכרו בטווח, או הכל אם אין טווח) ----
+      var sold = inv.filter(function (c) { return c.status === 'sold' && (!(from || to) || inRange(c.sold_at)); });
+      var rev = 0, cost = 0, nMargin = 0, daysSum = 0, daysN = 0;
+      sold.forEach(function (c) {
+        var pr = pmap[c.id] || {};
+        if (c.price != null && pr.purchase_cost != null) { rev += Number(c.price); cost += Number(pr.purchase_cost); nMargin++; }
+        var inD = pr.purchased_at || (c.created_at ? c.created_at.slice(0, 10) : null);
+        if (inD && c.sold_at) { var d = Math.round((new Date(c.sold_at) - new Date(inD)) / 86400000); if (d >= 0) { daysSum += d; daysN++; } }
+      });
+      var profit = rev - cost, marginPct = rev ? Math.round(profit / rev * 1000) / 10 : 0, avgDays = daysN ? Math.round(daysSum / daysN) : 0;
+      // ---- מכרזים (נוצרו בטווח, או הכל) ----
+      var tset = tnd.filter(function (t) { return (!(from || to) || inRange(t.created_at)); });
+      var tOpen = 0, tAward = 0, tClosed = 0, winSum = 0, winN = 0;
+      tset.forEach(function (t) { if (t.status === 'open') tOpen++; else if (t.status === 'awarded') { tAward++; if (t.winner_bid_id && bmap[t.winner_bid_id]) { winSum += bmap[t.winner_bid_id]; winN++; } } else if (t.status === 'closed') tClosed++; });
+      var avgWin = winN ? Math.round(winSum / winN) : 0;
+      var invBid = invites.filter(function (i) { return i.bid_id; }).length;
+      var respRate = invites.length ? Math.round(invBid / invites.length * 100) : 0;
+      var activeSup = sup.filter(function (s) { return s.active; }).length;
+
+      function kpi(label, val, color, sub) { return '<div class="card" style="padding:14px 16px"><div class="muted" style="font-size:12.5px">' + label + '</div><div style="font-weight:800;font-size:22px;margin-top:4px' + (color ? ';color:' + color : '') + '">' + val + '</div>' + (sub ? '<div class="muted" style="font-size:11.5px;margin-top:2px">' + sub + '</div>' : '') + '</div>'; }
+      function grid(cards) { return '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:20px">' + cards + '</div>'; }
+      var ST = { available: 'זמין', reserved: 'שמור', sold: 'נמכר', intake: 'קליטה', hidden: 'מוסתר' };
+      var makeRows = topMakes.map(function (m) { return '<tr><td style="padding:5px 8px">' + esc(m[0]) + '</td><td style="padding:5px 8px;text-align:left;font-weight:700">' + m[1] + '</td></tr>'; }).join('') || '<tr><td class="muted" style="padding:8px">אין נתונים</td></tr>';
+
+      view('<div class="row-between" style="margin-bottom:14px;align-items:center;flex-wrap:wrap;gap:8px"><h2 style="margin:0">📈 דוחות יד2</h2>' +
+        '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><label style="font-size:12px;color:var(--muted)">מ-</label><input class="inp" type="date" id="yr_from" value="' + esc(from) + '" style="width:140px"><label style="font-size:12px;color:var(--muted)">עד</label><input class="inp" type="date" id="yr_to" value="' + esc(to) + '" style="width:140px"><button class="btn btn-ghost btn-sm" id="yr_apply">סנן</button>' + (from || to ? '<button class="btn btn-ghost btn-sm" id="yr_clear">נקה</button>' : '') + '</div></div>' +
+        '<div style="font-size:13px;color:var(--brand);font-weight:700;margin:4px 0 8px">🚙 מלאי (מצב נוכחי)</div>' +
+        grid(kpi('סה"כ רכבים', inv.length) + kpi('זמינים', byStat.available || 0, 'var(--ok)') + kpi('שמורים', byStat.reserved || 0) + kpi('נמכרו', byStat.sold || 0) + kpi('מפורסמים', published) + kpi('שווי מלאי זמין', nis(stockValue))) +
+        '<div style="font-size:13px;color:var(--brand);font-weight:700;margin:4px 0 8px">💰 רווחיות ומסחר' + (from || to ? ' (בטווח)' : '') + '</div>' +
+        grid(kpi('נמכרו', sold.length) + kpi('הכנסות ממכירות', nis(rev)) + kpi('עלות רכש', nis(cost)) + kpi('רווח', nis(profit), profit >= 0 ? 'var(--ok)' : 'var(--danger)') + kpi('מרווח ממוצע', marginPct + '%', profit >= 0 ? 'var(--ok)' : 'var(--danger)') + kpi('ימים במלאי (ממוצע)', avgDays || '—')) +
+        '<div style="font-size:13px;color:var(--brand);font-weight:700;margin:4px 0 8px">🔨 מכרזים' + (from || to ? ' (בטווח)' : '') + '</div>' +
+        grid(kpi('סה"כ מכרזים', tset.length) + kpi('פתוחים', tOpen, 'var(--ok)') + kpi('הוכרזו זוכה', tAward) + kpi('הצעה-זוכה ממוצעת', avgWin ? nis(avgWin) : '—') + kpi('שיעור היענות סוחרים', respRate + '%', null, invBid + '/' + invites.length + ' הזמנות') + kpi('ספקים פעילים', activeSup)) +
+        '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px">' +
+          '<div class="card"><h3 style="margin:0 0 8px">יצרנים מובילים במלאי</h3><table style="width:100%;border-collapse:collapse;font-size:14px"><tbody>' + makeRows + '</tbody></table></div>' +
+          '<div class="card"><h3 style="margin:0 0 8px">פילוח מלאי לפי סטטוס</h3><table style="width:100%;border-collapse:collapse;font-size:14px"><tbody>' +
+            Object.keys(ST).map(function (k) { return '<tr><td style="padding:5px 8px">' + ST[k] + '</td><td style="padding:5px 8px;text-align:left;font-weight:700">' + (byStat[k] || 0) + '</td></tr>'; }).join('') + '</tbody></table></div></div>');
+      $('yr_apply').addEventListener('click', function () { renderYad2Reports({ from: $('yr_from').value, to: $('yr_to').value }); });
+      if ($('yr_clear')) $('yr_clear').addEventListener('click', function () { renderYad2Reports({}); });
+    });
+  }
+
   function renderReports() {
+    if ((window.__fleetCfg && window.__fleetCfg.slug) === 'yad2') return renderYad2Reports();
     loading();
     Promise.all([
       db.from('leads').select('id,name,phone,car,status,source,created_at,first_response_at,assigned_to,brand,utm_campaign,utm_source,utm_medium,utm_term,utm_content,campaign,adset_name,ad_name,ad_group,ad_id,marketing_company,city').is('deleted_at', null),
