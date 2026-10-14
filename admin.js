@@ -7563,6 +7563,17 @@
         whatsapp: !!(by.whatsapp && by.whatsapp.connected) || cnt(3) > 0,
         icredit: !!(by.icredit && by.icredit.config && by.icredit.config.group_token)
       };
+      function fbTokensHTML(cfg) {
+        var toks = (cfg && cfg.tokens) || [];
+        return '<div style="border-top:1px solid var(--line);margin-top:10px;padding-top:10px">' +
+          '<div class="row-between" style="align-items:center"><b style="font-size:13px">🔑 חשבונות/טוקנים נוספים <span class="muted" style="font-weight:400">· ' + toks.length + '</span></b></div>' +
+          '<p class="muted" style="font-size:11.5px;margin:4px 0 8px">כל טוקן = חשבון/BM נוסף. הדפים מכולם מוצגים יחד ב"🔄 טען טפסים".</p>' +
+          (toks.map(function (t, i) {
+            return '<details style="border:1px solid var(--line);border-radius:8px;padding:6px 11px;margin-bottom:6px"><summary style="cursor:pointer;font-size:12.5px;font-weight:600">' + esc(t.label || ('טוקן ' + (i + 1))) + ' <span class="muted" style="font-weight:400">· ****' + esc(String(t.token || '').slice(-4)) + '</span></summary><div style="margin-top:8px"><button class="btn btn-ghost btn-sm" data-fbtokdel="' + i + '" style="color:var(--danger)">🗑 הסר טוקן</button></div></details>';
+          }).join('') || '<p class="muted" style="font-size:12px;margin:0 0 6px">אין טוקנים נוספים עדיין.</p>') +
+          '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px"><input class="inp" id="fbTokLabel" placeholder="שם (למשל: BM מותגים)" style="width:150px"><input class="inp ltr" id="fbTokVal" type="password" placeholder="Page / System User Token" style="flex:1;min-width:150px"><button class="btn btn-sm" id="fbTokAdd">➕ הוסף טוקן</button> <span id="fbTokMsg" class="muted" style="font-size:12px"></span></div>' +
+          '</div>';
+      }
       host.innerHTML = '<p class="muted" style="font-size:12.5px;margin:0 0 14px;line-height:1.7">כל עסק מחבר את החשבונות שלו בנפרד. הסטטוס מתעדכן אוטומטית — "מחובר" מופיע ברגע שיש פעילות אמיתית (שיחות, הודעות, מיילים) או הגדרה שמורה.</p>' +
         CONN_PLATFORMS.map(function (p) {
           var st = by[p.key] || {}, cfg = st.config || {};
@@ -7576,6 +7587,7 @@
           var tip = CONN_TIP[p.key] ? '<p class="muted" style="font-size:12px;line-height:1.7;background:var(--surface-2);padding:9px 11px;border-radius:9px;margin:0 0 12px">' + CONN_TIP[p.key] + '</p>' : '';
           return '<div class="card cl-sub" style="margin-bottom:14px"><div class="row-between" style="align-items:center;gap:8px"><h3 class="cl-h" style="margin:0">' + p.icon + ' ' + esc(p.title) + '</h3><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">' + helpBtn + badge + '</div></div>' +
             '<p class="muted" style="font-size:12.5px;margin:6px 0 12px">' + esc(p.desc) + '</p>' + tip + fh +
+            (p.key === 'facebook' ? fbTokensHTML(cfg) : '') +
             (p.hook ? '<div class="field" style="margin:8px 0 0"><label>כתובת Webhook להגדרה בפלטפורמה</label><input class="inp ltr" readonly value="' + esc(base + p.hook + '?org=' + oid) + '" onclick="this.select()"></div>' : '') +
             '<div style="margin-top:12px"><button class="btn btn-sm" data-connsave="' + p.key + '">💾 שמור חיבור</button> <span data-cm="' + p.key + '" style="font-size:12px;margin-inline-start:8px"></span></div></div>';
         }).join('');
@@ -7607,6 +7619,29 @@
             msg.style.color = 'var(--ok)'; msg.textContent = '✔ נשמר'; by[key] = { platform: key, config: cfg, connected: true };
             setTimeout(renderConnections, 700);   // רענון הסטטוס
           });
+        });
+      });
+      // ---- ריבוי טוקנים לפייסבוק (חשבונות/BM נוספים) ----
+      function fbSaveTokens(tokens, msg) {
+        var cfg = Object.assign({}, (by.facebook && by.facebook.config) || {}); cfg.tokens = tokens;
+        if (msg) { msg.style.color = 'var(--muted)'; msg.textContent = 'שומר…'; }
+        db.from('org_integrations').upsert({ org_id: oid, platform: 'facebook', config: cfg, connected: true, updated_at: new Date().toISOString() }, { onConflict: 'org_id,platform' }).then(function (u) {
+          if (u.error) { if (msg) { msg.style.color = 'var(--danger)'; msg.textContent = 'שגיאה: ' + u.error.message; } return; }
+          by.facebook = { platform: 'facebook', config: cfg, connected: true }; setTimeout(renderConnections, 450);
+        });
+      }
+      var fbAdd = host.querySelector('#fbTokAdd');
+      if (fbAdd) fbAdd.addEventListener('click', function () {
+        var token = (host.querySelector('#fbTokVal').value || '').trim(), label = (host.querySelector('#fbTokLabel').value || '').trim();
+        var msg = host.querySelector('#fbTokMsg'); if (!token) { if (msg) { msg.style.color = 'var(--danger)'; msg.textContent = 'הדבק טוקן'; } return; }
+        var cur = ((by.facebook && by.facebook.config && by.facebook.config.tokens) || []);
+        fbSaveTokens(cur.concat([{ label: label || ('טוקן ' + (cur.length + 1)), token: token }]), msg);
+      });
+      host.querySelectorAll('[data-fbtokdel]').forEach(function (b) {
+        b.addEventListener('click', function () {
+          if (!confirm('להסיר את הטוקן? דפים שכבר חוברו ימשיכו לפעול.')) return;
+          var i = +b.dataset.fbtokdel, cur = ((by.facebook && by.facebook.config && by.facebook.config.tokens) || []);
+          fbSaveTokens(cur.filter(function (_, k) { return k !== i; }), host.querySelector('#fbTokMsg'));
         });
       });
     }, function (e) { host.innerHTML = '<div class="card"><div class="sec-note">שגיאה: ' + esc((e && e.message) || e) + '</div></div>'; });
