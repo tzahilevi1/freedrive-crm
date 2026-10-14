@@ -347,8 +347,9 @@
     box.innerHTML = '<div class="card" style="border:1px solid var(--line);background:var(--surface-2)">' +
       '<div class="row-between" style="margin-bottom:12px"><b>' + (isNew ? '➕ רכב חדש' : '✏️ ' + esc(invTitle(car))) + '</b><button class="btn btn-ghost btn-sm" id="invClose">✕ סגור</button></div>' +
       '<div class="grid2">' + invF('יצרן', 'iv_make', car.make) + invF('דגם', 'iv_model', car.model) + invF('רמת גימור', 'iv_trim', car.trim) + invF('שנה', 'iv_year', car.year, 'number') + invF('יד', 'iv_hand', car.hand) + invF('ק"מ', 'iv_km', car.km, 'number') + invF('צבע', 'iv_color', car.color) + invF('סוג דלק', 'iv_fuel', car.fuel) + invF('מספר רכב', 'iv_plate', car.plate) + invF('מחיר מכירה (₪)', 'iv_price', car.price, 'number') + '</div>' +
-      '<div style="font-size:12px;color:var(--muted);font-weight:600;margin:12px 0 4px">💰 תמחור פנימי (לא מוצג באתרים)</div>' +
+      '<div style="font-size:12px;color:var(--muted);font-weight:600;margin:12px 0 4px">💰 תמחור פנימי + יומן מסחר (לא מוצג באתרים)</div>' +
       '<div class="grid2">' + invF('מחיר מחירון (₪)', 'iv_listprice', '', 'number') + invF('מחיר מינימום (₪)', 'iv_minprice', '', 'number') + invF('מחיר מנהל (₪)', 'iv_mgrprice', '', 'number') + '</div>' +
+      '<div class="grid2" style="margin-top:4px">' + invF('עלות רכישה (₪)', 'iv_pcost', '', 'number') + invF('תאריך רכישה', 'iv_pdate', '', 'date') + invF('נרכש מ- (ספק)', 'iv_psup') + invF('נמכר ל- (קונה)', 'iv_buyer') + '</div>' +
       '<div class="field" style="margin-top:10px"><label>תיאור</label><textarea class="inp" id="iv_desc" style="height:70px;width:100%">' + esc(car.description || '') + '</textarea></div>' +
       '<div style="margin-top:12px"><label style="font-size:13px;color:var(--muted);display:block;margin-bottom:6px">תמונות (לחיצה על תמונה = קביעת שער)</label><div id="iv_imgs" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px"></div><input type="file" id="iv_file" accept="image/*" multiple style="font-size:13px"> <span id="iv_upmsg" class="muted" style="font-size:12px"></span></div>' +
       '<div class="grid2" style="margin-top:12px"><div class="field" style="margin:0"><label>סטטוס</label><select class="inp" id="iv_status" style="width:100%">' + ['intake', 'available', 'reserved', 'sold', 'hidden'].map(function (s) { return '<option value="' + s + '"' + ((car.status || 'intake') === s ? ' selected' : '') + '>' + INV_ST[s][0] + '</option>'; }).join('') + '</select></div>' +
@@ -356,8 +357,8 @@
       '<div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-sm" id="iv_save">💾 שמור</button>' + (isNew ? '' : '<button class="btn btn-ghost btn-sm" id="iv_del" style="color:var(--danger)">🗑 מחק</button>') + '<span id="iv_msg" style="font-size:13px;margin-inline-start:8px"></span></div></div>';
     box.scrollIntoView({ behavior: 'smooth', block: 'start' });
     // טעינת תמחור פנימי קיים (טבלה נפרדת צוות-בלבד)
-    if (car.id) db.from('inventory_pricing').select('list_price,min_price,manager_price').eq('inventory_id', car.id).maybeSingle().then(function (pr) {
-      if (pr && pr.data) { var st = function (id, v) { var e = $(id); if (e) e.value = (v == null ? '' : v); }; st('iv_listprice', pr.data.list_price); st('iv_minprice', pr.data.min_price); st('iv_mgrprice', pr.data.manager_price); }
+    if (car.id) db.from('inventory_pricing').select('list_price,min_price,manager_price,purchase_cost,purchased_at,supplier_name,buyer_name').eq('inventory_id', car.id).maybeSingle().then(function (pr) {
+      if (pr && pr.data) { var st = function (id, v) { var e = $(id); if (e) e.value = (v == null ? '' : v); }; st('iv_listprice', pr.data.list_price); st('iv_minprice', pr.data.min_price); st('iv_mgrprice', pr.data.manager_price); st('iv_pcost', pr.data.purchase_cost); st('iv_pdate', pr.data.purchased_at); st('iv_psup', pr.data.supplier_name); st('iv_buyer', pr.data.buyer_name); }
     });
     var state = { images: invImgs(car).slice(), cover: car.cover_idx || 0 };
     function paintImgs() {
@@ -386,16 +387,80 @@
     $('iv_save').addEventListener('click', function () {
       var patch = { make: val('iv_make'), model: val('iv_model'), trim: val('iv_trim'), year: numv('iv_year'), hand: val('iv_hand'), km: numv('iv_km'), color: val('iv_color'), fuel: val('iv_fuel'), plate: val('iv_plate'), price: numv('iv_price'), description: val('iv_desc'), images: state.images, cover_idx: state.cover, status: $('iv_status').value, published: $('iv_pub').checked };
       var btn = this; btn.disabled = true; $('iv_msg').style.color = 'var(--muted)'; $('iv_msg').textContent = 'שומר…';
-      var pricing = { list_price: numv('iv_listprice'), min_price: numv('iv_minprice'), manager_price: numv('iv_mgrprice') };
+      var pricing = { list_price: numv('iv_listprice'), min_price: numv('iv_minprice'), manager_price: numv('iv_mgrprice'), purchase_cost: numv('iv_pcost'), purchased_at: val('iv_pdate'), supplier_name: val('iv_psup'), buyer_name: val('iv_buyer') };
       function savePricing(invId, done) {
         if (!invId) return done();
-        db.from('inventory_pricing').upsert({ inventory_id: invId, list_price: pricing.list_price, min_price: pricing.min_price, manager_price: pricing.manager_price, updated_at: new Date().toISOString() }, { onConflict: 'inventory_id' }).then(function () { done(); });
+        db.from('inventory_pricing').upsert({ inventory_id: invId, list_price: pricing.list_price, min_price: pricing.min_price, manager_price: pricing.manager_price, purchase_cost: pricing.purchase_cost, purchased_at: pricing.purchased_at, supplier_name: pricing.supplier_name, buyer_name: pricing.buyer_name, updated_at: new Date().toISOString() }, { onConflict: 'inventory_id' }).then(function () { done(); });
       }
       var p = car.id ? db.from('inventory').update(patch).eq('id', car.id).select('id').single() : db.from('inventory').insert(patch).select('id').single();
       p.then(function (u) { if (u.error) { btn.disabled = false; $('iv_msg').style.color = 'var(--danger)'; $('iv_msg').textContent = 'שגיאה: ' + u.error.message; return; } savePricing(u.data && u.data.id, function () { btn.disabled = false; $('iv_msg').style.color = 'var(--ok)'; $('iv_msg').textContent = '✔ נשמר'; window.C2B_renderInventory(); }); });
     });
     if ($('iv_del')) $('iv_del').addEventListener('click', function () { if (confirm('למחוק את הרכב?')) db.from('inventory').delete().eq('id', car.id).then(function () { window.C2B_renderInventory(); }); });
   }
+
+  /* ============================ יומן מסחר ============================
+     פנקס קניות/מכירות לכל רכב: עלות רכישה (מ-inventory_pricing הצוות-בלבד)
+     מול מחיר-מכירה (inventory.price) → רווח. סינון-תאריכים + סיכומים + CSV. */
+  function tlDays(a, b) { if (!a) return ''; var d = Math.round(((b ? new Date(b) : new Date()) - new Date(a)) / 86400000); return d >= 0 ? d : ''; }
+  window.C2B_renderTradeLog = function (opts) {
+    opts = opts || {};
+    view('<div class="loading">טוען יומן מסחר…</div>');
+    db.from('inventory').select('id,make,model,year,plate,status,created_at,sold_at,price,inventory_pricing(purchase_cost,purchased_at,supplier_name,buyer_name)').order('created_at', { ascending: false }).then(function (r) {
+      if (r.error) return view('<div class="card"><h3>יומן מסחר</h3><p class="muted">שגיאה: ' + esc(r.error.message) + '</p></div>');
+      var rows = (r.data || []).map(function (c) {
+        var pr = c.inventory_pricing; if (Array.isArray(pr)) pr = pr[0]; pr = pr || {};
+        var inDate = pr.purchased_at || (c.created_at ? c.created_at.slice(0, 10) : null);
+        var outDate = c.sold_at ? c.sold_at.slice(0, 10) : null;
+        var cost = pr.purchase_cost == null ? null : Number(pr.purchase_cost);
+        var sale = c.price == null ? null : Number(c.price);
+        var profit = (cost != null && sale != null) ? (sale - cost) : null;
+        return { id: c.id, title: invTitle(c), plate: c.plate, status: c.status, inDate: inDate, outDate: outDate,
+          supplier: pr.supplier_name, buyer: pr.buyer_name, cost: cost, sale: sale, profit: profit,
+          days: tlDays(inDate, outDate), sold: c.status === 'sold' };
+      });
+      // סינון תאריכים (לפי תאריך-כניסה)
+      var from = opts.from || '', to = opts.to || '';
+      var shown = rows.filter(function (x) { if (from && (!x.inDate || x.inDate < from)) return false; if (to && (!x.inDate || x.inDate > to)) return false; return true; });
+      var tCost = 0, tSale = 0, tProfit = 0, nSold = 0, nStock = 0;
+      shown.forEach(function (x) { if (x.cost) tCost += x.cost; if (x.sold) { if (x.sale) tSale += x.sale; if (x.profit != null) tProfit += x.profit; nSold++; } else if (x.status !== 'hidden') nStock++; });
+      var head = ['רכב', 'רישוי', 'נכנס', 'נרכש מ-', 'עלות', 'נמכר', 'נמכר ל-', 'מחיר מכירה', 'רווח', 'ימים', 'סטטוס'];
+      var body = shown.map(function (x) {
+        var st = INV_ST[x.status] || ['—', '#888'];
+        var pc = x.profit == null ? '' : (x.profit >= 0 ? 'var(--ok)' : 'var(--danger)');
+        return '<tr data-tlrow="' + x.id + '" style="cursor:pointer;border-bottom:1px solid var(--line)">' +
+          '<td style="padding:7px 8px">' + esc(x.title) + '</td><td style="padding:7px 8px">' + esc(x.plate || '—') + '</td>' +
+          '<td style="padding:7px 8px;white-space:nowrap">' + (x.inDate || '—') + '</td><td style="padding:7px 8px">' + esc(x.supplier || '—') + '</td>' +
+          '<td style="padding:7px 8px;text-align:left">' + (x.cost != null ? money(x.cost) : '—') + '</td>' +
+          '<td style="padding:7px 8px;white-space:nowrap">' + (x.outDate || '—') + '</td><td style="padding:7px 8px">' + esc(x.buyer || '—') + '</td>' +
+          '<td style="padding:7px 8px;text-align:left">' + (x.sale != null ? money(x.sale) : '—') + '</td>' +
+          '<td style="padding:7px 8px;text-align:left;font-weight:700;color:' + pc + '">' + (x.profit != null ? money(x.profit) : '—') + '</td>' +
+          '<td style="padding:7px 8px;text-align:center">' + (x.days === '' ? '—' : x.days) + '</td>' +
+          '<td style="padding:7px 8px"><span style="background:' + st[1] + ';color:#fff;font-size:11px;padding:1px 8px;border-radius:999px">' + st[0] + '</span></td></tr>';
+      }).join('');
+      view('<div class="row-between" style="margin-bottom:12px;align-items:center;flex-wrap:wrap;gap:8px"><h2 style="margin:0">📒 יומן מסחר</h2>' +
+        '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><label style="font-size:12px;color:var(--muted)">מ-</label><input class="inp" type="date" id="tl_from" value="' + esc(from) + '" style="width:140px">' +
+        '<label style="font-size:12px;color:var(--muted)">עד</label><input class="inp" type="date" id="tl_to" value="' + esc(to) + '" style="width:140px">' +
+        '<button class="btn btn-ghost btn-sm" id="tl_apply">סנן</button><button class="btn btn-ghost btn-sm" id="tl_csv">⬇ CSV</button></div></div>' +
+        '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:14px">' +
+          tlCard('עלות רכישה (סה"כ)', money(tCost)) + tlCard('מכירות (נמכרו)', money(tSale)) + tlCard('רווח (נמכרו)', money(tProfit), tProfit >= 0 ? 'var(--ok)' : 'var(--danger)') +
+          tlCard('נמכרו', nSold) + tlCard('במלאי', nStock) + '</div>' +
+        '<div style="overflow:auto"><table style="width:100%;border-collapse:collapse;font-size:13.5px"><thead><tr style="color:var(--muted);text-align:right;font-size:12px;border-bottom:2px solid var(--line)">' +
+          head.map(function (h) { return '<th style="padding:7px 8px;white-space:nowrap">' + h + '</th>'; }).join('') + '</tr></thead><tbody>' +
+          (body || '<tr><td colspan="11" style="padding:20px;text-align:center" class="muted">אין רשומות בטווח</td></tr>') + '</tbody></table></div>');
+      $('tl_apply').addEventListener('click', function () { window.C2B_renderTradeLog({ from: $('tl_from').value, to: $('tl_to').value }); });
+      $('view').querySelectorAll('[data-tlrow]').forEach(function (tr) { tr.addEventListener('click', function () {
+        db.from('inventory').select('*').eq('id', tr.dataset.tlrow).single().then(function (res) { if (res.error || !res.data) return; window.C2B_renderInventory(); setTimeout(function () { openInvEdit(res.data); }, 150); }); }); });
+      $('tl_csv').addEventListener('click', function () {
+        var lines = [head.join(',')].concat(shown.map(function (x) {
+          return [x.title, x.plate || '', x.inDate || '', x.supplier || '', x.cost != null ? x.cost : '', x.outDate || '', x.buyer || '', x.sale != null ? x.sale : '', x.profit != null ? x.profit : '', x.days, (INV_ST[x.status] || [''])[0]]
+            .map(function (v) { v = String(v == null ? '' : v); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }).join(',');
+        }));
+        var blob = new Blob(['﻿' + lines.join('\n')], { type: 'text/csv;charset=utf-8' });
+        var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'יומן-מסחר-' + new Date().toISOString().slice(0, 10) + '.csv'; a.click();
+      });
+    });
+  };
+  function tlCard(label, val, color) { return '<div class="card" style="padding:12px 14px"><div class="muted" style="font-size:12px">' + label + '</div><div style="font-weight:800;font-size:18px;margin-top:3px' + (color ? ';color:' + color : '') + '">' + val + '</div></div>'; }
 
   /* ============================ ספקי יד2 ============================ */
   window.C2B_renderTenderSuppliers = function () {
