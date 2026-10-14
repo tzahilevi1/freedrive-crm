@@ -1821,7 +1821,9 @@
     function dPanel(k, active, inner) { return '<div class="dl-panel' + (active ? '' : ' hidden') + '" data-dpanel="' + k + '">' + inner + '</div>'; }
     view(
       '<div class="lead-top"><div style="display:flex;align-items:center;gap:8px"><button class="btn btn-ghost btn-sm" id="dlBack">' + ((C.role || '') === 'files' ? '→ לרשימת התיקים' : '→ לכרטיס') + '</button><h3 style="margin:0">' + (deal.id ? 'עסקה #' + esc(deal.order_no) : 'עסקה חדשה') + '</h3></div>' +
-        '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><button class="btn btn-sm" id="dlContract">' + (deal.signature ? '📄 צפה בהסכם החתום' : (deal.contract_html ? '📤 שלח לחתימה' : '✍ יצירת הסכם לחתימה')) + '</button><span id="dlSaveState" style="display:none"></span></div></div>' +
+        '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">' +
+          ((window.__fleetCfg && window.__fleetCfg.slug) === 'yad2' ? '<select class="inp" id="dl_contract_kind" title="סוג ההסכם" style="width:auto;min-width:130px">' + [['מכר', '📄 הסכם מכר'], ['רכש', '📄 הסכם רכש'], ['טרייד-אין', '📄 הסכם טרייד-אין']].map(function (o) { return '<option value="' + o[0] + '"' + ((deal.contract_type === o[0] ? o[0] : (deal.contract_type && ['מכר', 'רכש', 'טרייד-אין'].indexOf(deal.contract_type) >= 0 ? deal.contract_type : 'מכר')) === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select>' : '') +
+          '<button class="btn btn-sm" id="dlContract">' + (deal.signature ? '📄 צפה בהסכם החתום' : (deal.contract_html ? '📤 שלח לחתימה' : '✍ יצירת הסכם לחתימה')) + '</button><span id="dlSaveState" style="display:none"></span></div></div>' +
       (fileMode ? '<div class="card" style="padding:12px"><h3 style="margin:0 0 8px;font-size:13px">שלב התיק (מנהלת תיקי לקוחות)</h3><div class="flow" id="dlStageBar">' + stageBar(curStage) + '</div></div>' : '') +
       '<nav class="tabs" id="dlTabs" style="margin-bottom:14px;flex-wrap:wrap">' +
         dTab('client', '👤 פרטי הלקוח', true) + dTab('deal', '📋 פרטי העסקה') + dTab('car', '🚗 פרטי הרכב המוזמן') + dTab('fin', '🏦 מקטע מימון') + dTab('trade', '🔁 מקטע טרייד-אין') + dTab('record', '🗂️ סיכום ומסמכים') +
@@ -2009,7 +2011,7 @@
         car_price: num('dl_car_price'), purchase_price: num('dl_purchase_price') || null, commission: num('dl_commission') || null, down_total: num('dl_down_total'), down_initial: num('dl_down_initial'), down_balance: c.downBal, monthly: num('dl_monthly'), delivery_days: num('dl_delivery_days') || null, balance_to_pay: c.balPay,
         addons: { charging: $('dl_charging').checked, armor: $('dl_armor').checked, accessories: $('dl_accessories').checked, insurance: $('dl_insurance').checked, addons_amount: num('dl_addons_amount') },
         vat_included: $('dl_vat').checked, discount_pct: num('dl_discount_pct') || null, discount_amt: c.disc, total: c.total, paid: num('dl_paid') || null, spec: $('dl_spec').value,
-        stage: curStage, checklist: checklist, cancel_reason: (curStage === 'cancelled' ? (deal.cancel_reason || null) : null), contract_type: deal.contract_type || 'car2buy',
+        stage: curStage, checklist: checklist, cancel_reason: (curStage === 'cancelled' ? (deal.cancel_reason || null) : null), contract_type: ($('dl_contract_kind') ? $('dl_contract_kind').value : (deal.contract_type || 'car2buy')),
         financing: { amount: num('dl_fin_amount') || null, approved: num('dl_fin_approved') || null, payments: num('dl_fin_payments') || null, monthly: num('dl_fin_monthly') || null, track: $('dl_fin_track').value, offer: $('dl_fin_offer').value, balloon: num('dl_fin_balloon') || null, mgmt_fee: num('dl_fin_mgmt_fee') || null, status: $('dl_fin_status').value, transferred: $('dl_fin_transferred').checked },
         tradein: { plate: $('dl_ti_plate') ? $('dl_ti_plate').value : null, make: $('dl_ti_make').value, model: $('dl_ti_model').value, trim: $('dl_ti_trim').value, year: num('dl_ti_year') || null, hand: $('dl_ti_hand').value, km: num('dl_ti_km') || null, color: $('dl_ti_color') ? $('dl_ti_color').value : null, fuel: $('dl_ti_fuel') ? $('dl_ti_fuel').value : null, vin: $('dl_ti_vin') ? $('dl_ti_vin').value : null, list: num('dl_ti_list') || null, buy: num('dl_ti_buy') || null, lien: num('dl_ti_lien') || null, holder: $('dl_ti_holder').value, delivery: $('dl_ti_delivery').value || null, liened: $('dl_ti_liened').checked, images: tiImages.slice() }
       };
@@ -2912,7 +2914,85 @@
     };
   }
 
+  // ===================== הסכמי יד2 (רכש · מכר · טרייד-אין) =====================
+  //  מבנה מוכר/קונה לרכב יד-שנייה (שונה מהסכם-הליסינג). נבחר לפי contract_type.
+  //  רכש/טרייד-אין: הלקוח=מוכר, אנחנו=קונה, סעיפים 1-13. מכר: הפוך, 1-11.
+  function yad2ContractHTML(d, kind, sig) {
+    kind = (['רכש', 'מכר', 'טרייד-אין'].indexOf(kind) >= 0) ? kind : 'מכר';
+    var today = new Date().toLocaleDateString('he-IL');
+    var isPurchase = (kind === 'רכש' || kind === 'טרייד-אין');
+    var b = (window.C2B && C2B.brand) || {};
+    var ti = d.tradein || {};
+    var price = Number(d.total) || Number(d.car_price) || 0;
+    var cust = { name: d.client_name, id: d.client_id, phone: d.client_phone, addr: d.client_address };
+    var us = { name: blegal() || bname(), id: bregno(), phone: b.phone || b.support_phone || '', addr: b.address || '' };
+    var seller = isPurchase ? cust : us, buyer = isPurchase ? us : cust;
+    var car = {
+      make: d.car_make || ti.make, model: d.car_model || ti.model, year: d.car_year || ti.year,
+      trim: d.car_trim || ti.trim, color: d.car_color || ti.color,
+      plate: ti.plate || d.plate || '', km: ti.km || '', vin: ti.vin || '', hand: ti.hand || ''
+    };
+    function P(party) {
+      return '<b>' + esc(party.name || '____________') + '</b>'
+        + (party.id ? ' · ת.ז/ח.פ ' + '<bdi dir="ltr">' + esc(party.id) + '</bdi>' : '')
+        + (party.phone ? ' · טל ' + '<bdi dir="ltr">' + esc(party.phone) + '</bdi>' : '')
+        + (party.addr ? ' · ' + esc(party.addr) : '');
+    }
+    function fld(k, v, ltr) {
+      var _v = (v == null || v === '' ? '________' : esc(v)); if (ltr) _v = '<bdi dir="ltr">' + _v + '</bdi>';
+      return '<div style="display:flex;justify-content:space-between;gap:10px;padding:6px 2px;border-bottom:1px solid #eee"><span style="color:#555;flex-shrink:0">' + k + '</span><b><bdi>' + _v + '</bdi></b></div>';
+    }
+    // ---- סעיפים 1-11 (משותפים) ----
+    var C = [
+      'המכונית הינה רכוש המוכר עד פירעון התשלום האחרון. המוכר שומר לעצמו את הזכות לקחת מהקונה את המכונית ללא הודעה מוקדמת, במידה והקונה לא עמד בתנאי תשלום כלשהו והמחאותיו לא כובדו על ידי הבנק. במקרה זה ובמקרה של אי-מילוי התחייבויות אחרת של הקונה רשאי המוכר, אך אינו חייב, לבטל את ההסכם ולחייב את הקונה בכל ההוצאות הכרוכות בכך לרבות הוצאות משפטיות.',
+      'הקונה אינו רשאי לבטל את ההסכם, ואולם אם בהסכמת המוכר יבטל הקונה את ההסכם — יוחזרו לו הסכומים ששילם ללא הצמדה וריבית, בניכוי הוצאות המוכר.',
+      'אין באמור בסעיף 2 כדי לפגוע בכל סעד אחר העומד לזכות המוכר על פי הדין, לרבות הזכות לתבוע פיצויים בגין כל נזק שייגרם למוכר עקב איחור בתשלום.',
+      'הבעלות תועבר על שם הקונה עם גמר התשלום.',
+      'הקונה מצהיר כי המוכר הסביר את מצבה הכללי של המכונית ככל הידוע לו, ולאחר שהבין את דבריו בדק את המכונית במכון בדיקה או במוסך (שם המכון ________ · מס\' הבדיקה ________ · תאריך הבדיקה ________).',
+      'הקונה מצהיר כי המוכר הציג בפניו את כל המסמכים השייכים למכונית, כולל רישיון הרכב, אגרת רישוי, רישום הבעלות וכו\'.',
+      'כל המיסים, האגרות, הקנסות והתשלומים מכל סוג שהוא, החלים על הרכב או על השימוש בו — מיום מסירת החזקה ברכב לקונה ואילך — יחולו על הקונה במלואם.',
+      'הקונה מצהיר כי קיבל את המכונית לשביעות רצונו המלאה.',
+      'הקונה מצהיר כי קרא את הסעיפים בהסכם זה, הבין את תוכנם וחתם על כל סעיף בנוסף לחתימתו על הסכם זה.',
+      'מקום השיפוט היחיד בכל הנוגע לביצוע ו/או הפרת חוזה זה ייקבע בבית המשפט המוסמך.',
+      'הקונה מצהיר כי קיבל את המכונית על אחריותו, לגבי כל נזק או דו"ח תנועה שייגרם (מתאריך ________ שעה ________).'
+    ];
+    // ---- 12-13 (רק רכש/טרייד-אין) — טיוטה, תחודד מול הנוסח המקורי ----
+    if (isPurchase) {
+      C.push('מוסכם כי ככל שהמכונית תימסר לרוכש במועד שבין היום ה-21 לתום החודש שבו נחתם הסכם זה, ו/או תהיה מניעה כלשהי להעברת רישום הבעלות על שם הרוכש מכל סיבה שהיא — תעודכן התמורה הכוללת בהתאם לשינוי (עלייה או ירידה) בשורת הרכב במחירון לוי יצחק בחודש העוקב למועד המסירה בפועל. [נוסח טיוטה — לחידוד]');
+      C.push('הנני מצהיר ומתחייב כי עד למועד חתימתי על הסכם זה, הרכב לא היה מעורב בתאונה אשר במסגרתה הוכרז כ"אובדן להלכה" או "אובדן גמור", ולא נקבעה לו ירידת ערך על ידי שמאי ביטוח. [נוסח טיוטה — לחידוד]');
+    }
+    var sigBlock = '<table style="width:100%;margin-top:26px;direction:rtl"><tr>' +
+      '<td style="width:50%;text-align:center">חתימת המוכר:<br>' + ((isPurchase && sig) ? '<img src="' + sig + '" style="height:66px">' : '________________________') + '<br><span style="font-size:11px;color:#666">' + esc(seller.name || '') + '</span></td>' +
+      '<td style="width:50%;text-align:center">חתימת הקונה:<br>' + ((!isPurchase && sig) ? '<img src="' + sig + '" style="height:66px">' : '________________________') + '<br><span style="font-size:11px;color:#666">' + esc(buyer.name || '') + '</span></td>' +
+      '</tr></table>';
+    var logo = blogo();
+    return '<div style="font-family:Arial,sans-serif;line-height:1.75;width:100%;color:#111;font-size:13px;direction:rtl;text-align:right;overflow-wrap:break-word;word-break:break-word">' +
+      (logo ? '<div style="text-align:center;margin:0 0 8px"><img src="' + esc(logo) + '" onerror="this.style.display=\'none\'" style="max-height:72px;max-width:260px;object-fit:contain"></div>' : '') +
+      '<h2 style="text-align:center;margin:0 0 4px">הסכם ' + esc(kind) + '</h2>' +
+      (blegalLine() ? '<p style="text-align:center;color:#444;margin:0 0 2px;font-size:13px">' + esc(blegalLine()) + '</p>' : '') +
+      (us.phone || us.addr ? '<p style="text-align:center;color:#666;margin:0 0 6px;font-size:12px">' + [us.addr, us.phone].filter(Boolean).map(esc).join(' · ') + '</p>' : '') +
+      '<p style="text-align:center;color:#888;margin:0 0 12px;font-size:12.5px">מספר: ' + esc(d.order_no || '________') + ' · תאריך: ' + today + '</p>' +
+      '<hr style="border:0;border-top:1px solid #ddd;margin:0 0 12px">' +
+      '<p style="margin:0 0 8px">שנערך ונחתם במקום ________ בתאריך ' + today + '</p>' +
+      '<p style="margin:0 0 4px"><b>בין:</b> ' + P(seller) + ' (להלן "המוכר")</p>' +
+      '<p style="margin:0 0 12px"><b>לבין:</b> ' + P(buyer) + ' (להלן "הקונה")</p>' +
+      '<p style="margin:0 0 8px">המוכר הסכים למכור לקונה והקונה הסכים לקנות מהמוכר את המכונית מהסוג:</p>' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr;column-gap:24px;margin:0 0 10px">' +
+        fld('תוצר', car.make) + fld('דגם', car.model) + fld('מס\' רישוי', car.plate, true) + fld('מס\' שילדה (VIN)', car.vin, true) +
+        fld('שנת ייצור', car.year) + fld('מד אוץ (ק"מ)', car.km) + fld('יד', car.hand) + fld('רמת גימור', car.trim) +
+      '</div>' +
+      '<p style="margin:0 0 8px;font-size:12.5px">המוכר מצהיר כי לאחר שבדק במשרד הרישוי מצא כי המכונית נקייה מכל חוב, עיקול או צד ג\' כלשהו. ובמידה ויתברר בזמן כלשהו כי על המכונית רובץ מן הנזכר לעיל, מתחייב המוכר לנקוט בהליכים משפטיים על מנת להמציא לקונה את שחרורו.</p>' +
+      '<p style="margin:0 0 6px"><b>תמורת המכונית ישלם הקונה למוכר ' + (price ? esc(nis(price)) : '________') + '</b></p>' +
+      '<p style="margin:0 0 12px;font-size:12.5px">עם חתימת הסכם זה סך: ' + (price ? esc(nis(price)) : '________') + ' · תנאים מיוחדים: הסכם ' + esc(kind) + '.</p>' +
+      '<table style="width:100%;border-collapse:collapse;table-layout:fixed;direction:rtl">' + C.map(function (t, i) { return '<tr><td style="width:2.3em;vertical-align:top;text-align:right;font-weight:700;line-height:1.85;padding:0 0 10px"><span dir="ltr">' + (i + 1) + '</span>.</td><td style="vertical-align:top;text-align:right;line-height:1.85;padding:0 0 10px;font-size:12.5px">' + t + '</td></tr>'; }).join('') + '</table>' +
+      sigBlock +
+      '<p style="font-size:11px;color:#999;text-align:center;margin-top:14px">מסמך ממוחשב · ' + esc(bname()) + '</p></div>';
+  }
+
   function contractHTML(d, sig, ownership, tplBody) {
+    if ((window.__fleetCfg && window.__fleetCfg.slug) === 'yad2') {
+      return yad2ContractHTML(d, (['רכש', 'מכר', 'טרייד-אין'].indexOf(d.contract_type) >= 0 ? d.contract_type : 'מכר'), sig);
+    }
     if (tplBody == null) tplBody = CT_ACTIVE_BODY;
     var today = new Date().toLocaleDateString('he-IL');
     var own = ownership || (d.checklist && d.checklist._ownership) || '01';
