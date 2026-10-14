@@ -501,6 +501,36 @@
     });
   }
 
+  /* ===================== בקשות הצעת מחיר (יד2) =====================
+     שער-הכניסה המסודר לכל הבקשות הנכנסות (בעיקר מטרייד-אין של המותגים).
+     אותה טבלת tenders; פתיחה → כרטיס-המכרז (שליחה לסוחרים/הצעות/זוכה). */
+  window.C2B_renderQuoteRequests = function (statusFilter) {
+    view('<div class="loading">טוען בקשות…</div>');
+    db.from('tenders').select('*').order('created_at', { ascending: false }).then(function (r) {
+      if (r.error) return view('<div class="card"><h3>בקשות הצעת מחיר</h3><p class="muted">שגיאה: ' + esc(r.error.message) + '</p></div>');
+      var rows = r.data || [], counts = {};
+      rows.forEach(function (t) { counts[t.status] = (counts[t.status] || 0) + 1; });
+      function chip(k, label) { return '<button class="btn btn-ghost btn-sm' + ((statusFilter || '') === k ? ' active' : '') + '" data-qf="' + k + '">' + label + ' (' + (k ? (counts[k] || 0) : rows.length) + ')</button>'; }
+      var shown = statusFilter ? rows.filter(function (t) { return t.status === statusFilter; }) : rows;
+      var cards = shown.map(function (t) {
+        var st = QR_ST(t.status), cov = (invImgs(t)[0]) || null;
+        var src = t.source === 'trade-in' ? '↩︎ טרייד-אין · ' + esc(t.agent_org || '') : (t.agent_org ? esc(t.agent_org) : 'ידני');
+        return '<div class="card" data-qopen="' + t.id + '" style="cursor:pointer;padding:0;overflow:hidden;display:flex;gap:0">' +
+          '<div style="width:96px;flex:0 0 96px;background:#0b0f14;background-size:cover;background-position:center' + (cov ? ";background-image:url('" + esc(cov) + "')" : '') + '">' + (cov ? '' : '<div style="height:70px;display:flex;align-items:center;justify-content:center;color:#44505f;font-size:11px">אין תמונה</div>') + '</div>' +
+          '<div style="padding:10px 12px;flex:1"><div class="row-between" style="align-items:flex-start"><div style="font-weight:800">' + esc(tndTitle(t)) + '</div><span style="background:' + st[1] + ';color:#fff;font-size:11px;font-weight:700;padding:1px 8px;border-radius:999px;white-space:nowrap">' + st[0] + '</span></div>' +
+          '<div class="muted" style="font-size:12px;margin-top:3px">' + src + '</div>' +
+          '<div class="muted" style="font-size:11.5px;margin-top:2px">' + [t.agent_name ? '👤 ' + esc(t.agent_name) : '', t.car_plate ? esc(t.car_plate) : '', when(t.created_at)].filter(Boolean).join(' · ') + '</div></div></div>';
+      }).join('');
+      view('<div class="row-between" style="margin-bottom:12px;align-items:center;flex-wrap:wrap;gap:8px"><h2 style="margin:0">💸 בקשות הצעת מחיר</h2></div>' +
+        '<div id="tndEdit"></div>' +
+        '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">' + chip('', 'הכל') + chip('draft', 'חדשות') + chip('open', 'נשלחו') + chip('awarded', 'הוכרזו') + chip('closed', 'נסגרו') + '</div>' +
+        '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px">' + (cards || '<div class="empty">אין בקשות בסטטוס זה</div>') + '</div>');
+      $('view').querySelectorAll('[data-qf]').forEach(function (b) { b.addEventListener('click', function () { window.C2B_renderQuoteRequests(b.dataset.qf || ''); }); });
+      $('view').querySelectorAll('[data-qopen]').forEach(function (b) { b.addEventListener('click', function () { openTnd(rows.filter(function (x) { return x.id === b.dataset.qopen; })[0]); }); });
+    });
+  };
+  function QR_ST(s) { return ({ draft: ['חדשה', '#8b6f2e'], open: ['נשלחה לסוחרים', '#1f8a4c'], awarded: ['הוכרז זוכה', '#2563eb'], closed: ['נסגרה', '#6b7280'], cancelled: ['בוטלה', '#c0392b'] })[s] || ['—', '#888']; }
+
   /* ============================ מכרזי יד2 ============================ */
   var TND_ST = { draft: ['טיוטה', '#8b6f2e'], open: ['פתוח', '#1f8a4c'], awarded: ['הוכרז זוכה', '#2563eb'], closed: ['נסגר', '#6b7280'], cancelled: ['בוטל', '#c0392b'] };
   function tndTitle(t) { return [t.car_make, t.car_model, t.car_trim, t.car_year].filter(Boolean).join(' ') || 'רכב ללא שם'; }

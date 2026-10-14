@@ -1754,6 +1754,7 @@
     var grid = function (inner) { return '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">' + inner + '</div>'; };
     var statusSel = '<div class="field" style="margin:0"><label>סטטוס הזמנה</label><select class="inp" id="dl_status" style="width:100%">' + [['quote', 'הצעת מחיר'], ['ordered', 'הזמנה'], ['cancelled', 'בוטל']].map(function (s) { return '<option value="' + s[0] + '"' + ((deal.status || 'quote') === s[0] ? ' selected' : '') + '>' + s[1] + '</option>'; }).join('') + '</select></div>';
     var fin = deal.financing || {}, ti = deal.tradein || {};
+    var tiImages = Array.isArray(ti.images) ? ti.images.slice() : [];   // תמונות טרייד-אין (לבקשת הצעת-מחיר ביד2)
     function gearboxSel(v) { return '<div class="field" style="margin:0"><label>תיבת הילוכים</label><select class="inp" id="dl_car_gearbox" style="width:100%"><option value="">— בחר —</option>' + ['אוטומט', 'ידני', 'רובוטית', 'טיפטרוניק'].map(function (g) { return '<option' + (v === g ? ' selected' : '') + '>' + g + '</option>'; }).join('') + '</select></div>'; }
     // --- cards (grouped into tabs matching the reference layout) ---
     var clientCard = '<div class="card"><h3>👤 פרטי הלקוח</h3>' + grid(G('שם לקוח', 'client_name', deal.client_name || lead.name) + G('טלפון נייד', 'client_phone', deal.client_phone || lead.phone) + G('דוא"ל', 'client_email', deal.client_email || lead.email) + G('כתובת', 'client_address', deal.client_address || lead.city) + G('ת.ז / ח.פ', 'client_id', deal.client_id || lead.id_num) + G('שם לחשבונית', 'invoice_name', deal.invoice_name || lead.name)) + '</div>';
@@ -1792,7 +1793,9 @@
         '<label style="font-size:12px;font-weight:700;color:var(--brand);display:block;margin-bottom:6px">🔎 שליפת פרטי רכב לפי מספר רישוי (משרד התחבורה)</label>' +
         '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><input class="inp" id="dl_ti_plate" value="' + esc(ti.plate || '') + '" placeholder="מספר רכב (ספרות בלבד)" inputmode="numeric" style="max-width:200px"><button type="button" class="btn btn-sm" id="dlPlateLookup">שלוף פרטים</button><span id="dlPlateMsg" style="font-size:12.5px"></span></div>' +
       '</div>' +
-      grid(G('יצרן טרייד-אין', 'ti_make', ti.make) + G('דגם', 'ti_model', ti.model) + G('רמת גימור', 'ti_trim', ti.trim) + G('שנת דגם', 'ti_year', ti.year, 'number') + G('יד', 'ti_hand', ti.hand) + G('צבע', 'ti_color', ti.color) + G('סוג דלק', 'ti_fuel', ti.fuel) + G('מספר שלדה (VIN)', 'ti_vin', ti.vin) + G('מחיר מחירון ₪', 'ti_list', ti.list, 'number') + G('מחיר קנייה ₪', 'ti_buy', ti.buy, 'number') + G('סכום שעבוד ₪', 'ti_lien', ti.lien, 'number') + G('גורם משעבד', 'ti_holder', ti.holder) + G('תאריך מסירה בפועל', 'ti_delivery', ti.delivery, 'date')) +
+      grid(G('יצרן טרייד-אין', 'ti_make', ti.make) + G('דגם', 'ti_model', ti.model) + G('רמת גימור', 'ti_trim', ti.trim) + G('שנת דגם', 'ti_year', ti.year, 'number') + G('יד', 'ti_hand', ti.hand) + G('קילומטרים', 'ti_km', ti.km, 'number') + G('צבע', 'ti_color', ti.color) + G('סוג דלק', 'ti_fuel', ti.fuel) + G('מספר שלדה (VIN)', 'ti_vin', ti.vin) + G('מחיר מחירון ₪', 'ti_list', ti.list, 'number') + G('מחיר קנייה ₪', 'ti_buy', ti.buy, 'number') + G('סכום שעבוד ₪', 'ti_lien', ti.lien, 'number') + G('גורם משעבד', 'ti_holder', ti.holder) + G('תאריך מסירה בפועל', 'ti_delivery', ti.delivery, 'date')) +
+      '<div style="margin-top:12px"><label style="font-size:13px;color:var(--muted);display:block;margin-bottom:6px">📷 תמונות הרכב (לקבלת הצעת מחיר)</label><div id="dlTiImgs" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px"></div><input type="file" id="dlTiFile" accept="image/*" multiple style="font-size:13px"> <span id="dlTiUpMsg" class="muted" style="font-size:12px"></span></div>' +
+      '<div style="margin-top:8px;font-size:12px;color:var(--brand);background:var(--brand-soft);border-radius:8px;padding:8px 10px">💡 מילוי מלא (יצרן · דגם · שנה · גימור · יד · ק"מ) + לפחות תמונה אחת ושמירה → נשלחת אוטומטית בקשת הצעת-מחיר לסוחרי יד2.</div>' +
       '<label style="display:flex;gap:8px;align-items:center;padding:8px 0"><input type="checkbox" id="dl_ti_liened"' + (ti.liened ? ' checked' : '') + '> הרכב משועבד</label></div>';
     // צ'קליסט התיק = איסוף מסמכים (6 סעיפים רלוונטיים) — זהה לסוכן המכירות ולמנהלת תיקי הלקוחות
     var chkItems = FILE_CHECKLIST_ITEMS;
@@ -2008,7 +2011,7 @@
         vat_included: $('dl_vat').checked, discount_pct: num('dl_discount_pct') || null, discount_amt: c.disc, total: c.total, paid: num('dl_paid') || null, spec: $('dl_spec').value,
         stage: curStage, checklist: checklist, cancel_reason: (curStage === 'cancelled' ? (deal.cancel_reason || null) : null), contract_type: deal.contract_type || 'car2buy',
         financing: { amount: num('dl_fin_amount') || null, approved: num('dl_fin_approved') || null, payments: num('dl_fin_payments') || null, monthly: num('dl_fin_monthly') || null, track: $('dl_fin_track').value, offer: $('dl_fin_offer').value, balloon: num('dl_fin_balloon') || null, mgmt_fee: num('dl_fin_mgmt_fee') || null, status: $('dl_fin_status').value, transferred: $('dl_fin_transferred').checked },
-        tradein: { plate: $('dl_ti_plate') ? $('dl_ti_plate').value : null, make: $('dl_ti_make').value, model: $('dl_ti_model').value, trim: $('dl_ti_trim').value, year: num('dl_ti_year') || null, hand: $('dl_ti_hand').value, color: $('dl_ti_color') ? $('dl_ti_color').value : null, fuel: $('dl_ti_fuel') ? $('dl_ti_fuel').value : null, vin: $('dl_ti_vin') ? $('dl_ti_vin').value : null, list: num('dl_ti_list') || null, buy: num('dl_ti_buy') || null, lien: num('dl_ti_lien') || null, holder: $('dl_ti_holder').value, delivery: $('dl_ti_delivery').value || null, liened: $('dl_ti_liened').checked }
+        tradein: { plate: $('dl_ti_plate') ? $('dl_ti_plate').value : null, make: $('dl_ti_make').value, model: $('dl_ti_model').value, trim: $('dl_ti_trim').value, year: num('dl_ti_year') || null, hand: $('dl_ti_hand').value, km: num('dl_ti_km') || null, color: $('dl_ti_color') ? $('dl_ti_color').value : null, fuel: $('dl_ti_fuel') ? $('dl_ti_fuel').value : null, vin: $('dl_ti_vin') ? $('dl_ti_vin').value : null, list: num('dl_ti_list') || null, buy: num('dl_ti_buy') || null, lien: num('dl_ti_lien') || null, holder: $('dl_ti_holder').value, delivery: $('dl_ti_delivery').value || null, liened: $('dl_ti_liened').checked, images: tiImages.slice() }
       };
     }
     // ---- auto-save: persist every change (debounced), no button, no page refresh ----
@@ -2076,6 +2079,27 @@
       }, 150);
     });
     // trade-in: pull vehicle details by plate number from the Ministry of Transport open dataset
+    // מעלה-תמונות טרייד-אין (bucket ציבורי tradein) — URLs ב-tiImages, נשלחים ליד2 עם הבקשה
+    function paintTiImgs() {
+      var el = $('dlTiImgs'); if (!el) return;
+      el.innerHTML = tiImages.length ? tiImages.map(function (u, i) {
+        return '<div style="position:relative;width:84px;height:62px;border-radius:8px;overflow:hidden;border:1px solid var(--line)"><img src="' + esc(u) + '" style="width:100%;height:100%;object-fit:cover"><button type="button" data-tirm="' + i + '" style="position:absolute;top:1px;inset-inline-end:1px;background:rgba(0,0,0,.6);color:#fff;border:none;border-radius:50%;width:18px;height:18px;cursor:pointer;line-height:1">×</button></div>';
+      }).join('') : '<span class="muted" style="font-size:12px">אין תמונות — העלו לפחות אחת לקבלת הצעת מחיר</span>';
+      el.querySelectorAll('[data-tirm]').forEach(function (b) { b.addEventListener('click', function () { tiImages.splice(+b.dataset.tirm, 1); paintTiImgs(); }); });
+    }
+    if ($('dlTiImgs')) paintTiImgs();
+    if ($('dlTiFile')) $('dlTiFile').addEventListener('change', function () {
+      var files = Array.prototype.slice.call(this.files || []); if (!files.length) return;
+      var msg = $('dlTiUpMsg'); if (msg) msg.textContent = 'מעלה ' + files.length + '…'; var done = 0, errs = 0;
+      files.forEach(function (f) {
+        var path = (deal.id || 'new') + '/' + Date.now() + '_' + Math.random().toString(36).slice(2, 7) + '.' + ((f.name.split('.').pop() || 'jpg').toLowerCase());
+        db.storage.from('tradein').upload(path, f, { upsert: true, contentType: f.type || 'image/jpeg' }).then(function (res) {
+          done++; if (res.error) errs++; else tiImages.push(db.storage.from('tradein').getPublicUrl(path).data.publicUrl);
+          if (done === files.length) { if (msg) msg.textContent = errs ? (errs + ' נכשלו') : '✔ הועלו'; paintTiImgs(); }
+        });
+      });
+      this.value = '';
+    });
     if ($('dlPlateLookup')) $('dlPlateLookup').addEventListener('click', function () {
       var plate = ($('dl_ti_plate').value || '').replace(/\D/g, ''); var msg = $('dlPlateMsg');
       if (!plate) { msg.style.color = 'var(--danger)'; msg.textContent = 'הזינו מספר רכב'; return; }

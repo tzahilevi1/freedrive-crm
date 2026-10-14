@@ -730,7 +730,7 @@
     if (role === 'admin' || !role) return true;
     if (nav === 'activity' || nav === 'dashboard') return true;   // always available
     if (nav === 'inventory') return true;  // ניהול מלאי יד2 (yad2 בלבד; גידור ה-slug נפרד)
-    if (nav === 'tenders' || nav === 'tender_suppliers' || nav === 'tradelog') return true;  // מכרזי יד2 + יומן מסחר (yad2 בלבד; גידור ה-slug נפרד)
+    if (nav === 'tenders' || nav === 'tender_suppliers' || nav === 'tradelog' || nav === 'quote_requests') return true;  // מכרזי יד2 + יומן מסחר + בקשות הצעת מחיר (yad2 בלבד; גידור ה-slug נפרד)
     if (nav && nav.indexOf('soon:') === 0) return false;
     if (SENIOR_VIEWS[nav]) return role === 'branch';   // מנהל מערכת כבר חזר true למעלה
     var views = (window.C2B && window.C2B.views) || DEFAULT_VIEWS[role] || ['dashboard'];
@@ -976,6 +976,7 @@
     if (nav === 'cars') return renderCars();
     if (nav === 'inventory') return window.C2B_renderInventory && window.C2B_renderInventory();
     if (nav === 'tradelog') return window.C2B_renderTradeLog && window.C2B_renderTradeLog();
+    if (nav === 'quote_requests') return window.C2B_renderQuoteRequests && window.C2B_renderQuoteRequests();
     if (nav === 'tenders') return window.C2B_renderTenders && window.C2B_renderTenders();
     if (nav === 'tender_suppliers') return window.C2B_renderTenderSuppliers && window.C2B_renderTenderSuppliers();
     if (nav === 'appointments') return renderAppointments();
