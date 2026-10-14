@@ -3673,8 +3673,8 @@
 
   /* ===================== דוחות יד2 (מותאם לפעילות העסקית) =====================
      משקף את כל פעילות יד2: מלאי + רווחיות/יומן-מסחר + מכרזים. סינון-תאריכים. */
-  function renderYad2Reports(opts) {
-    opts = opts || {}; loading();
+  function renderYad2Panel(el, opts) {
+    if (!el) return; opts = opts || {}; el.innerHTML = '<div class="loading">טוען נתוני יד2…</div>';
     var from = opts.from || '', to = opts.to || '';
     function inRange(d) { if (!d) return false; d = String(d).slice(0, 10); if (from && d < from) return false; if (to && d > to) return false; return true; }
     Promise.all([
@@ -3718,7 +3718,7 @@
       var ST = { available: 'זמין', reserved: 'שמור', sold: 'נמכר', intake: 'קליטה', hidden: 'מוסתר' };
       var makeRows = topMakes.map(function (m) { return '<tr><td style="padding:5px 8px">' + esc(m[0]) + '</td><td style="padding:5px 8px;text-align:left;font-weight:700">' + m[1] + '</td></tr>'; }).join('') || '<tr><td class="muted" style="padding:8px">אין נתונים</td></tr>';
 
-      view('<div class="row-between" style="margin-bottom:14px;align-items:center;flex-wrap:wrap;gap:8px"><h2 style="margin:0">📈 דוחות יד2</h2>' +
+      el.innerHTML = ('<div class="row-between" style="margin:2px 0 14px;align-items:center;flex-wrap:wrap;gap:8px"><h3 style="margin:0">🚙 פעילות עסקית — יד2</h3>' +
         '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><label style="font-size:12px;color:var(--muted)">מ-</label><input class="inp" type="date" id="yr_from" value="' + esc(from) + '" style="width:140px"><label style="font-size:12px;color:var(--muted)">עד</label><input class="inp" type="date" id="yr_to" value="' + esc(to) + '" style="width:140px"><button class="btn btn-ghost btn-sm" id="yr_apply">סנן</button>' + (from || to ? '<button class="btn btn-ghost btn-sm" id="yr_clear">נקה</button>' : '') + '</div></div>' +
         '<div style="font-size:13px;color:var(--brand);font-weight:700;margin:4px 0 8px">🚙 מלאי (מצב נוכחי)</div>' +
         grid(kpi('סה"כ רכבים', inv.length) + kpi('זמינים', byStat.available || 0, 'var(--ok)') + kpi('שמורים', byStat.reserved || 0) + kpi('נמכרו', byStat.sold || 0) + kpi('מפורסמים', published) + kpi('שווי מלאי זמין', nis(stockValue))) +
@@ -3730,13 +3730,13 @@
           '<div class="card"><h3 style="margin:0 0 8px">יצרנים מובילים במלאי</h3><table style="width:100%;border-collapse:collapse;font-size:14px"><tbody>' + makeRows + '</tbody></table></div>' +
           '<div class="card"><h3 style="margin:0 0 8px">פילוח מלאי לפי סטטוס</h3><table style="width:100%;border-collapse:collapse;font-size:14px"><tbody>' +
             Object.keys(ST).map(function (k) { return '<tr><td style="padding:5px 8px">' + ST[k] + '</td><td style="padding:5px 8px;text-align:left;font-weight:700">' + (byStat[k] || 0) + '</td></tr>'; }).join('') + '</tbody></table></div></div>');
-      $('yr_apply').addEventListener('click', function () { renderYad2Reports({ from: $('yr_from').value, to: $('yr_to').value }); });
-      if ($('yr_clear')) $('yr_clear').addEventListener('click', function () { renderYad2Reports({}); });
+      var ya = el.querySelector('#yr_apply'); if (ya) ya.addEventListener('click', function () { renderYad2Panel(el, { from: el.querySelector('#yr_from').value, to: el.querySelector('#yr_to').value }); });
+      var yc = el.querySelector('#yr_clear'); if (yc) yc.addEventListener('click', function () { renderYad2Panel(el, {}); });
     });
   }
 
   function renderReports() {
-    if ((window.__fleetCfg && window.__fleetCfg.slug) === 'yad2') return renderYad2Reports();
+    var isYad2rep = (window.__fleetCfg && window.__fleetCfg.slug) === 'yad2';  // ל-yad2: טאב רביעי "יד2" עם נתונים עסקיים
     loading();
     Promise.all([
       db.from('leads').select('id,name,phone,car,status,source,created_at,first_response_at,assigned_to,brand,utm_campaign,utm_source,utm_medium,utm_term,utm_content,campaign,adset_name,ad_name,ad_group,ad_id,marketing_company,city').is('deleted_at', null),
@@ -4400,10 +4400,10 @@
             '<p class="muted" style="margin:0;font-size:13px">שלוש תצוגות: מנהל · מכירות · שיווק — כל הנתונים בטווח <b>' + esc(repRangeLabel()) + '</b></p></div>' +
           repRangeBar() +
         '</div>' +
-        '<nav class="tabs" id="repTabs">' + tab('manager', '👔 מנהל') + tab('sales', '💼 מכירות') + tab('marketing', '📣 שיווק') + '</nav>' +
-        '<div id="repPanel">' + panels[repTab] + '</div>');
+        '<nav class="tabs" id="repTabs">' + tab('manager', '👔 מנהל') + tab('sales', '💼 מכירות') + tab('marketing', '📣 שיווק') + (isYad2rep ? tab('yad2', '🚙 יד2') : '') + '</nav>' +
+        '<div id="repPanel">' + (panels[repTab] || '') + '</div>');
       if ($('rrBtn')) $('rrBtn').addEventListener('click', function (e) { e.stopPropagation(); openRepRange(this); });
-      loadAdMetrics();
+      if (repTab === 'yad2') { renderYad2Panel($('repPanel')); } else loadAdMetrics();
       //  שמירה אחת לכל השורות: upsert לכל נציג שיש לו לפחות ערך אחד.
       //  שדה ריק נשמר כ-null ולא כאפס, אחרת "אין יעד" היה נראה כיעד 0
       //  ואחוז העמידה היה קופץ ל-100% על כלום.
@@ -4464,7 +4464,7 @@
           }
         });
       };
-      $('repTabs').addEventListener('click', function (e) { var b = e.target.closest('button[data-rep]'); if (!b) return; repTab = b.dataset.rep; $('repTabs').querySelectorAll('button').forEach(function (x) { x.classList.toggle('active', x.dataset.rep === repTab); }); $('repPanel').innerHTML = panels[repTab];  loadAdMetrics(); });
+      $('repTabs').addEventListener('click', function (e) { var b = e.target.closest('button[data-rep]'); if (!b) return; repTab = b.dataset.rep; $('repTabs').querySelectorAll('button').forEach(function (x) { x.classList.toggle('active', x.dataset.rep === repTab); }); if (repTab === 'yad2') { renderYad2Panel($('repPanel')); } else { $('repPanel').innerHTML = panels[repTab]; loadAdMetrics(); } });
       // sales sub-tab switching (delegated on the persistent repPanel)
       $('repPanel').addEventListener('click', function (e) { var b = e.target.closest('button[data-ssub]'); if (!b) return; salesSub = b.dataset.ssub; var nav = $('repSalesTabs'); if (nav) nav.querySelectorAll('button').forEach(function (x) { x.classList.toggle('active', x.dataset.ssub === salesSub); }); var sp = $('repSalesPanel'); if (sp) sp.innerHTML = salesPanels[salesSub]; });
       // marketing sub-tab switching — loadAdMetrics מזהה לבד אם הוא בלשונית הנכונה
