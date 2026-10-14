@@ -651,6 +651,7 @@
         '<div class="row-between" style="margin-bottom:8px"><b>🔨 ' + esc(tndTitle(t)) + ' <span style="background:' + st[1] + ';color:#fff;font-size:11px;padding:2px 9px;border-radius:999px;margin-inline-start:6px">' + st[0] + '</span></b><button class="btn btn-ghost btn-sm" id="tndClose">✕</button></div>' +
         '<div class="muted" style="font-size:13px">' + spec + '</div>' +
         (t.car_description ? '<div style="font-size:13px;margin-top:6px">' + esc(t.car_description) + '</div>' : '') +
+        (t.license_doc && /^https?:/.test(t.license_doc) ? '<div style="margin-top:6px"><a href="' + esc(t.license_doc) + '" target="_blank" rel="noopener" class="btn btn-ghost btn-sm">📄 רישיון רכב</a></div>' : '') +
         '<div class="muted" style="font-size:12.5px;margin-top:8px">👤 ' + esc(t.agent_name || '—') + [t.agent_phone ? ' · ' + esc(t.agent_phone) : '', t.agent_email ? ' · ' + esc(t.agent_email) : '', t.agent_org ? ' · ' + esc(t.agent_org) : ''].join('') + '</div>' +
         (t.closes_at ? '<div class="muted" style="font-size:12.5px;margin-top:4px">⏱ סגירה: ' + when(t.closes_at) + ' · ' + remainTxt(t) + '</div>' : '') +
         '<div style="margin:12px 0"><label style="font-size:13px;color:var(--muted);display:block;margin-bottom:6px">תמונות הרכב (נשלחות לסוחרים במייל + בקישור)</label><div id="td_imgs" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px"></div><input type="file" id="td_file" accept="image/*" multiple style="font-size:13px"> <span id="td_upmsg" class="muted" style="font-size:12px"></span></div>' +
