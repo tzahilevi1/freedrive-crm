@@ -712,12 +712,15 @@
              'reports', 'agents', 'ai', 'quotes', 'documents', 'whatsapp', 'heyy', 'emails', 'sms', 'users', 'audit']
   };
   // screens the admin can grant when creating a user (label + key)
-  var GRANTABLE_VIEWS = [
-    ['dashboard', 'דשבורד'], ['leads', 'לידים'], ['files', 'תיקי לקוחות'], ['accounting', 'הנהלת חשבונות'],
-    ['calls', 'שיחות'], ['cars', 'רכבים'], ['appointments', 'יומן פגישות'], ['tasks', 'משימות'], ['analytics', 'אנליטיקס'], ['reports', 'דוחות'],
-    ['ai', 'עוזר AI'], ['quotes', 'הצעות מחיר'], ['documents', 'מסמכים והסכמים'], ['whatsapp', 'WhatsApp'], ['heyy', 'Hey · WhatsApp'], ['emails', 'מיילים'], ['sms', 'SMS'],
-    ['audit', 'יומן פעולות']
-  ];
+  //  תצוגות שניתן להקצות למשתמש. ביד2 — התצוגות הייעודיות (מכרזים/ספקים/מלאי/יומן מסחר/בקשות הצעת מחיר)
+  //  במקום רכבים/אנליטיקס שהוסתרו שם.
+  var _gvYad2 = (window.__fleetCfg && window.__fleetCfg.slug) === 'yad2';
+  var YAD2_VIEWS = ['quote_requests', 'inventory', 'tradelog', 'tenders', 'tender_suppliers'];
+  var GRANTABLE_VIEWS = [['dashboard', 'דשבורד'], ['leads', 'לידים'], ['files', 'תיקי לקוחות'], ['accounting', 'הנהלת חשבונות'], ['calls', 'שיחות']]
+    .concat(_gvYad2 ? [['quote_requests', 'בקשות הצעת מחיר'], ['inventory', 'מלאי יד2'], ['tradelog', 'יומן מסחר'], ['tenders', 'מכרזים'], ['tender_suppliers', 'ספקים']] : [['cars', 'רכבים']])
+    .concat([['appointments', 'יומן פגישות'], ['tasks', 'משימות']])
+    .concat(_gvYad2 ? [] : [['analytics', 'אנליטיקס']])
+    .concat([['reports', 'דוחות'], ['ai', 'עוזר AI'], ['quotes', 'הצעות מחיר'], ['documents', 'מסמכים והסכמים'], ['whatsapp', 'WhatsApp'], ['heyy', 'Hey · WhatsApp'], ['emails', 'מיילים'], ['sms', 'SMS'], ['audit', 'יומן פעולות']]);
   // מסכי ניהול שאינם ניתנים להקצאה (מנהל מערכת בלבד) — כאן רק כדי שיוצגו בעברית
   var ADMIN_ONLY_VIEWS = { users: 'משתמשים והרשאות', settings: 'הגדרות ורשימות', branches: 'סניפים', ctemplates: 'תבניות הסכמים',
                            automations: 'אוטומציות', trash: 'סל מיחזור', agents: 'נציגים' };
@@ -4784,8 +4787,10 @@
     return (isDefault ? '<span class="muted" style="font-size:10.5px;display:block;margin-bottom:3px">ברירת מחדל לתפקיד (מה שהם רואים):</span>' : '') + tags;
   }
   function viewChecks(idPrefix, checked) {
+    //  ביד2 — התצוגות הייעודיות פתוחות לכל הצוות (navAllowed), ולכן מוצגות כמסומנות כברירת-מחדל
     return '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:6px">' + GRANTABLE_VIEWS.map(function (g) {
-      return '<label style="display:flex;gap:5px;align-items:center;font-size:13px"><input type="checkbox" data-' + idPrefix + '="' + g[0] + '"' + (checked.indexOf(g[0]) >= 0 ? ' checked' : '') + '> ' + g[1] + '</label>';
+      var on = checked.indexOf(g[0]) >= 0 || (_gvYad2 && YAD2_VIEWS.indexOf(g[0]) >= 0);
+      return '<label style="display:flex;gap:5px;align-items:center;font-size:13px"><input type="checkbox" data-' + idPrefix + '="' + g[0] + '"' + (on ? ' checked' : '') + '> ' + g[1] + '</label>';
     }).join('') + '</div>';
   }
 

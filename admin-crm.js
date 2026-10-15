@@ -1788,12 +1788,31 @@
     // מנהל מכירות מתמלא אוטומטית מהסוכן שהליד משויך אליו (או המנהל הראשי אם לא שויך)
     var defSalesperson = deal.salesperson || profiles[lead.assigned_to || mainManagerUid()] || '';
     var formCard = '<div class="card"><h3>בחירת טופס</h3>' + grid(G('סוג טופס', 'form_type', defFormType) + statusSel + brandField + (isYad2deal ? kindSel : ownSel) + G('מנהל מכירות / נציג משוייך', 'salesperson', defSalesperson)) + '</div>';
-    var carCard = '<div class="card"><h3>🚗 פרטי הרכב המוזמן</h3>' +
-      '<div class="ac-box" style="margin-bottom:10px"><input class="inp" id="dl_carSearch" placeholder="🔎 חפש רכב מהקטלוג (עברית/אנגלית) — ימלא אוטומטית" style="width:100%"><div class="ac-res hidden" id="dl_carRes"></div></div>' +
-      grid(G('יצרן', 'car_make', deal.car_make) + G('דגם', 'car_model', deal.car_model) + G('שנת ייצור', 'car_year', deal.car_year || 2026, 'number') + G('רמת גימור', 'car_trim', deal.car_trim) + G('נפח מנוע', 'car_engine', deal.car_engine) + G('מחיר הרכב ₪', 'car_price', deal.car_price, 'number') + G('מחיר קניית רכב ₪ (עלות · הנה"ח)', 'purchase_price', deal.purchase_price, 'number') + G('החזר חודשי משוער ₪', 'monthly', deal.monthly, 'number') + '<div class="field" style="margin:0"><label>עמלת סוכן ₪ (אוטומטי · קריאה בלבד)</label><input class="inp" id="dl_commission" type="number" value="' + esc(deal.commission == null ? '' : deal.commission) + '" readonly tabindex="-1" style="width:100%;background:var(--surface-2);cursor:not-allowed;color:var(--muted)"></div>') +
-      ((window.__fleetCfg && window.__fleetCfg.slug) === 'yad2' ? '<div style="border-top:1px dashed var(--line);margin:14px 0 10px;padding-top:12px"><div style="font-size:12px;font-weight:700;color:var(--brand);margin-bottom:8px">🚙 פרטי רכב יד-שנייה (להסכם)</div>' + grid(G('מספר רישוי', 'cx_plate', (deal.car_extra || {}).plate) + G('קילומטרים', 'cx_km', (deal.car_extra || {}).km, 'number') + G('יד', 'cx_hand', (deal.car_extra || {}).hand) + G('מספר שלדה (VIN)', 'cx_vin', (deal.car_extra || {}).vin)) + '</div>' : '') +
-      '<div style="border-top:1px dashed var(--line);margin:14px 0 10px;padding-top:12px"><div style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:8px">✍ למילוי הסוכן</div>' +
-      grid(G('צבע מבוקש', 'car_color', deal.car_color) + gearboxSel(deal.car_gearbox)) + '</div>' + '</div>';
+    //  ביד2 — מקטע רכב יד-2 נקי: בחירה מהמלאי / שליפת-רישוי / מילוי ידני (בלי שדות ליסינג רכב-חדש).
+    //  כל השדות נכנסים להסכם (yad2ContractHTML) — תלוי בסוג-ההסכם שנבחר.
+    var gridR = function (inner) { return '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px">' + inner + '</div>'; };
+    var carCard;
+    if (isYad2deal) {
+      var cxv = deal.car_extra || {};
+      carCard = '<div class="card"><h3>🚗 פרטי הרכב (יד 2)</h3>' +
+        '<p class="muted" style="font-size:12.5px;margin:0 0 12px">בחרו רכב <b>מהמלאי שלנו</b> (למכירה), או מלאו ידנית (לרכב שאנחנו קונים / טרייד-אין). אפשר לשלוף פרטים לפי מספר רישוי. הפרטים נכנסים אוטומטית להסכם.</p>' +
+        '<div class="ac-box" style="margin-bottom:8px"><input class="inp" id="dl_invSearch" placeholder="🔎 בחר רכב מהמלאי שלנו — יצרן / דגם / מס׳ רכב" style="width:100%"><div class="ac-res hidden" id="dl_invRes"></div></div>' +
+        '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px"><input class="inp" id="dl_plateLk" value="' + esc(cxv.plate || '') + '" placeholder="מספר רכב (ספרות)" inputmode="numeric" style="max-width:190px"><button type="button" class="btn btn-sm" id="dlCarPlateLk">🔎 שלוף ממשרד התחבורה</button><span id="dlCarPlateMsg" style="font-size:12px"></span></div>' +
+        gridR(
+          G('יצרן', 'car_make', deal.car_make || cxv.make) + G('דגם', 'car_model', deal.car_model) +
+          G('שנת ייצור', 'car_year', deal.car_year, 'number') + G('רמת גימור', 'car_trim', deal.car_trim) +
+          G('מספר רישוי', 'cx_plate', cxv.plate) + G('קילומטרים', 'cx_km', cxv.km, 'number') +
+          GS('יד', 'cx_hand', cxv.hand, TI_HANDS) + G('צבע', 'car_color', deal.car_color) +
+          GS('סוג דלק', 'cx_fuel', cxv.fuel, TI_FUELS) + G('מספר שלדה (VIN)', 'cx_vin', cxv.vin) +
+          G('מחיר העסקה ₪ (מכר / רכש)', 'car_price', deal.car_price, 'number')
+        ) + '</div>';
+    } else {
+      carCard = '<div class="card"><h3>🚗 פרטי הרכב המוזמן</h3>' +
+        '<div class="ac-box" style="margin-bottom:10px"><input class="inp" id="dl_carSearch" placeholder="🔎 חפש רכב מהקטלוג (עברית/אנגלית) — ימלא אוטומטית" style="width:100%"><div class="ac-res hidden" id="dl_carRes"></div></div>' +
+        grid(G('יצרן', 'car_make', deal.car_make) + G('דגם', 'car_model', deal.car_model) + G('שנת ייצור', 'car_year', deal.car_year || 2026, 'number') + G('רמת גימור', 'car_trim', deal.car_trim) + G('נפח מנוע', 'car_engine', deal.car_engine) + G('מחיר הרכב ₪', 'car_price', deal.car_price, 'number') + G('מחיר קניית רכב ₪ (עלות · הנה"ח)', 'purchase_price', deal.purchase_price, 'number') + G('החזר חודשי משוער ₪', 'monthly', deal.monthly, 'number') + '<div class="field" style="margin:0"><label>עמלת סוכן ₪ (אוטומטי · קריאה בלבד)</label><input class="inp" id="dl_commission" type="number" value="' + esc(deal.commission == null ? '' : deal.commission) + '" readonly tabindex="-1" style="width:100%;background:var(--surface-2);cursor:not-allowed;color:var(--muted)"></div>') +
+        '<div style="border-top:1px dashed var(--line);margin:14px 0 10px;padding-top:12px"><div style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:8px">✍ למילוי הסוכן</div>' +
+        grid(G('צבע מבוקש', 'car_color', deal.car_color) + gearboxSel(deal.car_gearbox)) + '</div>' + '</div>';
+    }
     var specCard = '<div class="card"><h3>מפרט / הערות</h3><textarea class="inp" id="dl_spec" rows="5" style="width:100%" placeholder="מפרט / הערות לחוזה…">' + esc(deal.spec || '') + '</textarea></div>';
     var pricingCard = '<div class="card"><h3>תמחור ומקדמה</h3>' + grid(G('סכום מקדמה כולל ₪', 'down_total', deal.down_total, 'number') + G('מקדמה ראשונית ₪', 'down_initial', deal.down_initial, 'number') + G('זמן אספקה (ימים)', 'delivery_days', deal.delivery_days, 'number')) + '</div>';
     var addonsCard = '<div class="card"><h3>תוספות</h3>' +
@@ -2028,6 +2047,7 @@
     // car search fills fields
     loadCars(function (cars) {
       var inp = $('dl_carSearch'), res = $('dl_carRes');
+      if (!inp || !res) return;   // ביד2 אין חיפוש-קטלוג רכב-חדש (מקטע הרכב שונה)
       inp.addEventListener('input', function () {
         var q = this.value.trim().toLowerCase(); if (!q) { res.classList.add('hidden'); return; }
         var m = cars.filter(function (c) { return carMatch(c, q); }).slice(0, 12);
@@ -2036,6 +2056,44 @@
         res.querySelectorAll('.ai[data-i]').forEach(function (el) { el.addEventListener('click', function () { var c = cars[+el.dataset.i]; var mm = carMakeModel(c); $('dl_car_make').value = mm.make; $('dl_car_model').value = mm.model; $('dl_car_trim').value = prettyCarText(c.trim || ''); $('dl_car_engine').value = c.engine || ''; $('dl_car_price').value = c.p || ''; $('dl_monthly').value = c.m || ''; if ($('dl_commission')) $('dl_commission').value = c.commission || ''; if ($('dl_car_gearbox') && !$('dl_car_gearbox').value && /חשמלי|electric|\bEV\b/i.test(c.engine || '')) $('dl_car_gearbox').value = 'אוטומט'; res.classList.add('hidden'); inp.value = ''; compute(); autoSave(); }); });
       });
     });
+    //  ביד2 — חיפוש רכב מהמלאי שלנו + שליפת-רישוי → ממלאים את מקטע הרכב (שנכנס להסכם)
+    if (isYad2deal) {
+      var fillCx = function (id, val) {
+        var el = $(id); if (!el || val == null || val === '') return;
+        if (el.tagName === 'SELECT' && ![].some.call(el.options, function (o) { return o.value === String(val); })) { var o = document.createElement('option'); o.value = String(val); o.textContent = String(val); el.appendChild(o); }
+        el.value = val;
+      };
+      (function () {
+        var sinp = $('dl_invSearch'), sres = $('dl_invRes'); if (!sinp || !sres) return;
+        db.from('inventory').select('make,model,trim,year,km,hand,color,fuel,plate,price').order('created_at', { ascending: false }).then(function (r) {
+          var inv = (r && r.data) || [];
+          sinp.addEventListener('input', function () {
+            var q = this.value.trim().toLowerCase(); if (!q) { sres.classList.add('hidden'); return; }
+            var m = inv.filter(function (c) { return ((c.make || '') + ' ' + (c.model || '') + ' ' + (c.trim || '') + ' ' + (c.plate || '') + ' ' + (c.year || '')).toLowerCase().indexOf(q) >= 0; }).slice(0, 12);
+            sres.innerHTML = m.map(function (c) { return '<div class="ai" data-ii="' + inv.indexOf(c) + '"><span><b>' + esc((c.make || '') + ' ' + (c.model || '')) + '</b> ' + esc(c.trim || '') + (c.year ? ' · ' + c.year : '') + (c.plate ? ' · ' + esc(c.plate) : '') + (c.price ? ' · ' + nis(c.price) : '') + '</span></div>'; }).join('') || '<div class="ai muted">אין רכב תואם במלאי</div>';
+            sres.classList.remove('hidden');
+            sres.querySelectorAll('.ai[data-ii]').forEach(function (el) { el.addEventListener('click', function () {
+              var c = inv[+el.dataset.ii];
+              fillCx('dl_car_make', c.make); fillCx('dl_car_model', c.model); fillCx('dl_car_trim', c.trim); fillCx('dl_car_year', c.year); fillCx('dl_car_color', c.color);
+              fillCx('dl_cx_plate', c.plate); fillCx('dl_cx_km', c.km); fillCx('dl_cx_hand', c.hand); fillCx('dl_cx_fuel', c.fuel);
+              if (c.price && !$('dl_car_price').value) $('dl_car_price').value = c.price;
+              sres.classList.add('hidden'); sinp.value = ''; compute(); autoSave();
+            }); });
+          });
+        });
+      })();
+      if ($('dlCarPlateLk')) $('dlCarPlateLk').addEventListener('click', function () {
+        var plate = ($('dl_plateLk').value || '').replace(/\D/g, ''); var msg = $('dlCarPlateMsg');
+        if (!plate) { msg.style.color = 'var(--danger)'; msg.textContent = 'הזינו מספר רכב'; return; }
+        msg.style.color = 'var(--muted)'; msg.textContent = 'מחפש…'; var btn = this; btn.disabled = true;
+        plateLookup(plate, function (v, err) {
+          btn.disabled = false;
+          if (err || !v) { msg.style.color = 'var(--danger)'; msg.textContent = err || 'לא נמצא רכב'; return; }
+          fillCx('dl_car_make', v.make); fillCx('dl_car_model', v.model); fillCx('dl_car_trim', v.trim); fillCx('dl_car_year', v.year); fillCx('dl_car_color', v.color); fillCx('dl_cx_fuel', v.fuel); fillCx('dl_cx_vin', v.vin); fillCx('dl_cx_plate', plate);
+          msg.style.color = 'var(--ok)'; msg.textContent = '✅ ' + [v.make, v.model, v.year].filter(Boolean).join(' · '); autoSave();
+        });
+      });
+    }
     // read the current form into a deal object (reused by save + contract)
     function readForm() {
       var c = compute();
@@ -2043,7 +2101,7 @@
         lead_id: lead.id, form_type: $('dl_form_type').value, status: $('dl_status').value, salesperson: $('dl_salesperson').value, brand: $('dl_brand') ? $('dl_brand').value : null,
         client_name: $('dl_client_name').value, client_phone: $('dl_client_phone').value, client_email: $('dl_client_email').value, client_address: $('dl_client_address').value, client_id: $('dl_client_id').value, invoice_name: $('dl_invoice_name').value,
         car_make: $('dl_car_make').value, car_model: $('dl_car_model').value, car_year: num('dl_car_year') || null, car_trim: $('dl_car_trim').value, car_engine: $('dl_car_engine').value, car_gearbox: $('dl_car_gearbox').value, car_color: $('dl_car_color').value,
-        car_extra: ($('dl_cx_plate') || $('dl_cx_km') || $('dl_cx_hand') || $('dl_cx_vin')) ? { plate: $('dl_cx_plate') ? $('dl_cx_plate').value : null, km: num('dl_cx_km') || null, hand: $('dl_cx_hand') ? $('dl_cx_hand').value : null, vin: $('dl_cx_vin') ? $('dl_cx_vin').value : null } : (deal.car_extra || null),
+        car_extra: ($('dl_cx_plate') || $('dl_cx_km') || $('dl_cx_hand') || $('dl_cx_vin') || $('dl_cx_fuel')) ? { plate: $('dl_cx_plate') ? $('dl_cx_plate').value : null, km: num('dl_cx_km') || null, hand: $('dl_cx_hand') ? $('dl_cx_hand').value : null, vin: $('dl_cx_vin') ? $('dl_cx_vin').value : null, fuel: $('dl_cx_fuel') ? $('dl_cx_fuel').value : null } : (deal.car_extra || null),
         car_price: num('dl_car_price'), purchase_price: num('dl_purchase_price') || null, commission: num('dl_commission') || null, down_total: num('dl_down_total'), down_initial: num('dl_down_initial'), down_balance: c.downBal, monthly: num('dl_monthly'), delivery_days: num('dl_delivery_days') || null, balance_to_pay: c.balPay,
         addons: { charging: $('dl_charging').checked, armor: $('dl_armor').checked, accessories: $('dl_accessories').checked, insurance: $('dl_insurance').checked, addons_amount: num('dl_addons_amount') },
         vat_included: $('dl_vat').checked, discount_pct: num('dl_discount_pct') || null, discount_amt: c.disc, total: c.total, paid: num('dl_paid') || null, spec: $('dl_spec').value,
