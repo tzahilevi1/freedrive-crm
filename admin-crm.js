@@ -1778,11 +1778,16 @@
       C.selOpts(brandOpts, deal.brand || lead.brand || (brandOpts.length === 1 ? brandOpts[0] : ''), '— מותג —') + '</select></div>';
     var ownVal = checklist._ownership || '01';
     var ownSel = '<div class="field" style="margin:0"><label>סוג הסכם (בעלות)</label><select class="inp" id="dl_ownership" style="width:100%"><option value="01"' + (ownVal === '01' ? ' selected' : '') + '>בעלים 01 (הרכב על שם הלקוח)</option><option value="00"' + (ownVal === '00' ? ' selected' : '') + '>בעלים 00 (בעלות קודמת)</option></select></div>';
+    //  ביד2 ההסכם הוא אחד מ-3 ההסכמים המובנים (טרייד-אין/רכש/מכר) — לא "בעלות 00/01" (ליסינג רכב-חדש).
+    var isYad2deal = (window.__fleetCfg && window.__fleetCfg.slug) === 'yad2';
+    var ctKind = (['מכר', 'רכש', 'טרייד-אין'].indexOf(deal.contract_type) >= 0) ? deal.contract_type : 'מכר';
+    var kindSel = '<div class="field" style="margin:0"><label>סוג הסכם</label><select class="inp" id="dl_contract_kind" style="width:100%">' +
+      [['טרייד-אין', '📄 הסכם טרייד-אין'], ['רכש', '📄 הסכם רכש (קנייה)'], ['מכר', '📄 הסכם מכר (מכירה)']].map(function (o) { return '<option value="' + o[0] + '"' + (ctKind === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select></div>';
     var autoBrand = deal.brand || lead.brand || '';
     var defFormType = deal.form_type || (autoBrand ? 'חוזה ' + autoBrand : 'חוזה');
     // מנהל מכירות מתמלא אוטומטית מהסוכן שהליד משויך אליו (או המנהל הראשי אם לא שויך)
     var defSalesperson = deal.salesperson || profiles[lead.assigned_to || mainManagerUid()] || '';
-    var formCard = '<div class="card"><h3>בחירת טופס</h3>' + grid(G('סוג טופס', 'form_type', defFormType) + statusSel + brandField + ownSel + G('מנהל מכירות / נציג משוייך', 'salesperson', defSalesperson)) + '</div>';
+    var formCard = '<div class="card"><h3>בחירת טופס</h3>' + grid(G('סוג טופס', 'form_type', defFormType) + statusSel + brandField + (isYad2deal ? kindSel : ownSel) + G('מנהל מכירות / נציג משוייך', 'salesperson', defSalesperson)) + '</div>';
     var carCard = '<div class="card"><h3>🚗 פרטי הרכב המוזמן</h3>' +
       '<div class="ac-box" style="margin-bottom:10px"><input class="inp" id="dl_carSearch" placeholder="🔎 חפש רכב מהקטלוג (עברית/אנגלית) — ימלא אוטומטית" style="width:100%"><div class="ac-res hidden" id="dl_carRes"></div></div>' +
       grid(G('יצרן', 'car_make', deal.car_make) + G('דגם', 'car_model', deal.car_model) + G('שנת ייצור', 'car_year', deal.car_year || 2026, 'number') + G('רמת גימור', 'car_trim', deal.car_trim) + G('נפח מנוע', 'car_engine', deal.car_engine) + G('מחיר הרכב ₪', 'car_price', deal.car_price, 'number') + G('מחיר קניית רכב ₪ (עלות · הנה"ח)', 'purchase_price', deal.purchase_price, 'number') + G('החזר חודשי משוער ₪', 'monthly', deal.monthly, 'number') + '<div class="field" style="margin:0"><label>עמלת סוכן ₪ (אוטומטי · קריאה בלבד)</label><input class="inp" id="dl_commission" type="number" value="' + esc(deal.commission == null ? '' : deal.commission) + '" readonly tabindex="-1" style="width:100%;background:var(--surface-2);cursor:not-allowed;color:var(--muted)"></div>') +
@@ -1852,7 +1857,7 @@
     view(
       '<div class="lead-top"><div style="display:flex;align-items:center;gap:8px"><button class="btn btn-ghost btn-sm" id="dlBack">' + ((C.role || '') === 'files' ? '→ לרשימת התיקים' : '→ לכרטיס') + '</button><h3 style="margin:0">' + (deal.id ? 'עסקה #' + esc(deal.order_no) : 'עסקה חדשה') + '</h3></div>' +
         '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">' +
-          ((window.__fleetCfg && window.__fleetCfg.slug) === 'yad2' ? '<select class="inp" id="dl_contract_kind" title="סוג ההסכם" style="width:auto;min-width:130px">' + [['טרייד-אין', '📄 הסכם טרייד-אין'], ['רכש', '📄 הסכם רכש (קנייה)'], ['מכר', '📄 הסכם מכר (מכירה)']].map(function (o) { return '<option value="' + o[0] + '"' + ((deal.contract_type === o[0] ? o[0] : (deal.contract_type && ['מכר', 'רכש', 'טרייד-אין'].indexOf(deal.contract_type) >= 0 ? deal.contract_type : 'מכר')) === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select>' : '') +
+          '' +
           '<button class="btn btn-sm" id="dlContract">' + (deal.signature ? '📄 צפה בהסכם החתום' : (deal.contract_html ? '📤 שלח לחתימה' : '✍ יצירת הסכם לחתימה')) + '</button><span id="dlSaveState" style="display:none"></span></div></div>' +
       (fileMode ? '<div class="card" style="padding:12px"><h3 style="margin:0 0 8px;font-size:13px">שלב התיק (מנהלת תיקי לקוחות)</h3><div class="flow" id="dlStageBar">' + stageBar(curStage) + '</div></div>' : '') +
       '<nav class="tabs" id="dlTabs" style="margin-bottom:14px;flex-wrap:wrap">' +
@@ -3299,6 +3304,11 @@
     }
     var curOwn = (deal.checklist && deal.checklist._ownership) || '01';
     var curType = deal.contract_type === 'car2buy' ? 'car2buy' : 'click_drive';
+    //  ביד2 — בורר סוג-הסכם (3 הסוגים) במקום בורר "בעלות" הלא-רלוונטי
+    var cv_isYad2 = (window.__fleetCfg && window.__fleetCfg.slug) === 'yad2';
+    var cv_ctKind = (['מכר', 'רכש', 'טרייד-אין'].indexOf(deal.contract_type) >= 0) ? deal.contract_type : 'מכר';
+    var cv_kindSel = '<label style="font-size:12.5px;color:var(--muted)">סוג הסכם:</label><select class="inp" id="cContractKind" style="width:auto;padding:5px 8px;font-size:12.5px">' +
+      [['טרייד-אין', '📄 טרייד-אין'], ['רכש', '📄 רכש (קנייה)'], ['מכר', '📄 מכר (מכירה)']].map(function (o) { return '<option value="' + o[0] + '"' + (cv_ctKind === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select>';
     view(
       '<div class="lead-top"><button class="btn btn-ghost btn-sm" id="cBack">→ לעסקה</button><h3 style="margin:0">הסכם' + (deal.brand ? ' · ' + esc(deal.brand) : '') + ' — ' + esc(deal.client_name || '') + (signed ? ' <span class="tag" style="border-color:var(--ok);color:var(--ok);background:rgba(22,163,74,.1)">✅ נחתם</span>' : '') + '</h3>' +
         '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">' +
@@ -3310,7 +3320,7 @@
               tplList.map(function (t) {
                 return '<option value="' + esc(t.id) + '"' + (chosenTpl && t.id === chosenTpl.id ? ' selected' : '') + '>' + esc(t.name) + '</option>';
               }).join('') + '</select>' : '') +
-          (signed ? '' : '<label style="font-size:12.5px;color:var(--muted)">בעלות:</label><select class="inp" id="cOwnership" style="width:auto;padding:5px 8px"><option value="01"' + (curOwn === '01' ? ' selected' : '') + '>בעלים 01</option><option value="00"' + (curOwn === '00' ? ' selected' : '') + '>בעלים 00</option></select>') +
+          (signed ? '' : (cv_isYad2 ? cv_kindSel : '<label style="font-size:12.5px;color:var(--muted)">בעלות:</label><select class="inp" id="cOwnership" style="width:auto;padding:5px 8px"><option value="01"' + (curOwn === '01' ? ' selected' : '') + '>בעלים 01</option><option value="00"' + (curOwn === '00' ? ' selected' : '') + '>בעלים 00</option></select>')) +
           '<button class="btn btn-sm" id="cPdf">⬇ הורד PDF</button>' +
           '<button class="btn btn-ghost btn-sm" id="cPrint" title="פותח את חלון ההדפסה של הדפדפן — איכות טקסט מיטבית">🖨 הדפסה</button>' + '</div></div>' +
       (justSaved && !signed ? '<div class="card" style="border:2px solid var(--ok);background:rgba(22,163,74,.07);text-align:center;padding:22px">' +'<div style="font-size:40px;line-height:1">✅</div>' +'<h2 style="margin:10px 0 4px;font-size:22px">ההסכם נוצר בהצלחה' + (deal.order_no ? ' #' + esc(deal.order_no) : '') + '</h2>' +'<p class="muted" style="margin:0;font-size:14px">השלב הבא: שלחו אותו ללקוח לחתימה באחת הדרכים שלמטה.</p></div>' : '') +
@@ -3348,7 +3358,12 @@
       // שומרים גם את ה-HTML המעוצב → הלקוח יראה בדיוק את אותו הסכם (כולל סעיף הבעלות הנכון)
       if (deal.id) db.from('deals').update({ checklist: deal.checklist, contract_html: contractHTML(deal, null) }).eq('id', deal.id).then(function () {});
     });
-    // (בורר סוג ההסכם הוסר — מותג אחד, הסכם אחד)
+    // ביד2 — החלפת סוג-ההסכם (טרייד-אין/רכש/מכר) מחדשת את ההסכם ושומרת
+    if ($('cContractKind')) $('cContractKind').addEventListener('change', function () {
+      deal.contract_type = this.value;
+      $('cDoc').innerHTML = contractHTML(deal, deal.signature || null);
+      if (deal.id) db.from('deals').update({ contract_type: this.value, contract_html: contractHTML(deal, null) }).eq('id', deal.id).then(function () {});
+    });
     // PDF מושלם דרך מנוע ההדפסה של הדפדפן (בדיאלוג בוחרים "שמירה כ-PDF") — bidi עברית ללא פגם
     if ($('cTpl')) $('cTpl').addEventListener('change', function () {
       var id = this.value;

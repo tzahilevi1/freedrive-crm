@@ -591,8 +591,8 @@
       '<div class="grid2">' + tndF('יצרן', 'tn_make') + tndF('דגם', 'tn_model') + tndF('רמת גימור', 'tn_trim') + tndF('שנה', 'tn_year', '', 'number') + tndF('ק"מ', 'tn_km', '', 'number') + tndF('יד', 'tn_hand') + tndF('צבע', 'tn_color') + tndF('מספר רכב', 'tn_plate') + '</div>' +
       '<div class="field" style="margin-top:10px"><label>תיאור / הערות</label><textarea class="inp" id="tn_desc" style="height:54px;width:100%"></textarea></div>' +
       '<div style="margin-top:12px"><label style="font-size:13px;color:var(--muted);display:block;margin-bottom:6px">תמונות (נשלחות לסוחרים במייל + מוצגות בקישור)</label><div id="tn_imgs" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px"></div><input type="file" id="tn_file" accept="image/*" multiple style="font-size:13px"> <span id="tn_upmsg" class="muted" style="font-size:12px"></span></div>' +
-      '<div style="font-size:13px;color:var(--brand);font-weight:600;margin:14px 0 6px">הסוכן המבקש</div>' +
-      '<div class="grid2">' + tndF('שם הסוכן', 'tn_aname') + tndF('טלפון', 'tn_aphone', '', 'tel') + tndF('מייל (לתוצאה)', 'tn_aemail', '', 'email') + tndF('מותג/סניף', 'tn_aorg') + '</div>' +
+      '<div style="font-size:13px;color:var(--brand);font-weight:600;margin:14px 0 6px">הסוכן המבקש <span class="muted" style="font-weight:400;font-size:11.5px">(ברירת-מחדל: את/ה — יוצר/ת המכרז; ניתן לשנות)</span></div>' +
+      '<div class="grid2">' + tndF('שם הסוכן', 'tn_aname', (window.C2B && window.C2B.userName) || '') + tndF('טלפון', 'tn_aphone', (window.C2B && window.C2B.userPhone) || '', 'tel') + tndF('מייל (לתוצאה)', 'tn_aemail', (window.C2B && window.C2B.userEmail) || '', 'email') + tndF('מותג/סניף', 'tn_aorg') + '</div>' +
       '<div style="margin-top:14px;display:flex;gap:8px"><button class="btn btn-sm" id="tn_create">💾 צור מכרז</button><span id="tn_msg" style="font-size:13px"></span></div></div>';
     box.scrollIntoView({ behavior: 'smooth', block: 'start' });
     $('tndClose').addEventListener('click', function () { box.innerHTML = ''; });
