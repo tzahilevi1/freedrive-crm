@@ -1068,6 +1068,7 @@
             (lead.message ? '<div style="margin-top:10px;font-size:14px">🗒️ ' + esc(lead.message) + '</div>' : '') + '</div>' +
           '<div id="ldMkt" class="hidden">' + leadMkt(lead) + '</div>' + '</div>' +
           '<div class="card"><div class="row-between"><h3 style="margin:0">הצעות / הסכמים לחתימה</h3>' + (role !== 'accounting' ? '<div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn btn-ghost btn-sm" id="lpBrandDeals">📄 הצעות לפי מותג</button><button class="btn btn-sm" id="lpNewDeal">+ הצעה</button></div>' : '') + '</div><div id="lpBrandPick"></div><div id="lpDeals">' + dealList(deals) + '</div></div>' +
+          ((lead.meta && Array.isArray(lead.meta.documents) && lead.meta.documents.length) ? '<div class="card"><h3>📄 מסמכים שהתקבלו <span class="muted" style="font-size:12px;font-weight:400">· ' + lead.meta.documents.length + '</span></h3><p class="muted" style="font-size:11.5px;margin:0 0 8px">מסמכים שהלקוח העלה בטופס באתר (מאובטחים — קישור זמני).</p><div id="lpDocs" style="display:flex;flex-direction:column;gap:6px">טוען…</div></div>' : '') +
         '</div>' +
         '<div>' +
           '<div class="card">' +
@@ -1079,6 +1080,16 @@
       '</div>'
     );
     bindLead(lead, prev, next);
+    //  מסמכים שהתקבלו (דלי-פרטי lead-docs) — יצירת signed URL זמני לכל קובץ
+    if (lead.meta && Array.isArray(lead.meta.documents) && lead.meta.documents.length && C.$('lpDocs')) {
+      Promise.all(lead.meta.documents.map(function (d) {
+        return db.storage.from('lead-docs').createSignedUrl(d.path, 3600).then(function (r) {
+          var url = r && r.data && r.data.signedUrl;
+          return url ? '<a href="' + esc(url) + '" target="_blank" rel="noopener" class="btn btn-ghost btn-sm" style="justify-content:flex-start;text-align:right">📄 ' + esc(d.label || 'מסמך') + (d.name ? ' <span class="muted" style="font-size:11px;margin-inline-start:4px">· ' + esc(d.name) + '</span>' : '') + '</a>'
+                     : '<span class="muted" style="font-size:12.5px">📄 ' + esc(d.label || 'מסמך') + ' <span style="color:var(--danger)">(לא ניתן לטעון)</span></span>';
+        }, function () { return '<span class="muted" style="font-size:12.5px">📄 ' + esc(d.label || 'מסמך') + '</span>'; });
+      })).then(function (links) { var el = C.$('lpDocs'); if (el) el.innerHTML = links.join(''); });
+    }
     deals.forEach(function (dd) { if (dd.signature) ensureSignedDoc(lead, dd, function () { window.C2B_openLeadCard(lead.id); }); });   // עסקה חתומה → עותק HTML לתיק + ציר זמן
   }
   // ---- lead details in two tabs: business info + marketing/attribution ----
