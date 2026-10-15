@@ -1000,9 +1000,15 @@
   }
   $('nav').addEventListener('click', function (e) {
     var it = e.target.closest('.nav-item'); if (!it) return;
-    //  פריט-אב עם תת-תפריט (למשל "לידים") — בנייד לא לסגור את המגירה:
-    //  פותחים את שלבי-המשנה כדי שאפשר לבחור, במקום שהתפריט ייעלם.
-    go(it.dataset.nav, { status: it.dataset.status, keepOpen: !!it.dataset.expand });
+    //  פריט-אב עם תת-תפריט (למשל "לידים") — toggle: לחיצה פותחת את שלבי-המשנה
+    //  (והמגירה נשארת פתוחה בנייד), ולחיצה נוספת סוגרת אותם.
+    if (it.dataset.expand) {
+      var sub = document.getElementById(it.dataset.expand);
+      if (sub && sub.classList.contains('open')) { sub.classList.remove('open'); return; }
+      go(it.dataset.nav, { status: it.dataset.status, keepOpen: true });
+      return;
+    }
+    go(it.dataset.nav, { status: it.dataset.status });
   });
   //  לשוניות המשנה. המאזין על המיכל שנשאר בדף, ולכן שורד כל רינדור.
   $('subnav').addEventListener('click', function (e) {

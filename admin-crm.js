@@ -1752,6 +1752,17 @@
     if (deal.checklist && deal.checklist._ownership) checklist._ownership = deal.checklist._ownership;
     var G = function (label, name, val, type) { return '<div class="field" style="margin:0"><label>' + label + '</label><input class="inp" id="dl_' + name + '" type="' + (type || 'text') + '" value="' + esc(val == null ? '' : val) + '" style="width:100%"></div>'; };
     var grid = function (inner) { return '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">' + inner + '</div>'; };
+    //  שדה-רשימה (select). שומר ערך קיים/משלוף-רישוי גם אם אינו ברשימה.
+    var TI_FUELS = ['בנזין', 'דיזל', 'היברידי', 'היברידי נטען', 'חשמלי', 'גז'];
+    var TI_HANDS = ['יד ראשונה', 'יד שנייה', 'יד שלישית', 'יד רביעית', 'יד חמישית ומעלה'];
+    var GS = function (label, name, val, opts) {
+      val = (val == null ? '' : String(val)); var has = opts.indexOf(val) >= 0;
+      return '<div class="field" style="margin:0"><label>' + label + '</label><select class="inp" id="dl_' + name + '" style="width:100%">' +
+        '<option value="">—</option>' +
+        opts.map(function (o) { return '<option value="' + esc(o) + '"' + (o === val ? ' selected' : '') + '>' + esc(o) + '</option>'; }).join('') +
+        (val && !has ? '<option value="' + esc(val) + '" selected>' + esc(val) + '</option>' : '') +
+        '</select></div>';
+    };
     var statusSel = '<div class="field" style="margin:0"><label>סטטוס הזמנה</label><select class="inp" id="dl_status" style="width:100%">' + [['quote', 'הצעת מחיר'], ['ordered', 'הזמנה'], ['cancelled', 'בוטל']].map(function (s) { return '<option value="' + s[0] + '"' + ((deal.status || 'quote') === s[0] ? ' selected' : '') + '>' + s[1] + '</option>'; }).join('') + '</select></div>';
     var fin = deal.financing || {}, ti = deal.tradein || {};
     var tiImages = Array.isArray(ti.images) ? ti.images.slice() : [];   // תמונות טרייד-אין (לבקשת הצעת-מחיר ביד2)
@@ -1794,19 +1805,23 @@
       '<div class="ac-box" style="box-shadow:none;border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:14px;background:var(--brand-soft)">' +
         '<label style="font-size:12px;font-weight:700;color:var(--brand);display:block;margin-bottom:6px">🔎 שליפת פרטי רכב לפי מספר רישוי (משרד התחבורה)</label>' +
         '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><input class="inp" id="dl_ti_plate" value="' + esc(ti.plate || '') + '" placeholder="מספר רכב (ספרות בלבד)" inputmode="numeric" style="max-width:200px"><button type="button" class="btn btn-sm" id="dlPlateLookup">שלוף פרטים</button><span id="dlPlateMsg" style="font-size:12.5px"></span></div>' +
+        '<div class="muted" style="font-size:11.5px;margin-top:6px">💡 הזינו מספר רכב ולחצו "שלוף פרטים" — המערכת מושכת אוטומטית יצרן, דגם, שנת דגם, רמת גימור, צבע וסוג דלק ממאגר משרד התחבורה וממלאה את השדות למטה (חוסך הקלדה ידנית).</div>' +
       '</div>' +
       // ===== בלוק 1: לקבלת הצעת מחיר (הסוכן בשטח) =====
       '<div style="font-size:12.5px;font-weight:700;color:var(--brand);margin:0 0 8px">📋 לקבלת הצעת מחיר</div>' +
-      grid(G('יצרן טרייד-אין', 'ti_make', ti.make) + G('דגם', 'ti_model', ti.model) + G('רמת גימור', 'ti_trim', ti.trim) + G('שנת דגם', 'ti_year', ti.year, 'number') + G('יד', 'ti_hand', ti.hand) + G('קילומטרים', 'ti_km', ti.km, 'number') + G('צבע', 'ti_color', ti.color) + G('סוג דלק', 'ti_fuel', ti.fuel)) +
+      grid(G('יצרן טרייד-אין', 'ti_make', ti.make) + G('דגם', 'ti_model', ti.model) + G('רמת גימור', 'ti_trim', ti.trim) + G('שנת דגם', 'ti_year', ti.year, 'number') + GS('יד', 'ti_hand', ti.hand, TI_HANDS) + G('קילומטרים', 'ti_km', ti.km, 'number') + G('צבע', 'ti_color', ti.color) + GS('סוג דלק', 'ti_fuel', ti.fuel, TI_FUELS)) +
       '<div class="grid2" style="margin-top:4px"><div class="field" style="margin:0"><label>מחירון לוי יצחק ₪ <a href="https://www.levi-itzhak.co.il/" target="_blank" rel="noopener" style="font-size:11px;color:var(--brand);text-decoration:none">↗ פתח מחירון</a></label><input class="inp" id="dl_ti_list" type="number" value="' + esc(ti.list == null ? '' : ti.list) + '" style="width:100%"></div></div>' +
-      '<div style="margin-top:12px"><label style="font-size:13px;color:var(--muted);display:block;margin-bottom:6px">📄 רישיון רכב <span style="color:var(--danger)">(חובה)</span></label><div id="dlTiLicense" style="margin-bottom:6px"></div><input type="file" id="dlTiLicenseFile" accept="image/*,.pdf" style="font-size:13px"> <span id="dlTiLicMsg" class="muted" style="font-size:12px"></span></div>' +
-      '<div style="margin-top:12px"><label style="font-size:13px;color:var(--muted);display:block;margin-bottom:6px">📷 תמונות הרכב <span style="color:var(--danger)">(לפחות 2)</span></label><div id="dlTiImgs" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px"></div><input type="file" id="dlTiFile" accept="image/*" multiple style="font-size:13px"> <span id="dlTiUpMsg" class="muted" style="font-size:12px"></span></div>' +
+      '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px;margin-top:12px">' +
+        '<div style="border:1px solid var(--line);border-radius:10px;padding:10px"><label style="font-size:13px;color:var(--muted);display:block;margin-bottom:6px">📄 רישיון רכב <span style="color:var(--danger)">(חובה)</span></label><div id="dlTiLicense" style="margin-bottom:6px"></div><input type="file" id="dlTiLicenseFile" accept="image/*,.pdf" style="font-size:13px"> <span id="dlTiLicMsg" class="muted" style="font-size:12px"></span></div>' +
+        '<div style="border:1px solid var(--line);border-radius:10px;padding:10px"><label style="font-size:13px;color:var(--muted);display:block;margin-bottom:6px">📷 תמונות הרכב <span style="color:var(--danger)">(לפחות 2)</span></label><div id="dlTiImgs" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px"></div><input type="file" id="dlTiFile" accept="image/*" multiple style="font-size:13px"> <span id="dlTiUpMsg" class="muted" style="font-size:12px"></span></div>' +
+      '</div>' +
       '<label style="display:flex;gap:8px;align-items:center;padding:10px 0 6px;font-size:13.5px"><input type="checkbox" id="dl_ti_commercial"' + (ti.commercial ? ' checked' : '') + '> 🚚 רכב מסחרי / משאית <span class="muted" style="font-size:12px">(חובה תמונת אחורה + צד)</span></label>' +
       '<div id="dlTiComm" style="display:' + (ti.commercial ? 'flex' : 'none') + ';gap:16px;flex-wrap:wrap;margin-bottom:8px">' +
         '<div><label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px">תמונת אחורה <span style="color:var(--danger)">(חובה)</span></label><div id="dlTiRear" style="margin-bottom:4px"></div><input type="file" id="dlTiRearFile" accept="image/*" style="font-size:12px"></div>' +
         '<div><label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px">תמונת צד <span style="color:var(--danger)">(חובה)</span></label><div id="dlTiSide" style="margin-bottom:4px"></div><input type="file" id="dlTiSideFile" accept="image/*" style="font-size:12px"></div>' +
       '</div>' +
-      '<div style="margin-top:4px;font-size:12px;color:var(--brand);background:var(--brand-soft);border-radius:8px;padding:8px 10px">💡 מילוי מלא (יצרן · דגם · שנה · גימור · יד · ק"מ) + רישיון רכב + לפחות 2 תמונות (למסחרי: גם אחורה + צד) ושמירה → נשלחת אוטומטית בקשת הצעת-מחיר לסוחרי יד2.</div>' +
+      '<div style="margin-top:4px;font-size:12px;color:var(--brand);background:var(--brand-soft);border-radius:8px;padding:8px 10px">💡 מילוי מלא (יצרן · דגם · שנה · גימור · יד · ק"מ) + רישיון רכב + לפחות 2 תמונות (למסחרי: גם אחורה + צד) → שלחו בקשת הצעת-מחיר למחלקת הטרייד-אין.</div>' +
+      '<div style="margin-top:12px"><button type="button" id="dlTiSend" class="btn" style="width:100%;background:var(--brand);color:#fff;font-weight:800;padding:13px;font-size:14.5px;border-radius:10px;border:none;cursor:pointer">📨 שמור ושלח בקשת הצעת-מחיר למחלקת הטרייד-אין</button><div id="dlTiSent" style="display:none;margin-top:10px"></div></div>' +
       // ===== בלוק 2: פרטים נוספים (לאחר רכישה) =====
       '<div style="font-size:12.5px;font-weight:700;color:var(--muted);margin:16px 0 8px;border-top:1px solid var(--line);padding-top:12px">📄 פרטים נוספים (לאחר רכישה)</div>' +
       grid(G('מספר שלדה (VIN)', 'ti_vin', ti.vin) + G('מחיר קנייה ₪', 'ti_buy', ti.buy, 'number') + G('סכום שעבוד ₪', 'ti_lien', ti.lien, 'number') + G('גורם משעבד', 'ti_holder', ti.holder) + G('תאריך מסירה בפועל', 'ti_delivery', ti.delivery, 'date')) +
@@ -2034,7 +2049,7 @@
     // ---- auto-save: persist every change (debounced), no button, no page refresh ----
     var saveTimer = null, inFlight = false, dirtyAgain = false, dealLogged = !!deal.id, lastStatus = deal.status || 'quote';
     function setState(txt) { var ind = $('dlSaveState'); if (ind) ind.textContent = txt; }
-    function doSave() {
+    function doSave(onDone) {
       if (inFlight) { dirtyAgain = true; return; }
       inFlight = true; setState('💾 שומר…');
       var payload = readForm();
@@ -2047,7 +2062,7 @@
         : db.from('deals').insert(payload).select('id,order_no,updated_at').single();
       q.then(function (r) {
         inFlight = false;
-        if (r.error) { setState('⚠ שגיאת שמירה'); console.warn('[deal auto-save]', r.error); return; }
+        if (r.error) { setState('⚠ שגיאת שמירה'); console.warn('[deal auto-save]', r.error); if (onDone) onDone(false); return; }
         if (deal.id && Array.isArray(r.data) && r.data.length === 0) {
           setState('⚠ נחסם');
           alert('משתמש אחר שמר את העסקה הזאת בזמן שערכת.\n\nכדי לא לדרוס את השינוי שלו, השמירה שלך לא בוצעה.\nהמסך ייטען מחדש עם הגרסה העדכנית.');
@@ -2067,6 +2082,7 @@
           if (ns !== prevLeadStatus) db.from('leads').update({ status: ns }).eq('id', lead.id).then(function () { lead.status = ns; if (C.refreshBadges) C.refreshBadges(); runAutomations(lead.id, ns, lead); });
         }
         setState('✓ נשמר');
+        if (onDone) onDone(true);
         if (dirtyAgain) { dirtyAgain = false; doSave(); }
       });
     }
@@ -2137,6 +2153,37 @@
     tiSingleUp('dlTiRear', 'dlTiRearFile', null, 'rear');
     tiSingleUp('dlTiSide', 'dlTiSideFile', null, 'side');
     if ($('dl_ti_commercial')) $('dl_ti_commercial').addEventListener('change', function () { var box = $('dlTiComm'); if (box) box.style.display = this.checked ? 'flex' : 'none'; });
+    // שליחת בקשת הצעת-מחיר למחלקת הטרייד-אין: ולידציה (זהה לשער-המלאות במסד) → שמירה → אישור ברור
+    if ($('dlTiSend')) $('dlTiSend').addEventListener('click', function () {
+      var box = $('dlTiSent'), btn = this;
+      function v(id) { return ($(id) && $(id).value || '').trim(); }
+      var miss = [];
+      if (!v('dl_ti_make')) miss.push('יצרן');
+      if (!v('dl_ti_model')) miss.push('דגם');
+      if (!v('dl_ti_year')) miss.push('שנת דגם');
+      if (!v('dl_ti_trim')) miss.push('רמת גימור');
+      if (!v('dl_ti_hand')) miss.push('יד');
+      if (!v('dl_ti_km')) miss.push('קילומטרים');
+      if (!tiDocs.license) miss.push('רישיון רכב');
+      if (tiImages.length < 2) miss.push('לפחות 2 תמונות רכב');
+      var comm = $('dl_ti_commercial') && $('dl_ti_commercial').checked;
+      if (comm && !tiDocs.rear) miss.push('תמונת אחורה (רכב מסחרי)');
+      if (comm && !tiDocs.side) miss.push('תמונת צד (רכב מסחרי)');
+      if (miss.length) {
+        box.style.display = 'block';
+        box.innerHTML = '<div style="background:rgba(239,68,68,.08);border:1px solid #ef4444;border-radius:10px;padding:10px 12px;font-size:12.5px;color:#ef4444"><b>חסרים פרטים לשליחת הבקשה:</b><br>• ' + miss.join('<br>• ') + '</div>';
+        box.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        return;
+      }
+      btn.disabled = true; var orig = btn.textContent; btn.textContent = '📨 שולח…'; box.style.display = 'none';
+      clearTimeout(saveTimer);
+      doSave(function (ok) {
+        btn.disabled = false; btn.textContent = orig; box.style.display = 'block';
+        if (ok) box.innerHTML = '<div style="background:var(--brand-soft);border:1px solid var(--brand);border-radius:10px;padding:12px 14px;font-size:13px"><b style="color:var(--brand)">✅ נשלח למחלקת הטרייד-אין של יד2</b><br><span class="muted" style="font-size:12.5px">הפרטים והתמונות נשמרו והבקשה נשלחה. המחלקה עוברת על הרכב ותחזור אליך עם הצעת מחיר בהקדם.</span></div>';
+        else box.innerHTML = '<div style="background:rgba(239,68,68,.08);border:1px solid #ef4444;border-radius:10px;padding:10px 12px;font-size:12.5px;color:#ef4444">השמירה נכשלה — נסו שוב בעוד רגע.</div>';
+        box.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      });
+    });
     if ($('dlPlateLookup')) $('dlPlateLookup').addEventListener('click', function () {
       var plate = ($('dl_ti_plate').value || '').replace(/\D/g, ''); var msg = $('dlPlateMsg');
       if (!plate) { msg.style.color = 'var(--danger)'; msg.textContent = 'הזינו מספר רכב'; return; }
@@ -2145,13 +2192,17 @@
       plateLookup(plate, function (v, err) {
         btn.disabled = false;
         if (err || !v) { msg.style.color = 'var(--danger)'; msg.textContent = err || 'לא נמצא רכב עם מספר זה'; return; }
-        if (v.make && $('dl_ti_make')) $('dl_ti_make').value = v.make;
-        if (v.model && $('dl_ti_model')) $('dl_ti_model').value = v.model;
-        if (v.trim && $('dl_ti_trim')) $('dl_ti_trim').value = v.trim;
-        if (v.year && $('dl_ti_year')) $('dl_ti_year').value = v.year;
-        if (v.color && $('dl_ti_color')) $('dl_ti_color').value = v.color;
-        if (v.fuel && $('dl_ti_fuel')) $('dl_ti_fuel').value = v.fuel;
-        if (v.vin && $('dl_ti_vin')) $('dl_ti_vin').value = v.vin;
+        // ממלא שדה; אם זה select (דלק/יד) והערך לא ברשימה — מוסיף אותו קודם, אחרת לא "נתפס".
+        function fill(id, val) {
+          var el = $(id); if (!el || val == null || val === '') return;
+          if (el.tagName === 'SELECT' && ![].some.call(el.options, function (o) { return o.value === String(val); })) {
+            var o = document.createElement('option'); o.value = String(val); o.textContent = String(val); el.appendChild(o);
+          }
+          el.value = val;
+        }
+        fill('dl_ti_make', v.make); fill('dl_ti_model', v.model); fill('dl_ti_trim', v.trim);
+        fill('dl_ti_year', v.year); fill('dl_ti_color', v.color); fill('dl_ti_fuel', v.fuel); fill('dl_ti_vin', v.vin);
+        if (typeof autoSave === 'function') autoSave();
         msg.style.color = 'var(--ok)'; msg.textContent = '✅ ' + [v.make, v.model, v.year].filter(Boolean).join(' · ');
       });
     });
