@@ -466,7 +466,7 @@
   window.C2B_renderTenderSuppliers = function () {
     view('<div class="loading">טוען ספקים…</div>');
     db.from('tender_suppliers').select('*').order('name').then(function (r) {
-      if (r.error) return view('<div class="card"><h3>ספקי יד2</h3><p class="muted">שגיאה: ' + esc(r.error.message) + '</p></div>');
+      if (r.error) return view('<div class="card"><h3>ספקים</h3><p class="muted">שגיאה: ' + esc(r.error.message) + '</p></div>');
       var rows = r.data || [];
       var list = rows.map(function (s) {
         return '<div class="card" style="padding:12px 14px;display:flex;justify-content:space-between;align-items:center;gap:10px">' +
@@ -474,7 +474,7 @@
           '<div class="muted" style="font-size:12.5px;margin-top:2px">' + [s.phone ? '📱 ' + esc(s.phone) : '', s.email ? '✉ ' + esc(s.email) : '', s.region ? esc(s.region) : ''].filter(Boolean).join(' · ') + '</div></div>' +
           '<div style="display:flex;gap:6px"><button class="btn btn-ghost btn-sm" data-sedit="' + s.id + '">✏️</button><button class="btn btn-ghost btn-sm" data-sdel="' + s.id + '" style="color:var(--danger)">🗑</button></div></div>';
       }).join('');
-      view('<div class="row-between" style="margin-bottom:12px;align-items:center"><h2 style="margin:0">🤝 ספקי יד2 <span class="muted" style="font-size:13px;font-weight:400">· ' + rows.length + '</span></h2><button class="btn btn-sm" id="supAdd">➕ ספק חדש</button></div>' +
+      view('<div class="row-between" style="margin-bottom:12px;align-items:center"><h2 style="margin:0">🤝 ספקים <span class="muted" style="font-size:13px;font-weight:400">· ' + rows.length + '</span></h2><button class="btn btn-sm" id="supAdd">➕ ספק חדש</button></div>' +
         '<div id="supEdit"></div><div style="display:flex;flex-direction:column;gap:8px">' + (list || '<div class="empty">אין ספקים עדיין</div>') + '</div>');
       $('supAdd').addEventListener('click', function () { openSupEdit(null); });
       $('view').querySelectorAll('[data-sedit]').forEach(function (b) { b.addEventListener('click', function () { openSupEdit(rows.filter(function (x) { return x.id == b.dataset.sedit; })[0]); }); });
@@ -645,11 +645,13 @@
         var win = (t.winner_bid_id && b.id === t.winner_bid_id) || (!t.winner_bid_id && i === 0 && t.status === 'open');
         return '<tr style="' + (win ? 'background:rgba(37,99,235,.12)' : '') + '"><td style="padding:6px 8px">' + (i + 1) + (win ? ' 🏆' : '') + '</td><td style="padding:6px 8px">' + esc(b.supplier_name || '—') + '</td><td style="padding:6px 8px;font-weight:700;text-align:left">' + money(b.amount) + '</td><td style="padding:6px 8px;color:var(--muted);font-size:12px">' + when(b.created_at) + '</td></tr>';
       }).join('');
-      var spec = [t.car_hand ? 'יד ' + esc(t.car_hand) : '', t.car_km != null ? Number(t.car_km).toLocaleString('en-US') + ' ק"מ' : '', t.car_color ? esc(t.car_color) : '', t.car_plate ? esc(t.car_plate) : ''].filter(Boolean).join(' · ');
+      var spec = [t.car_hand ? 'יד ' + esc(t.car_hand) : '', t.car_km != null ? Number(t.car_km).toLocaleString('en-US') + ' ק"מ' : '', t.car_color ? esc(t.car_color) : '', t.car_fuel ? '⛽ ' + esc(t.car_fuel) : '', t.car_plate ? '🔖 ' + esc(t.car_plate) : ''].filter(Boolean).join(' · ');
+      var spec2 = [t.car_vin ? 'שלדה: ' + esc(t.car_vin) : '', t.list_price != null ? 'מחירון לוי יצחק: ' + money(t.list_price) : ''].filter(Boolean).join(' · ');
       var canSend = (t.status === 'draft' || t.status === 'open'), canClose = (t.status === 'open' || t.status === 'draft');
       box.innerHTML = '<div class="card" style="border:1px solid var(--line);background:var(--surface-2)">' +
         '<div class="row-between" style="margin-bottom:8px"><b>🔨 ' + esc(tndTitle(t)) + ' <span style="background:' + st[1] + ';color:#fff;font-size:11px;padding:2px 9px;border-radius:999px;margin-inline-start:6px">' + st[0] + '</span></b><button class="btn btn-ghost btn-sm" id="tndClose">✕</button></div>' +
         '<div class="muted" style="font-size:13px">' + spec + '</div>' +
+        (spec2 ? '<div class="muted" style="font-size:12.5px;margin-top:3px">' + spec2 + '</div>' : '') +
         (t.car_description ? '<div style="font-size:13px;margin-top:6px">' + esc(t.car_description) + '</div>' : '') +
         (t.license_doc && /^https?:/.test(t.license_doc) ? '<div style="margin-top:6px"><a href="' + esc(t.license_doc) + '" target="_blank" rel="noopener" class="btn btn-ghost btn-sm">📄 רישיון רכב</a></div>' : '') +
         '<div class="muted" style="font-size:12.5px;margin-top:8px">👤 ' + esc(t.agent_name || '—') + [t.agent_phone ? ' · ' + esc(t.agent_phone) : '', t.agent_email ? ' · ' + esc(t.agent_email) : '', t.agent_org ? ' · ' + esc(t.agent_org) : ''].join('') + '</div>' +

@@ -2786,6 +2786,8 @@
   function renderContractTemplates() {
     var $ = C.$;
     if (C.role !== 'admin') return view('<div class="card"><p class="muted">המסך פתוח למנהל מערכת בלבד.</p></div>');
+    //  ביד2 ההסכמים מובנים בקוד (3 סוגים) ונוצרים פר-עסקה — לא תבניות עריכה. מציגים אותם עם תצוגה-מקדימה.
+    if ((window.__fleetCfg && window.__fleetCfg.slug) === 'yad2') return renderYad2Contracts();
     ctInvalidate();
     view('<div class="card"><h3 style="margin:0 0 4px">📜 תבניות הסכמים</h3>' +
       '<p class="muted" style="font-size:13px;margin:0 0 12px">הנוסח המשפטי של ההסכם. שינוי כאן משפיע על הסכמים חדשים בלבד — הסכם שנחתם שומר את הנוסח שעליו חתמו.</p>' +
@@ -2911,6 +2913,39 @@
         ctInvalidate(); ctLoad(); if (isNew) $('ctEdit').innerHTML = '';
       });
     });
+  }
+  //  מסך הסכמי יד2 — 3 הסכמים מובנים (טרייד-אין/רכש/מכר) עם תצוגה-מקדימה (נתוני דוגמה)
+  function renderYad2Contracts() {
+    var $ = C.$;
+    var kinds = [
+      ['טרייד-אין', '📄 הסכם טרייד-אין', 'רכישת רכב מלקוח במסגרת טרייד-אין — הלקוח הוא המוכר, אנחנו הקונים.'],
+      ['רכש', '📄 הסכם רכש (קנייה)', 'קניית רכב יד-שנייה מלקוח/סוחר — הלקוח הוא המוכר, אנחנו הקונים.'],
+      ['מכר', '📄 הסכם מכר (מכירה)', 'מכירת רכב ללקוח — אנחנו המוכרים, הלקוח הוא הקונה.']
+    ];
+    view('<div class="card"><h3 style="margin:0 0 4px">📜 הסכמי יד2</h3>' +
+      '<p class="muted" style="font-size:13px;margin:0 0 12px">ליד2 שלושה הסכמים מובנים. ההסכם נוצר <b>אוטומטית בכרטיס העסקה</b> לפי בחירת "סוג הסכם" (ליד כפתור יצירת ההסכם), עם מילוי פרטי הרכב והצדדים מהעסקה. הנוסח אחיד ומתעדכן לכל עסקה — אין צורך לערוך תבנית.</p>' +
+      '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px">' +
+      kinds.map(function (k) {
+        return '<div style="border:1px solid var(--line);border-radius:12px;padding:14px"><b style="font-size:14.5px">' + k[1] + '</b>' +
+          '<p class="muted" style="font-size:12px;margin:6px 0 10px">' + k[2] + '</p>' +
+          '<button class="btn btn-sm" data-ctprev="' + esc(k[0]) + '">👁 תצוגה מקדימה</button></div>';
+      }).join('') + '</div></div>' +
+      '<div id="ctPrev"></div>');
+    $('view').querySelectorAll('[data-ctprev]').forEach(function (b) {
+      b.addEventListener('click', function () { previewYad2Contract(b.dataset.ctprev); });
+    });
+  }
+  function previewYad2Contract(kind) {
+    var sample = {
+      order_no: 'דוגמה', client_name: 'ישראל ישראלי', client_id: '000000000', client_phone: '050-0000000', client_address: 'רחוב הדוגמה 1, עיר',
+      car_make: 'טויוטה', car_model: 'קורולה', car_year: 2021, car_trim: 'Hybrid', car_color: 'לבן', car_price: 95000,
+      car_extra: { plate: '00-000-00', km: '45,000', vin: 'JTDBR32E030000000', hand: 'יד שנייה' }, contract_type: kind
+    };
+    var host = C.$('ctPrev');
+    host.innerHTML = '<div class="card"><div class="row-between" style="margin-bottom:8px"><b>תצוגה מקדימה — הסכם ' + esc(kind) + ' <span class="muted" style="font-weight:400;font-size:12px">(נתוני דוגמה)</span></b><button class="btn btn-ghost btn-sm" data-ctprevclose>✕ סגור</button></div>' +
+      '<div style="border:1px solid var(--line);border-radius:10px;padding:18px;background:#fff;max-height:70vh;overflow:auto">' + yad2ContractHTML(sample, kind, null) + '</div></div>';
+    host.querySelector('[data-ctprevclose]').addEventListener('click', function () { host.innerHTML = ''; });
+    host.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
   window.C2B_renderContractTemplates = renderContractTemplates;
 

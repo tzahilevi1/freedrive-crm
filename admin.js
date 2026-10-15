@@ -727,6 +727,8 @@
   function navAllowed(nav, role) {
     //  לשוניות משנה ("settings:phone") יורשות את ההרשאה של המסך
     if (nav && nav.indexOf(':') > 0) nav = nav.split(':')[0];
+    //  ביד2 אין "דיוור והחזרה" — חסום גם ניווט ישיר (גם למנהל), לא רק הסתרה בתפריט
+    if (nav === 'nurture' && (window.__fleetCfg && window.__fleetCfg.slug) === 'yad2') return false;
     if (role === 'admin' || !role) return true;
     if (nav === 'activity' || nav === 'dashboard') return true;   // always available
     if (nav === 'inventory') return true;  // ניהול מלאי יד2 (yad2 בלבד; גידור ה-slug נפרד)
