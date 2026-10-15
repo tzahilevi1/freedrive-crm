@@ -643,7 +643,7 @@
       var bids = (r && r.data) || [], st = TND_ST[t.status] || ['—', '#888'];
       var bidRows = bids.map(function (b, i) {
         var win = (t.winner_bid_id && b.id === t.winner_bid_id) || (!t.winner_bid_id && i === 0 && t.status === 'open');
-        return '<tr style="' + (win ? 'background:rgba(37,99,235,.12)' : '') + '"><td style="padding:6px 8px">' + (i + 1) + (win ? ' 🏆' : '') + '</td><td style="padding:6px 8px">' + esc(b.supplier_name || '—') + '</td><td style="padding:6px 8px;font-weight:700;text-align:left">' + money(b.amount) + '</td><td style="padding:6px 8px;color:var(--muted);font-size:12px">' + when(b.created_at) + '</td></tr>';
+        return '<tr style="' + (win ? 'background:rgba(37,99,235,.12)' : '') + '"><td style="padding:6px 8px;vertical-align:top">' + (i + 1) + (win ? ' 🏆' : '') + '</td><td style="padding:6px 8px">' + esc(b.supplier_name || '—') + (b.note ? '<div class="muted" style="font-size:11.5px;margin-top:2px;white-space:normal">💬 ' + esc(b.note) + '</div>' : '') + '</td><td style="padding:6px 8px;font-weight:700;text-align:left;vertical-align:top">' + money(b.amount) + '</td><td style="padding:6px 8px;color:var(--muted);font-size:12px;vertical-align:top">' + when(b.created_at) + '</td></tr>';
       }).join('');
       var spec = [t.car_hand ? 'יד ' + esc(t.car_hand) : '', t.car_km != null ? Number(t.car_km).toLocaleString('en-US') + ' ק"מ' : '', t.car_color ? esc(t.car_color) : '', t.car_fuel ? '⛽ ' + esc(t.car_fuel) : '', t.car_plate ? '🔖 ' + esc(t.car_plate) : ''].filter(Boolean).join(' · ');
       var spec2 = [t.car_vin ? 'שלדה: ' + esc(t.car_vin) : '', t.list_price != null ? 'מחירון לוי יצחק: ' + money(t.list_price) : ''].filter(Boolean).join(' · ');
