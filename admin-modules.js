@@ -412,31 +412,51 @@
   function invSetSel(id, val) { var e = $(id); if (!e || !val) return; val = String(val); if (![].some.call(e.options, function (o) { return o.value === val; })) { var op = document.createElement('option'); op.value = val; op.textContent = val; e.appendChild(op); } e.value = val; }
   function openInvEdit(car) {
     car = car || {}; var isNew = !car.id, box = $('invEdit'); if (!box) return;
+    //  לשוניות (כמו בכרטיס-עסקה): כל השדות נשארים עם אותם id — המאזינים מוצאים אותם בכל פאנל.
+    function ivTab(k, label, active) { return '<button type="button" data-ivtab="' + k + '" style="background:none;border:none;border-bottom:2px solid ' + (active ? 'var(--brand)' : 'transparent') + ';color:' + (active ? 'var(--brand)' : 'var(--muted)') + ';font-weight:700;font-size:13.5px;padding:9px 12px;cursor:pointer;margin-bottom:-1px">' + label + '</button>'; }
+    function ivPane(k, active, inner) { return '<div data-ivpane="' + k + '"' + (active ? '' : ' style="display:none"') + '>' + inner + '</div>'; }
     box.innerHTML = '<div class="card" style="border:1px solid var(--line);background:var(--surface-2)">' +
       '<div class="row-between" style="margin-bottom:12px"><b>' + (isNew ? '➕ רכב חדש' : '✏️ ' + esc(invTitle(car))) + '</b><button class="btn btn-ghost btn-sm" id="invClose">✕ סגור</button></div>' +
-      //  מספר-רכב למעלה — נקודת-ההתחלה: שליפה אוטומטית ממשרד התחבורה ממלאת יצרן/דגם/רמת-גימור/שנה/צבע/סוג-דלק.
-      '<div class="field" style="margin:0 0 12px"><label>מספר רכב — התחל כאן (שליפה אוטומטית ממשרד התחבורה)</label><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><input class="inp" id="iv_plate" value="' + esc(car.plate || '') + '" placeholder="מספר רכב (ספרות)" inputmode="numeric" style="flex:1;min-width:150px"><button type="button" class="btn btn-sm" id="iv_plateLk">🔎 שלוף פרטי רכב</button><span id="iv_plateMsg" style="font-size:12px"></span></div></div>' +
-      '<div class="grid2">' + invF('יצרן', 'iv_make', car.make) + invF('דגם', 'iv_model', car.model) + invF('רמת גימור', 'iv_trim', car.trim) + invS('שנה', 'iv_year', car.year, invYears()) + invS('יד', 'iv_hand', car.hand, INV_HANDS) + invF('ק"מ', 'iv_km', car.km, 'number') + invF('צבע', 'iv_color', car.color) + invS('סוג דלק', 'iv_fuel', car.fuel, INV_FUELS) + invF('מחיר מכירה (₪)', 'iv_price', car.price, 'number') + '</div>' +
-      '<div style="font-size:12px;color:var(--muted);font-weight:600;margin:12px 0 4px">💰 תמחור פנימי + יומן מסחר (לא מוצג באתרים)</div>' +
-      '<div class="grid2">' + invF('מחיר מחירון (₪)', 'iv_listprice', '', 'number') + invF('מחיר מינימום (₪)', 'iv_minprice', '', 'number') + invF('מחיר מנהל (₪)', 'iv_mgrprice', '', 'number') + '</div>' +
-      '<div class="grid2" style="margin-top:4px">' + invF('עלות רכישה (₪)', 'iv_pcost', '', 'number') + invF('תאריך רכישה', 'iv_pdate', '', 'date') + invF('נרכש מ- (ספק)', 'iv_psup') + invF('נמכר ל- (קונה)', 'iv_buyer') + '</div>' +
-      '<div class="field" style="margin-top:10px"><label>תיאור</label><textarea class="inp" id="iv_desc" style="height:70px;width:100%">' + esc(car.description || '') + '</textarea></div>' +
-      //  תמונות + מסמכים זה-לצד-זה (תמונות מימין, מסמכים משמאל ב-RTL); הוצאות מתחת.
-      '<div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:12px;align-items:flex-start">' +
-        '<div style="flex:1;min-width:240px"><label style="font-size:13px;color:var(--muted);display:block;margin-bottom:6px">תמונות (לחיצה על תמונה = קביעת שער)</label><div id="iv_imgs" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px"></div><input type="file" id="iv_file" accept="image/*" multiple style="font-size:13px"> <span id="iv_upmsg" class="muted" style="font-size:12px"></span></div>' +
-        (car.id ? '<div style="flex:1;min-width:240px"><label style="font-size:13px;color:var(--muted);display:block;margin-bottom:6px">📎 מסמכי הרכב — רישיון / בדיקה / סליקה / קאר-זון / תשלומים / קבלות</label>' +
-          '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px"><select class="inp" id="iv_doctype" style="width:auto">' + INV_DOC_TYPES.map(function (d) { return '<option>' + esc(d) + '</option>'; }).join('') + '</select>' +
-          '<label class="btn btn-ghost btn-sm" style="cursor:pointer;margin:0">⬆ העלה מסמך<input type="file" id="iv_docfile" accept="image/*,application/pdf" style="display:none"></label><span id="iv_docmsg" class="muted" style="font-size:12px"></span></div>' +
-          '<div id="iv_doclist" style="display:flex;flex-direction:column;gap:5px"></div></div>' : '') +
+      //  סרגל-לשוניות
+      '<div id="ivTabs" style="display:flex;gap:2px;flex-wrap:wrap;border-bottom:1px solid var(--line);margin-bottom:14px">' +
+        ivTab('car', '🚗 פרטי הרכב', true) + ivTab('price', '💰 תמחור פנימי') + ivTab('media', '📷 תמונות ומסמכים') + ivTab('exp', '💸 הוצאות') +
       '</div>' +
-      (car.id ? '<div style="margin-top:14px;border-top:1px solid var(--line);padding-top:12px"><label style="font-size:13px;color:var(--muted);display:block;margin-bottom:6px">💸 הוצאות על הרכב</label>' +
-        '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px"><select class="inp" id="iv_expkind" style="width:auto">' + INV_EXP_KINDS.map(function (k) { return '<option>' + esc(k) + '</option>'; }).join('') + '</select>' +
-        '<input class="inp" id="iv_expamt" type="number" inputmode="numeric" placeholder="סכום ₪" style="width:120px"><input class="inp" id="iv_expnote" placeholder="הערה (לא חובה)" style="width:160px"><button class="btn btn-sm" id="iv_expadd" type="button">+ הוסף</button></div>' +
-        '<div id="iv_explist"></div></div>'
-        : '<p class="muted" style="font-size:12px;margin-top:12px">💡 שמרו את הרכב כדי להוסיף מסמכים והוצאות.</p>') +
-      '<div class="grid2" style="margin-top:12px"><div class="field" style="margin:0"><label>סטטוס</label><select class="inp" id="iv_status" style="width:100%">' + ['intake', 'available', 'reserved', 'sold', 'hidden'].map(function (s) { return '<option value="' + s + '"' + ((car.status || (isNew ? 'available' : 'intake')) === s ? ' selected' : '') + '>' + INV_ST[s][0] + '</option>'; }).join('') + '</select></div>' +
-        '<label style="display:flex;align-items:center;gap:8px;margin-top:22px;font-size:14px"><input type="checkbox" id="iv_pub"' + ((isNew || car.published) ? ' checked' : '') + '> מפורסם (מוצג באתרים וב-CRM-ים)</label></div>' +
-      '<div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-sm" id="iv_save">💾 שמור</button>' + (isNew ? '' : '<button class="btn btn-ghost btn-sm" id="iv_del" style="color:var(--danger)">🗑 מחק</button>') + '<span id="iv_msg" style="font-size:13px;margin-inline-start:8px"></span></div></div>';
+      //  לשונית 1 — פרטי הרכב (מספר-רכב בראש = שליפה אוטומטית ממשרד התחבורה; סטטוס + פרסום)
+      ivPane('car', true,
+        '<div class="field" style="margin:0 0 12px"><label>מספר רכב — התחל כאן (שליפה אוטומטית ממשרד התחבורה)</label><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><input class="inp" id="iv_plate" value="' + esc(car.plate || '') + '" placeholder="מספר רכב (ספרות)" inputmode="numeric" style="flex:1;min-width:150px"><button type="button" class="btn btn-sm" id="iv_plateLk">🔎 שלוף פרטי רכב</button><span id="iv_plateMsg" style="font-size:12px"></span></div></div>' +
+        '<div class="grid2">' + invF('יצרן', 'iv_make', car.make) + invF('דגם', 'iv_model', car.model) + invF('רמת גימור', 'iv_trim', car.trim) + invS('שנה', 'iv_year', car.year, invYears()) + invS('יד', 'iv_hand', car.hand, INV_HANDS) + invF('ק"מ', 'iv_km', car.km, 'number') + invF('צבע', 'iv_color', car.color) + invS('סוג דלק', 'iv_fuel', car.fuel, INV_FUELS) + invF('מחיר מכירה (₪)', 'iv_price', car.price, 'number') + '</div>' +
+        '<div class="grid2" style="margin-top:12px"><div class="field" style="margin:0"><label>סטטוס</label><select class="inp" id="iv_status" style="width:100%">' + ['intake', 'available', 'reserved', 'sold', 'hidden'].map(function (s) { return '<option value="' + s + '"' + ((car.status || (isNew ? 'available' : 'intake')) === s ? ' selected' : '') + '>' + INV_ST[s][0] + '</option>'; }).join('') + '</select></div>' +
+          '<label style="display:flex;align-items:center;gap:8px;margin-top:22px;font-size:14px"><input type="checkbox" id="iv_pub"' + ((isNew || car.published) ? ' checked' : '') + '> מפורסם (מוצג באתרים וב-CRM-ים)</label></div>'
+      ) +
+      //  לשונית 2 — תמחור פנימי + יומן מסחר (לא מוצג באתרים) + תיאור
+      ivPane('price', false,
+        '<div style="font-size:12px;color:var(--muted);font-weight:600;margin:0 0 8px">💰 תמחור פנימי + יומן מסחר (לא מוצג באתרים)</div>' +
+        '<div class="grid2">' + invF('מחיר מחירון (₪)', 'iv_listprice', '', 'number') + invF('מחיר מינימום (₪)', 'iv_minprice', '', 'number') + invF('מחיר מנהל (₪)', 'iv_mgrprice', '', 'number') + '</div>' +
+        '<div class="grid2" style="margin-top:4px">' + invF('עלות רכישה (₪)', 'iv_pcost', '', 'number') + invF('תאריך רכישה', 'iv_pdate', '', 'date') + invF('נרכש מ- (ספק)', 'iv_psup') + invF('נמכר ל- (קונה)', 'iv_buyer') + '</div>' +
+        '<div class="field" style="margin-top:10px"><label>תיאור</label><textarea class="inp" id="iv_desc" style="height:70px;width:100%">' + esc(car.description || '') + '</textarea></div>'
+      ) +
+      //  לשונית 3 — תמונות (ימין) ומסמכי-רכב (שמאל, דלי פרטי + signed URL)
+      ivPane('media', false,
+        '<div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start">' +
+          '<div style="flex:1;min-width:240px"><label style="font-size:13px;color:var(--muted);display:block;margin-bottom:6px">תמונות (לחיצה על תמונה = קביעת שער)</label><div id="iv_imgs" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px"></div><input type="file" id="iv_file" accept="image/*" multiple style="font-size:13px"> <span id="iv_upmsg" class="muted" style="font-size:12px"></span></div>' +
+          (car.id ? '<div style="flex:1;min-width:240px"><label style="font-size:13px;color:var(--muted);display:block;margin-bottom:6px">📎 מסמכי הרכב — רישיון / בדיקה / סליקה / קאר-זון / תשלומים / קבלות</label>' +
+            '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px"><select class="inp" id="iv_doctype" style="width:auto">' + INV_DOC_TYPES.map(function (d) { return '<option>' + esc(d) + '</option>'; }).join('') + '</select>' +
+            '<label class="btn btn-ghost btn-sm" style="cursor:pointer;margin:0">⬆ העלה מסמך<input type="file" id="iv_docfile" accept="image/*,application/pdf" style="display:none"></label><span id="iv_docmsg" class="muted" style="font-size:12px"></span></div>' +
+            '<div id="iv_doclist" style="display:flex;flex-direction:column;gap:5px"></div></div>' : '') +
+        '</div>' +
+        (car.id ? '' : '<p class="muted" style="font-size:12px;margin-top:12px">💡 שמרו את הרכב כדי להוסיף מסמכים.</p>')
+      ) +
+      //  לשונית 4 — הוצאות על הרכב
+      ivPane('exp', false,
+        (car.id ? '<label style="font-size:13px;color:var(--muted);display:block;margin-bottom:6px">💸 הוצאות על הרכב</label>' +
+          '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px"><select class="inp" id="iv_expkind" style="width:auto">' + INV_EXP_KINDS.map(function (k) { return '<option>' + esc(k) + '</option>'; }).join('') + '</select>' +
+          '<input class="inp" id="iv_expamt" type="number" inputmode="numeric" placeholder="סכום ₪" style="width:120px"><input class="inp" id="iv_expnote" placeholder="הערה (לא חובה)" style="width:160px"><button class="btn btn-sm" id="iv_expadd" type="button">+ הוסף</button></div>' +
+          '<div id="iv_explist"></div>'
+          : '<p class="muted" style="font-size:12px">💡 שמרו את הרכב כדי להוסיף הוצאות.</p>') +
+        '<div style="font-size:12px;color:var(--muted);margin-top:10px">💡 את כל המסמכים (רישיון/בדיקה/סליקה/קבלות) מעלים בלשונית «תמונות ומסמכים».</div>'
+      ) +
+      //  שורת-שמירה — תמיד גלויה (מחוץ ללשוניות)
+      '<div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap;border-top:1px solid var(--line);padding-top:14px"><button class="btn btn-sm" id="iv_save">💾 שמור</button>' + (isNew ? '' : '<button class="btn btn-ghost btn-sm" id="iv_del" style="color:var(--danger)">🗑 מחק</button>') + '<span id="iv_msg" style="font-size:13px;margin-inline-start:8px"></span></div></div>';
     box.scrollIntoView({ behavior: 'smooth', block: 'start' });
     // טעינת תמחור פנימי קיים (טבלה נפרדת צוות-בלבד)
     if (car.id) db.from('inventory_pricing').select('list_price,min_price,manager_price,purchase_cost,purchased_at,supplier_name,buyer_name').eq('inventory_id', car.id).maybeSingle().then(function (pr) {
@@ -452,6 +472,12 @@
     }
     paintImgs();
     $('invClose').addEventListener('click', function () { box.innerHTML = ''; });
+    //  החלפת-לשוניות: מדגיש כפתור ומציג את הפאנל המתאים.
+    if ($('ivTabs')) $('ivTabs').addEventListener('click', function (e) {
+      var b = e.target.closest('[data-ivtab]'); if (!b) return;
+      $('ivTabs').querySelectorAll('[data-ivtab]').forEach(function (x) { var on = x === b; x.style.borderBottomColor = on ? 'var(--brand)' : 'transparent'; x.style.color = on ? 'var(--brand)' : 'var(--muted)'; });
+      box.querySelectorAll('[data-ivpane]').forEach(function (p) { p.style.display = (p.dataset.ivpane === b.dataset.ivtab) ? '' : 'none'; });
+    });
     //  שליפת פרטי-רכב ממשרד התחבורה לפי מספר-רכב — ממלא יצרן/דגם/רמת-גימור/שנה/צבע/סוג-דלק.
     if ($('iv_plateLk') && window.C2B_plateLookup) $('iv_plateLk').addEventListener('click', function () {
       var plate = (($('iv_plate') && $('iv_plate').value) || '').replace(/\D/g, '');
@@ -548,7 +574,10 @@
         if (numv('iv_km') == null) miss.push('ק"מ');
         if (!val('iv_fuel')) miss.push('סוג דלק');
         if (!state.images.length) miss.push('תמונה אחת לפחות');
-        if (miss.length) { var _m = 'חובה להשלים: ' + miss.join(', '); $('iv_msg').style.color = 'var(--danger)'; $('iv_msg').innerHTML = '⚠ <b>הרכב לא פורסם</b> — ' + esc(_m); alert('⚠ הרכב לא נשמר/פורסם לאתר.\n\n' + _m + '\n\n(או שמור כ"קליטה" לא-מפורסם כדי לשמור טיוטה חלקית.)'); return; }
+        if (miss.length) { var _m = 'חובה להשלים: ' + miss.join(', '); $('iv_msg').style.color = 'var(--danger)'; $('iv_msg').innerHTML = '⚠ <b>הרכב לא פורסם</b> — ' + esc(_m);
+          //  קפיצה ללשונית הרלוונטית כדי שהמשתמש יראה את השדה החסר.
+          var _tgt = (miss.length === 1 && miss[0] === 'תמונה אחת לפחות') ? 'media' : 'car'; var _tb = box.querySelector('[data-ivtab="' + _tgt + '"]'); if (_tb) _tb.click();
+          alert('⚠ הרכב לא נשמר/פורסם לאתר.\n\n' + _m + '\n\n(או שמור כ"קליטה" לא-מפורסם כדי לשמור טיוטה חלקית.)'); return; }
       }
       var patch = { make: val('iv_make'), model: val('iv_model'), trim: val('iv_trim'), year: numv('iv_year'), hand: val('iv_hand'), km: numv('iv_km'), color: val('iv_color'), fuel: val('iv_fuel'), plate: val('iv_plate'), price: numv('iv_price'), description: val('iv_desc'), images: state.images, cover_idx: state.cover, status: $('iv_status').value, published: $('iv_pub').checked };
       var btn = this; btn.disabled = true; $('iv_msg').style.color = 'var(--muted)'; $('iv_msg').textContent = 'שומר…';
