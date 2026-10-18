@@ -421,13 +421,15 @@
       '<div class="grid2">' + invF('מחיר מחירון (₪)', 'iv_listprice', '', 'number') + invF('מחיר מינימום (₪)', 'iv_minprice', '', 'number') + invF('מחיר מנהל (₪)', 'iv_mgrprice', '', 'number') + '</div>' +
       '<div class="grid2" style="margin-top:4px">' + invF('עלות רכישה (₪)', 'iv_pcost', '', 'number') + invF('תאריך רכישה', 'iv_pdate', '', 'date') + invF('נרכש מ- (ספק)', 'iv_psup') + invF('נמכר ל- (קונה)', 'iv_buyer') + '</div>' +
       '<div class="field" style="margin-top:10px"><label>תיאור</label><textarea class="inp" id="iv_desc" style="height:70px;width:100%">' + esc(car.description || '') + '</textarea></div>' +
-      '<div style="margin-top:12px"><label style="font-size:13px;color:var(--muted);display:block;margin-bottom:6px">תמונות (לחיצה על תמונה = קביעת שער)</label><div id="iv_imgs" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px"></div><input type="file" id="iv_file" accept="image/*" multiple style="font-size:13px"> <span id="iv_upmsg" class="muted" style="font-size:12px"></span></div>' +
-      //  מסמכי-רכב + הוצאות — זמינים אחרי שמירה ראשונה (צריך id לקישור).
-      (car.id ? '<div style="margin-top:14px;border-top:1px solid var(--line);padding-top:12px"><label style="font-size:13px;color:var(--muted);display:block;margin-bottom:6px">📎 מסמכי הרכב — רישיון / בדיקה / סליקה / קאר-זון / תשלומים / קבלות</label>' +
-        '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px"><select class="inp" id="iv_doctype" style="width:auto">' + INV_DOC_TYPES.map(function (d) { return '<option>' + esc(d) + '</option>'; }).join('') + '</select>' +
-        '<label class="btn btn-ghost btn-sm" style="cursor:pointer;margin:0">⬆ העלה מסמך<input type="file" id="iv_docfile" accept="image/*,application/pdf" style="display:none"></label><span id="iv_docmsg" class="muted" style="font-size:12px"></span></div>' +
-        '<div id="iv_doclist" style="display:flex;flex-direction:column;gap:5px"></div></div>' +
-        '<div style="margin-top:14px;border-top:1px solid var(--line);padding-top:12px"><label style="font-size:13px;color:var(--muted);display:block;margin-bottom:6px">💸 הוצאות על הרכב</label>' +
+      //  תמונות + מסמכים זה-לצד-זה (תמונות מימין, מסמכים משמאל ב-RTL); הוצאות מתחת.
+      '<div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:12px;align-items:flex-start">' +
+        '<div style="flex:1;min-width:240px"><label style="font-size:13px;color:var(--muted);display:block;margin-bottom:6px">תמונות (לחיצה על תמונה = קביעת שער)</label><div id="iv_imgs" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px"></div><input type="file" id="iv_file" accept="image/*" multiple style="font-size:13px"> <span id="iv_upmsg" class="muted" style="font-size:12px"></span></div>' +
+        (car.id ? '<div style="flex:1;min-width:240px"><label style="font-size:13px;color:var(--muted);display:block;margin-bottom:6px">📎 מסמכי הרכב — רישיון / בדיקה / סליקה / קאר-זון / תשלומים / קבלות</label>' +
+          '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px"><select class="inp" id="iv_doctype" style="width:auto">' + INV_DOC_TYPES.map(function (d) { return '<option>' + esc(d) + '</option>'; }).join('') + '</select>' +
+          '<label class="btn btn-ghost btn-sm" style="cursor:pointer;margin:0">⬆ העלה מסמך<input type="file" id="iv_docfile" accept="image/*,application/pdf" style="display:none"></label><span id="iv_docmsg" class="muted" style="font-size:12px"></span></div>' +
+          '<div id="iv_doclist" style="display:flex;flex-direction:column;gap:5px"></div></div>' : '') +
+      '</div>' +
+      (car.id ? '<div style="margin-top:14px;border-top:1px solid var(--line);padding-top:12px"><label style="font-size:13px;color:var(--muted);display:block;margin-bottom:6px">💸 הוצאות על הרכב</label>' +
         '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px"><select class="inp" id="iv_expkind" style="width:auto">' + INV_EXP_KINDS.map(function (k) { return '<option>' + esc(k) + '</option>'; }).join('') + '</select>' +
         '<input class="inp" id="iv_expamt" type="number" inputmode="numeric" placeholder="סכום ₪" style="width:120px"><input class="inp" id="iv_expnote" placeholder="הערה (לא חובה)" style="width:160px"><button class="btn btn-sm" id="iv_expadd" type="button">+ הוסף</button></div>' +
         '<div id="iv_explist"></div></div>'
