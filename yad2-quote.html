@@ -103,12 +103,30 @@
   var YAD2_ANON='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhwcHN2b3R0aXdianNqbHVzaWVmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTEzNzg5NzYsImV4cCI6MjEwNjk1NDk3Nn0.b9WaudA0bbKQiEVHtdnChETITTq4Tl2oPEHPnzwWsZo';
   var ENDPOINT=YAD2_URL+'/functions/v1/quote-intake';
   var $=function(id){return document.getElementById(id);};
-  function uploadFile(f){
-    if(!f||f.size>12582912) return Promise.resolve(null);
+  // רישיון רכב (PII) → דלי פרטי lead-docs; מחזיר path בלבד (לא URL ציבורי). קריאה ב-CRM דרך signed URL.
+  function uploadLicense(f){
+    if(!f||f.size>10485760) return Promise.resolve(null);
     var ext=((f.name||'').split('.').pop()||'jpg').toLowerCase().replace(/[^a-z0-9]/g,'').slice(0,5)||'jpg';
     var path='landing/'+Date.now()+'-'+Math.random().toString(16).slice(2,8)+'.'+ext;
-    return fetch(YAD2_URL+'/storage/v1/object/tradein/'+path,{method:'POST',headers:{apikey:YAD2_ANON,Authorization:'Bearer '+YAD2_ANON,'Content-Type':f.type||'image/jpeg'},body:f})
-      .then(function(r){ return r.ok ? (YAD2_URL+'/storage/v1/object/public/tradein/'+path) : null; }).catch(function(){ return null; });
+    return fetch(YAD2_URL+'/storage/v1/object/lead-docs/'+path,{method:'POST',headers:{apikey:YAD2_ANON,Authorization:'Bearer '+YAD2_ANON,'Content-Type':f.type||'image/jpeg'},body:f})
+      .then(function(r){ return r.ok ? path : null; }).catch(function(){ return null; });
+  }
+  // תמונת-רכב → הקטנה ל-base64; quote-intake מעלה לדלי הציבורי בצד-השרת (anon לא כותב לדלי ציבורי).
+  function imgToB64(f){
+    return new Promise(function(resolve){
+      if(!f){resolve(null);return;}
+      var img=new Image(), url=URL.createObjectURL(f);
+      img.onload=function(){
+        URL.revokeObjectURL(url);
+        var max=1600, w=img.width||max, h=img.height||max;
+        if(w>max||h>max){ if(w>=h){h=Math.round(h*max/w);w=max;}else{w=Math.round(w*max/h);h=max;} }
+        var c=document.createElement('canvas'); c.width=w; c.height=h;
+        try{ c.getContext('2d').drawImage(img,0,0,w,h); resolve((c.toDataURL('image/jpeg',0.82)||'').split(',')[1]||null); }
+        catch(e){ resolve(null); }
+      };
+      img.onerror=function(){ URL.revokeObjectURL(url); resolve(null); };
+      img.src=url;
+    });
   }
   // שליפת פרטי-רכב ממשרד התחבורה (data.gov.il)
   var DATASETS=['053cea08-09bc-40ec-8f7a-156f0677aff3','0866573c-40cd-4ca8-91d2-9dd2d7a492e5','bf9df4e2-d90d-4c0a-a400-19e15af8e95f'];
@@ -133,16 +151,16 @@
     e.preventDefault();
     if(!($('agent_name').value||'').trim()){$('formmsg').className='msg err';$('formmsg').textContent='חובה להזין שם סוכן';return;}
     var btn=$('send'); btn.disabled=true; $('formmsg').className='msg muted'; $('formmsg').textContent='מעלה קבצים…';
-    var lf=($('license_file').files||[])[0], cf=[].slice.call($('car_files').files||[]);
-    var licUrl=null, imgUrls=[], jobs=[];
-    if(lf) jobs.push(uploadFile(lf).then(function(u){ licUrl=u; }));
-    cf.forEach(function(f){ jobs.push(uploadFile(f).then(function(u){ if(u) imgUrls.push(u); })); });
+    var lf=($('license_file').files||[])[0], cf=[].slice.call($('car_files').files||[]).slice(0,8);
+    var licPath=null, imgsB64=[], jobs=[];
+    if(lf) jobs.push(uploadLicense(lf).then(function(p){ licPath=p; }));
+    cf.forEach(function(f){ jobs.push(imgToB64(f).then(function(b){ if(b) imgsB64.push(b); })); });
     Promise.all(jobs).then(function(){
       $('formmsg').textContent='שולח…';
       var body={car_make:$('car_make').value,car_model:$('car_model').value,car_trim:$('car_trim').value,car_year:$('car_year').value,car_hand:$('car_hand').value,car_km:$('car_km').value,car_color:$('car_color').value,car_fuel:$('car_fuel').value,car_plate:$('plate').value,car_description:$('car_description').value,
         agent_name:$('agent_name').value,branch:$('branch').value,agent_phone:$('agent_phone').value,agent_email:$('agent_email').value,
         customer_name:$('customer_name').value,customer_phone:$('customer_phone').value,customer_id:$('customer_id').value,
-        license_doc:licUrl,images:imgUrls};
+        license_path:licPath,images_b64:imgsB64};
       fetch(ENDPOINT,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
         .then(function(r){return r.json();}).then(function(j){
           if(j&&j.ok){ $('qf').style.display='none'; $('done').style.display='block'; }

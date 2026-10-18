@@ -848,7 +848,7 @@
         '<div class="muted" style="font-size:13px">' + spec + '</div>' +
         (spec2 ? '<div class="muted" style="font-size:12.5px;margin-top:3px">' + spec2 + '</div>' : '') +
         (t.car_description ? '<div style="font-size:13px;margin-top:6px">' + esc(t.car_description) + '</div>' : '') +
-        (t.license_doc && /^https?:/.test(t.license_doc) ? '<div style="margin-top:6px"><a href="' + esc(t.license_doc) + '" target="_blank" rel="noopener" class="btn btn-ghost btn-sm">📄 רישיון רכב</a></div>' : '') +
+        (t.license_doc ? '<div id="tndLic" style="margin-top:6px"></div>' : '') +
         '<div class="muted" style="font-size:12.5px;margin-top:8px">👤 ' + esc(t.agent_name || '—') + [t.agent_phone ? ' · ' + esc(t.agent_phone) : '', t.agent_email ? ' · ' + esc(t.agent_email) : '', t.agent_org ? ' · ' + esc(t.agent_org) : ''].join('') + '</div>' +
         (t.closes_at ? '<div class="muted" style="font-size:12.5px;margin-top:4px">⏱ סגירה: ' + when(t.closes_at) + ' · ' + remainTxt(t) + '</div>' : '') +
         '<div style="margin:12px 0"><label style="font-size:13px;color:var(--muted);display:block;margin-bottom:6px">תמונות הרכב (נשלחות לסוחרים במייל + בקישור)</label><div id="td_imgs" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px"></div><input type="file" id="td_file" accept="image/*" multiple style="font-size:13px"> <span id="td_upmsg" class="muted" style="font-size:12px"></span></div>' +
@@ -875,6 +875,13 @@
         (bids.length ? '<div style="overflow:auto"><table style="width:100%;border-collapse:collapse;font-size:14px"><thead><tr style="color:var(--muted);text-align:right;font-size:12px"><th style="padding:6px 8px">#</th><th style="padding:6px 8px">סוחר</th><th style="padding:6px 8px;text-align:left">סכום</th><th style="padding:6px 8px">זמן</th></tr></thead><tbody>' + bidRows + '</tbody></table></div>' : '<div class="muted" style="font-size:13px">אין הצעות עדיין.</div>') +
         '</div>';
       $('tndClose').addEventListener('click', function () { box.innerHTML = ''; });
+      //  רישיון רכב (רגיש) — URL ישן (http) ישירות; path חדש בדלי-פרטי lead-docs דרך signed URL (שעה).
+      if (t.license_doc && $('tndLic')) {
+        var licEl = $('tndLic');
+        var mkLic = function (href) { licEl.innerHTML = href ? '<a href="' + esc(href) + '" target="_blank" rel="noopener" class="btn btn-ghost btn-sm">📄 רישיון רכב</a>' : ''; };
+        if (/^https?:\/\//i.test(t.license_doc)) mkLic(t.license_doc);
+        else db.storage.from('lead-docs').createSignedUrl(t.license_doc, 3600).then(function (r) { mkLic((r && r.data && r.data.signedUrl) || null); }, function () { mkLic(null); });
+      }
       // מנהל תמונות הרכב — נשמר מיידית למכרז (כדי שישלח בתמונות)
       var dImgs = invImgs(t).slice();
       function paintDImgs() {
