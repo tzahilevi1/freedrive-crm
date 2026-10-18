@@ -342,6 +342,18 @@
   };
 
   function invF(label, id, val, type) { return '<div class="field" style="margin:0"><label>' + label + '</label><input class="inp" id="' + id + '" type="' + (type || 'text') + '" value="' + esc(val == null ? '' : val) + '" style="width:100%"></div>'; }
+  //  שדות-רשימה למלאי: יד / סוג-דלק / שנה. ערך קיים שאינו ברשימה נשמר כאופציה (לא מאבדים נתונים ישנים).
+  var INV_HANDS = ['יד ראשונה', 'יד שנייה', 'יד שלישית', 'יד רביעית', 'יד חמישית ומעלה'];
+  var INV_FUELS = ['בנזין', 'דיזל', 'היברידי', 'היברידי נטען', 'חשמלי', 'גז'];
+  function invYears() { var y = new Date().getFullYear() + 1, a = []; for (; y >= 2000; y--) a.push(String(y)); return a; }
+  function invS(label, id, val, opts) {
+    var v = (val == null ? '' : String(val)), list = opts.slice();
+    if (v && list.indexOf(v) < 0) list.unshift(v);   // ערך-מורשת שאינו ברשימה
+    return '<div class="field" style="margin:0"><label>' + label + '</label><select class="inp" id="' + id + '" style="width:100%"><option value="">— בחר —</option>' +
+      list.map(function (o) { return '<option value="' + esc(o) + '"' + (v === String(o) ? ' selected' : '') + '>' + esc(o) + '</option>'; }).join('') + '</select></div>';
+  }
+  //  קביעת ערך ל-select (יוצר אופציה אם חסרה) — לשימוש אחרי שליפת-לוח.
+  function invSetSel(id, val) { var e = $(id); if (!e || !val) return; val = String(val); if (![].some.call(e.options, function (o) { return o.value === val; })) { var op = document.createElement('option'); op.value = val; op.textContent = val; e.appendChild(op); } e.value = val; }
   function openInvEdit(car) {
     car = car || {}; var isNew = !car.id, box = $('invEdit'); if (!box) return;
     box.innerHTML = '<div class="card" style="border:1px solid var(--line);background:var(--surface-2)">' +

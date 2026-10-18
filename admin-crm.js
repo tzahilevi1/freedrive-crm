@@ -3211,7 +3211,9 @@
       '<p style="margin:0 0 8px;font-size:12.5px">המוכר מצהיר כי לאחר שבדק במשרד הרישוי מצא כי המכונית נקייה מכל חוב, עיקול או צד ג\' כלשהו. ובמידה ויתברר בזמן כלשהו כי על המכונית רובץ מן הנזכר לעיל, מתחייב המוכר לנקוט בהליכים משפטיים על מנת להמציא לקונה את שחרורו.</p>' +
       '<p style="margin:0 0 6px"><b>תמורת המכונית ישלם הקונה למוכר ' + (price ? esc(nis(price)) : '________') + '</b></p>' +
       '<p style="margin:0 0 12px;font-size:12.5px">עם חתימת הסכם זה סך: ' + (price ? esc(nis(price)) : '________') + ' · תנאים מיוחדים: הסכם ' + esc(kind) + '.</p>' +
-      '<table style="width:100%;border-collapse:collapse;table-layout:fixed;direction:rtl">' + C.map(function (t, i) { return '<tr><td style="width:2.3em;vertical-align:top;text-align:right;font-weight:700;line-height:1.85;padding:0 0 10px"><span dir="ltr">' + (i + 1) + '</span>.</td><td style="vertical-align:top;text-align:right;line-height:1.85;padding:0 0 10px;font-size:12.5px">' + t + '</td></tr>'; }).join('') + '</table>' +
+      //  סעיפים כ-flex/div (לא table-layout:fixed): min-width:0 + overflow-wrap מבטיחים
+      //  ירידת-שורה תקינה ב-RTL בתוך רוחב הדף — table-layout:fixed גלש מגבולות ה-A4 ב-PDF.
+      '<div style="direction:rtl;margin:0 0 4px">' + C.map(function (t, i) { return '<div style="display:flex;gap:7px;align-items:flex-start;margin:0 0 10px;line-height:1.85;page-break-inside:avoid"><span style="flex:0 0 1.7em;font-weight:700;text-align:right"><span dir="ltr">' + (i + 1) + '</span>.</span><span style="flex:1 1 auto;min-width:0;text-align:justify;font-size:12.5px;overflow-wrap:break-word;word-break:break-word">' + t + '</span></div>'; }).join('') + '</div>' +
       sigBlock +
       '<p style="font-size:11px;color:#999;text-align:center;margin-top:14px">מסמך ממוחשב · ' + esc(bname()) + '</p></div>';
   }
