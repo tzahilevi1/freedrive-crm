@@ -671,7 +671,7 @@
       function paintDImgs() {
         var el = $('td_imgs'); if (!el) return;
         el.innerHTML = dImgs.length ? dImgs.map(function (u, i) {
-          return '<div style="position:relative;width:88px;height:66px;border-radius:8px;overflow:hidden;border:1px solid var(--line)"><img src="' + esc(u) + '" style="width:100%;height:100%;object-fit:cover"><button data-rm="' + i + '" style="position:absolute;top:1px;inset-inline-end:1px;background:rgba(0,0,0,.6);color:#fff;border:none;border-radius:50%;width:18px;height:18px;cursor:pointer;line-height:1">×</button></div>';
+          return '<div style="position:relative;width:88px;height:66px;border-radius:8px;overflow:hidden;border:1px solid var(--line)"><img src="' + esc(u) + '" data-imgpop="' + esc(u) + '" style="width:100%;height:100%;object-fit:cover;cursor:zoom-in"><button data-rm="' + i + '" style="position:absolute;top:1px;inset-inline-end:1px;background:rgba(0,0,0,.6);color:#fff;border:none;border-radius:50%;width:18px;height:18px;cursor:pointer;line-height:1">×</button></div>';
         }).join('') : '<span class="muted" style="font-size:12px">אין תמונות — העלה כדי שהסוחרים יקבלו</span>';
         el.querySelectorAll('[data-rm]').forEach(function (b) { b.addEventListener('click', function () { dImgs.splice(+b.dataset.rm, 1); saveDImgs(); paintDImgs(); }); });
       }
