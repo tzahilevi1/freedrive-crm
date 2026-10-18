@@ -751,7 +751,21 @@
         '<div class="muted" style="font-size:12.5px;margin-top:8px">👤 ' + esc(t.agent_name || '—') + [t.agent_phone ? ' · ' + esc(t.agent_phone) : '', t.agent_email ? ' · ' + esc(t.agent_email) : '', t.agent_org ? ' · ' + esc(t.agent_org) : ''].join('') + '</div>' +
         (t.closes_at ? '<div class="muted" style="font-size:12.5px;margin-top:4px">⏱ סגירה: ' + when(t.closes_at) + ' · ' + remainTxt(t) + '</div>' : '') +
         '<div style="margin:12px 0"><label style="font-size:13px;color:var(--muted);display:block;margin-bottom:6px">תמונות הרכב (נשלחות לסוחרים במייל + בקישור)</label><div id="td_imgs" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px"></div><input type="file" id="td_file" accept="image/*" multiple style="font-size:13px"> <span id="td_upmsg" class="muted" style="font-size:12px"></span></div>' +
-        '<div style="display:flex;gap:8px;flex-wrap:wrap;margin:14px 0">' +
+        //  שלב 1 — הצעת-המחיר שלנו ללקוח (מזינים קודם), ורק אז שולחים לסוחרים (שלב 2).
+        '<div style="margin:14px 0;padding:12px 14px;border:1px solid var(--brand);border-radius:12px;background:rgba(37,99,235,.05)">' +
+          '<div style="font-weight:700;font-size:13.5px;margin-bottom:10px">💰 שלב 1 — הנתונים שלנו (לפני שליחה לסוחרים)</div>' +
+          '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px">' +
+            '<input class="inp" id="tnd_listprice" type="number" inputmode="numeric" placeholder="מחירון לוי יצחק (₪) — חובה" value="' + (t.list_price != null && t.list_price !== '' ? esc(t.list_price) : '') + '" style="max-width:235px">' +
+            '<label class="btn btn-ghost btn-sm" style="cursor:pointer;margin:0">📷 תמונת מחירון<input type="file" id="tnd_lpimg" accept="image/*" style="display:none"></label>' +
+            '<span id="tnd_lpimgPrev" style="font-size:12px">' + (t.list_price_img ? '<a href="' + esc(t.list_price_img) + '" target="_blank" rel="noopener">✔ תמונת מחירון</a>' : '') + '</span>' +
+          '</div>' +
+          '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">' +
+            '<input class="inp" id="tnd_ourquote" type="number" inputmode="numeric" placeholder="הצעת המחיר שלנו ללקוח (₪)" value="' + (t.our_quote != null && t.our_quote !== '' ? esc(t.our_quote) : '') + '" style="max-width:235px">' +
+            '<button class="btn btn-sm" id="tnd_saveQuote" type="button">💾 שמור</button>' +
+            '<span id="tnd_quoteMsg" style="font-size:12.5px"></span>' +
+          '</div></div>' +
+        '<div style="font-weight:700;font-size:13.5px;margin:14px 0 6px">📤 שלב 2 — שליחה לסוחרים</div>' +
+        '<div style="display:flex;gap:8px;flex-wrap:wrap;margin:6px 0 14px">' +
           (canSend ? '<button class="btn btn-sm" id="tnd_send">📤 שלח לכל הסוחרים</button>' : '') +
           (t.status === 'open' ? '<button class="btn btn-ghost btn-sm" id="tnd_ext">⏱ הארך שעה</button>' : '') +
           (canClose ? '<button class="btn btn-ghost btn-sm" id="tnd_award">🏁 סגור והכרז זוכה</button>' : '') +
@@ -772,7 +786,33 @@
       function saveDImgs() { db.from('tenders').update({ images: dImgs.slice() }).eq('id', t.id).then(function () { t.images = dImgs.slice(); }); }
       paintDImgs();
       tndUpload($('td_file'), $('td_upmsg'), dImgs, 'tender/' + t.id, function () { saveDImgs(); paintDImgs(); });
+      //  שלב 1 — שמירת מחירון לוי יצחק + הצעת-המחיר שלנו (ההצעה שהסוחר יראה ויקבל במייל).
+      if ($('tnd_saveQuote')) $('tnd_saveQuote').addEventListener('click', function () {
+        var v = ($('tnd_ourquote').value || '').trim(), q = v === '' ? null : Number(v);
+        var lp = ($('tnd_listprice').value || '').trim(), lpv = lp === '' ? null : Number(lp);
+        var btn = this; btn.disabled = true; $('tnd_quoteMsg').style.color = 'var(--muted)'; $('tnd_quoteMsg').textContent = 'שומר…';
+        db.from('tenders').update({ our_quote: q, list_price: lpv }).eq('id', t.id).then(function (r) {
+          btn.disabled = false;
+          if (r.error) { $('tnd_quoteMsg').style.color = 'var(--danger)'; $('tnd_quoteMsg').textContent = 'שגיאה: ' + esc(r.error.message); return; }
+          t.our_quote = q; t.list_price = lpv; $('tnd_quoteMsg').style.color = 'var(--ok)'; $('tnd_quoteMsg').textContent = '✔ נשמר';
+        });
+      });
+      //  העלאת תמונת-מחירון (לדלי tradein הציבורי) — אופציונלי.
+      if ($('tnd_lpimg')) $('tnd_lpimg').addEventListener('change', function () {
+        var f = this.files && this.files[0]; if (!f) return;
+        var prev = $('tnd_lpimgPrev'); prev.textContent = 'מעלה…';
+        var path = 'tender/' + t.id + '/listprice_' + Date.now() + '.' + ((f.name.split('.').pop() || 'jpg').toLowerCase());
+        db.storage.from('tradein').upload(path, f, { upsert: true, contentType: f.type || 'image/jpeg' }).then(function (res) {
+          if (res.error) { prev.textContent = 'שגיאה בהעלאה'; return; }
+          var url = db.storage.from('tradein').getPublicUrl(path).data.publicUrl;
+          db.from('tenders').update({ list_price_img: url }).eq('id', t.id).then(function () { t.list_price_img = url; prev.innerHTML = '<a href="' + esc(url) + '" target="_blank" rel="noopener">✔ תמונת מחירון</a>'; });
+        });
+      });
       if ($('tnd_send')) $('tnd_send').addEventListener('click', function () {
+        //  "קודם הנתונים שלנו ואז שליחה": מחירון לוי יצחק + הצעת-המחיר שלנו חובה לפני שליחה.
+        if ($('tnd_listprice') && ($('tnd_listprice').value || '').trim() !== '' && (t.list_price == null || t.list_price === '')) { alert('⚠ שמרו קודם (💾) — מחירון לוי יצחק טרם נשמר.'); return; }
+        if (t.list_price == null || t.list_price === '') { alert('⚠ מחירון לוי יצחק הוא שדה חובה (שלב 1) — הזינו ושמרו לפני שליחה.'); return; }
+        if (t.our_quote == null || t.our_quote === '') { alert('⚠ קודם הזינו ושמרו את הצעת-המחיר שלנו (שלב 1) — זו ההצעה שהסוחר יקבל.'); return; }
         var btn = this; btn.disabled = true; btn.textContent = 'שולח…';
         db.rpc('tender_send', { p_tender_id: t.id }).then(function (res) {
           btn.disabled = false; btn.textContent = '📤 שלח שוב';
