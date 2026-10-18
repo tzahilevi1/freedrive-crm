@@ -1009,6 +1009,9 @@
   };
 
   window.C2B_openLeadCard = function (id) {
+    //  מזהה ריק/חסר (שורה בלי ליד מקושר, data-l="" וכו') → אין מה לפתוח.
+    //  בלי השמירה, '' נשלח ל-.eq() על עמודת-uuid ומפיל 7 שגיאות "invalid input syntax for type uuid".
+    if (!id) return;
     if ((C.role || '') === 'files') return openFileView(id);        // file manager → file view
     if ((C.role || '') === 'accounting') return openAcctLeadView(id); // accountant → accounting file
     loading();
@@ -1898,7 +1901,9 @@
       dPanel('car', false, carCard + specCard) +
       dPanel('fin', false, finCard) +
       dPanel('trade', false, tradeCard) +
-      dPanel('record', false, '<div class="grid2">' + checklistCard + recordCard + '</div>' + (fileMode ? '' : paymentsCard)) +
+      //  מקטע התשלומים/קבלות/חשבוניות הוסר מטופס-המכירות — מנוהל ע"י הנהלת-החשבונות
+      //  בתצוגה שלה (openAcctLeadView). (החיווט ב-dlPayForm מגודר וממילא לא ירוץ.)
+      dPanel('record', false, '<div class="grid2">' + checklistCard + recordCard + '</div>') +
       fileNotesCard   // הערות על הלקוח — הכי למטה, מתחת להכל (מנהלת תיקי לקוחות)
     );
     var $ = C.$;
