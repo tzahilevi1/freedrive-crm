@@ -735,6 +735,7 @@
     if (nav === 'nurture' && (window.__fleetCfg && window.__fleetCfg.slug) === 'yad2') return false;
     if (role === 'admin' || !role) return true;
     if (nav === 'activity' || nav === 'dashboard') return true;   // always available
+    if (nav === 'leadsources') return navAllowed('leads', role);   // פילוח מקורות — יורש הרשאת לידים
     if (nav === 'inventory') return true;  // ניהול מלאי יד2 (yad2 בלבד; גידור ה-slug נפרד)
     if (nav === 'tenders' || nav === 'tender_suppliers' || nav === 'tradelog' || nav === 'quote_requests') return true;  // מכרזי יד2 + יומן מסחר + בקשות הצעת מחיר (yad2 בלבד; גידור ה-slug נפרד)
     if (nav && nav.indexOf('soon:') === 0) return false;
@@ -1002,6 +1003,7 @@
     if (nav === 'tasks') return renderTasks();
     if (nav === 'analytics') return renderAnalytics();
     if (nav === 'reports') return renderReports();
+    if (nav === 'leadsources') return renderLeadSources();
     if (nav === 'ai') return renderAI();
     if (navBase(nav) === 'settings') return renderSettings(nav.indexOf(':') > 0 ? nav.split(':')[1] : 'lists');
     if (nav === 'quotes') return window.C2B_renderQuotes && window.C2B_renderQuotes();
@@ -3761,6 +3763,43 @@
       var ya = el.querySelector('#yr_apply'); if (ya) ya.addEventListener('click', function () { renderYad2Panel(el, { from: el.querySelector('#yr_from').value, to: el.querySelector('#yr_to').value }); });
       var yc = el.querySelector('#yr_clear'); if (yc) yc.addEventListener('click', function () { renderYad2Panel(el, {}); });
     });
+  }
+
+  //  מקורות לידים — פילוח כל הלידים לפי מותג / פלטפורמה / מקור-הגעה (תתי-תצוגות).
+  //  עימוד מלא (fetchAll) כדי לכלול את כל הלידים, לא רק 1000 הראשונים.
+  var LS_DIMS = [['brand', 'מותג', 'brand'], ['platform', 'פלטפורמה', 'utm_source'], ['source', 'מקור הגעה', 'source']];
+  function renderLeadSources(dim) {
+    dim = (LS_DIMS.some(function (d) { return d[0] === dim; })) ? dim : 'brand';
+    loading();
+    fetchAll(function () { return db.from('leads').select('id,name,phone,brand,source,utm_source,created_at,status').is('deleted_at', null).order('id', { ascending: true }); })
+      .then(function (leads) {
+        var d = LS_DIMS.filter(function (x) { return x[0] === dim; })[0], field = d[2];
+        var groups = {};
+        leads.forEach(function (l) { var v = String(l[field] == null ? '' : l[field]).trim() || '(ללא ' + d[1] + ')'; (groups[v] = groups[v] || []).push(l); });
+        var keys = Object.keys(groups).sort(function (a, b) { return groups[b].length - groups[a].length; });
+        var total = leads.length;
+        var tabs = '<nav class="tabs" style="margin-bottom:14px;flex-wrap:wrap">' + LS_DIMS.map(function (x) { return '<button data-lsdim="' + x[0] + '"' + (x[0] === dim ? ' class="active"' : '') + '>' + x[1] + '</button>'; }).join('') + '</nav>';
+        var rows = keys.map(function (k) {
+          var n = groups[k].length, pct = total ? Math.round(n / total * 100) : 0;
+          return '<tr data-lsval="' + esc(k) + '" style="cursor:pointer"><td style="padding:9px 12px;font-weight:600">' + esc(k) + '</td><td style="padding:9px 12px;font-weight:800">' + n + '</td><td style="padding:9px 12px;color:var(--muted)">' + pct + '%</td><td style="padding:9px 12px;width:38%"><div style="height:8px;background:var(--brand);border-radius:4px;width:' + Math.max(pct, 2) + '%"></div></td></tr>';
+        }).join('');
+        view('<h2 style="margin:0 0 4px">📊 מקורות לידים <span class="muted" style="font-size:14px">· ' + total + ' לידים</span></h2>' +
+          '<p class="muted" style="font-size:13px;margin-bottom:12px">פילוח כל הלידים שנכנסו — לפי מותג / פלטפורמה / מקור-הגעה. לחיצה על שורה מציגה את הלידים שבה.</p>' +
+          tabs +
+          '<div class="card"><div class="table-scroll"><table style="width:100%"><thead><tr style="color:var(--muted);font-size:12px;text-align:right"><th style="padding:7px 12px">' + esc(d[1]) + '</th><th style="padding:7px 12px">לידים</th><th style="padding:7px 12px">%</th><th></th></tr></thead><tbody>' + (rows || '<tr><td colspan="4" class="empty">אין לידים</td></tr>') + '</tbody></table></div></div>');
+        $('view').querySelectorAll('[data-lsdim]').forEach(function (b) { b.addEventListener('click', function () { renderLeadSources(b.dataset.lsdim); }); });
+        $('view').querySelectorAll('[data-lsval]').forEach(function (tr) {
+          tr.addEventListener('click', function () {
+            var v = tr.dataset.lsval, list = (groups[v] || []);
+            var badge = window.C2B_badge || function () { return ''; };
+            openDrawer('<div class="dw-head"><h3 style="margin:0">' + esc(v) + ' <span class="muted" style="font-size:13px">(' + list.length + ')</span></h3></div>' +
+              '<div class="dw-body">' + list.slice().sort(function (a, b) { return new Date(b.created_at || 0) - new Date(a.created_at || 0); }).map(function (l) {
+                return '<div data-lead="' + l.id + '" style="padding:11px 12px;border-bottom:1px solid var(--line);border-radius:8px;cursor:pointer"><div style="display:flex;justify-content:space-between;gap:8px"><b>' + esc(l.name || 'ליד') + '</b>' + (l.status ? badge(l.status) : '') + '</div><div class="muted" style="font-size:12.5px;margin-top:3px">' + [l.phone, l.brand, fmtDateTime(l.created_at)].filter(Boolean).map(esc).join(' · ') + '</div></div>';
+              }).join('') + '</div>');
+            document.getElementById('drawer').querySelectorAll('[data-lead]').forEach(function (el) { el.addEventListener('click', function () { closeDrawer(); if (window.C2B_openLeadCard) window.C2B_openLeadCard(el.dataset.lead); }); });
+          });
+        });
+      }).catch(function (e) { errBox(e.message || e); });
   }
 
   function renderReports() {
