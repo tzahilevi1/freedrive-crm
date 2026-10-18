@@ -3753,13 +3753,17 @@
   function renderReports() {
     var isYad2rep = (window.__fleetCfg && window.__fleetCfg.slug) === 'yad2';  // ל-yad2: טאב רביעי "יד2" עם נתונים עסקיים
     loading();
+    //  עימוד מלא ללידים ולעסקאות: PostgREST חותך ב-1000 שורות, ובלי זה
+    //  ספירות הדוח (לידים/מקורות/סטטוסים/עסקאות) מפספסות את הרשומות החדשות.
+    var repLeads = function () { return fetchAll(function () { return db.from('leads').select('id,name,phone,car,status,source,created_at,first_response_at,assigned_to,brand,utm_campaign,utm_source,utm_medium,utm_term,utm_content,campaign,adset_name,ad_name,ad_group,ad_id,marketing_company,city').is('deleted_at', null).order('id', { ascending: true }); }).then(function (d) { return { data: d }; }, function (e) { return { data: [], error: e }; }); };
+    var repDeals = function () { return fetchAll(function () { return db.from('deals').select('id,lead_id,brand,stage,status,car_make,car_model,total,car_price,commission,discount_amt,salesperson,created_at,signed_at,financing,tradein,has_signature').is('deleted_at', null).order('id', { ascending: true }); }).then(function (d) { return { data: d }; }, function (e) { return { data: [], error: e }; }); };
     Promise.all([
-      db.from('leads').select('id,name,phone,car,status,source,created_at,first_response_at,assigned_to,brand,utm_campaign,utm_source,utm_medium,utm_term,utm_content,campaign,adset_name,ad_name,ad_group,ad_id,marketing_company,city').is('deleted_at', null),
+      repLeads(),
       db.from('appointments').select('status'),
       db.from('events').select('type,session_id,created_at'),
       db.from('tasks').select('done'),
       db.from('profiles').select('user_id,full_name'),
-      db.from('deals').select('id,lead_id,brand,stage,status,car_make,car_model,total,car_price,commission,discount_amt,salesperson,created_at,signed_at,financing,tradein,has_signature').is('deleted_at', null),
+      repDeals(),
       db.from('payments').select('amount,kind,deal_id'),
       db.from('agent_targets').select('user_id,deals,revenue,profit')
     ]).then(function (res) {
@@ -7185,8 +7189,7 @@
     var per = aiPersona(), role = (window.C2B && window.C2B.role) || 'admin';
     var since = new Date(Date.now() - 90 * 864e5).toISOString();   // חלון של 90 יום — מספיק לכל שאלה תפעולית
     Promise.all([
-      db.from('leads').select('id,name,status,source,created_at,first_response_at,status_changed_at,city,brand,car,assigned_to')
-        .is('deleted_at', null).gte('created_at', since).limit(3000),
+      fetchAll(function () { return db.from('leads').select('id,name,status,source,created_at,first_response_at,status_changed_at,city,brand,car,assigned_to').is('deleted_at', null).gte('created_at', since).order('id', { ascending: true }); }).then(function (d) { return { data: d }; }, function (e) { return { data: [], error: e }; }),
       db.from('deals').select('id,lead_id,order_no,client_name,total,commission,stage,status,created_at,updated_at,car_make,car_model,has_signature,checklist'),
       db.from('payments').select('amount,kind,created_at,deal_id'),
       db.from('tasks').select('done,due_at,title,lead_id'),

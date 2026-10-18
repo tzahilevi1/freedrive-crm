@@ -3823,6 +3823,23 @@
   //  שנציג טיפל בו, לא היו משנים את "זמן תגובה" עד רענון דף מלא.
   //  הרענון קורה רק בכניסה למסך ולא בזמן שיושבים עליו, כדי שהמסך לא יקפוץ.
   var DASH_TTL = 120000;   //  שתי דקות
+  //  עימוד מלא: PostgREST מחזיר עד 1000 שורות לבקשה. בלי זה הדשבורד נחתך
+  //  ב-1000 הלידים הראשונים (בלי order — הסדר הפיזי, כלומר הישנים), וכל
+  //  הלידים החדשים — של אתמול והיום — נעלמים מכל הספירות (KPI/סטטוסים/מקורות).
+  //  מושכים עמוד-אחר-עמוד לפי id (יציב וללא-פערים) עד שעמוד מחזיר <1000.
+  function dashFetchAll(build) {
+    return new Promise(function (resolve) {
+      var out = [], size = 1000;
+      (function page(from) {
+        build().range(from, from + size - 1).then(function (r) {
+          if (r.error) return resolve({ data: out, error: r.error });
+          var rows = r.data || [];
+          out = out.concat(rows);
+          if (rows.length < size) resolve({ data: out, error: null }); else page(from + size);
+        }, function (e) { resolve({ data: out, error: e }); });
+      })(0);
+    });
+  }
   window.C2B_renderDashboard = function (opts) {
     var wantAll = (opts && opts.all) || dashRange.preset === 'all' || !!dashRange.from;
     var days = wantAll ? null : 400;                       // 400 יום מכסה את "שנה אחורה" בנוחות
@@ -3831,12 +3848,12 @@
     if (fresh && dashAll && (dashLoaded === null || (days !== null && dashLoaded >= days))) return drawDashboard();
     loading();
     var since = days ? new Date(Date.now() - days * 864e5).toISOString() : null;
-    var leadsQ = db.from('leads').select('id,name,phone,car,brand,status,source,created_at,first_response_at,assigned_to,marketing_company,city,utm_source,utm_campaign').is('deleted_at', null);
-    var dealsQ = db.from('deals').select('id,lead_id,client_name,car_make,car_model,total,stage,status,created_at,signed_at,has_signature');
-    if (since) { leadsQ = leadsQ.gte('created_at', since); dealsQ = dealsQ.gte('created_at', since); }
+    function leadsB() { var q = db.from('leads').select('id,name,phone,car,brand,status,source,created_at,first_response_at,assigned_to,marketing_company,city,utm_source,utm_campaign').is('deleted_at', null).order('id', { ascending: true }); if (since) q = q.gte('created_at', since); return q; }
+    function dealsB() { var q = db.from('deals').select('id,lead_id,client_name,car_make,car_model,total,stage,status,created_at,signed_at,has_signature').order('id', { ascending: true }); if (since) q = q.gte('created_at', since); return q; }
+    function tasksB() { return db.from('tasks').select('id,title,due_at,done,lead_id,created_at').order('id', { ascending: true }); }
     Promise.all([
-      leadsQ, db.from('tasks').select('id,title,due_at,done,lead_id,created_at'), db.from('appointments').select('status'),
-      dealsQ, db.from('profiles').select('user_id,full_name')
+      dashFetchAll(leadsB), dashFetchAll(tasksB), db.from('appointments').select('status'),
+      dashFetchAll(dealsB), db.from('profiles').select('user_id,full_name')
     ]).then(function (res) {
       if (res[0].error) return errBox(res[0].error.message);
       var prof = {}; ((res[4] && res[4].data) || []).forEach(function (p) { prof[p.user_id] = p.full_name; });
