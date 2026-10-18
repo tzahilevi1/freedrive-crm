@@ -447,7 +447,7 @@
         if (numv('iv_km') == null) miss.push('ק"מ');
         if (!val('iv_fuel')) miss.push('סוג דלק');
         if (!state.images.length) miss.push('תמונה אחת לפחות');
-        if (miss.length) { $('iv_msg').style.color = 'var(--danger)'; $('iv_msg').textContent = 'כדי להוסיף למלאי ולפרסם באתר השלם: ' + miss.join(', '); return; }
+        if (miss.length) { var _m = 'חובה להשלים: ' + miss.join(', '); $('iv_msg').style.color = 'var(--danger)'; $('iv_msg').innerHTML = '⚠ <b>הרכב לא פורסם</b> — ' + esc(_m); alert('⚠ הרכב לא נשמר/פורסם לאתר.\n\n' + _m + '\n\n(או שמור כ"קליטה" לא-מפורסם כדי לשמור טיוטה חלקית.)'); return; }
       }
       var patch = { make: val('iv_make'), model: val('iv_model'), trim: val('iv_trim'), year: numv('iv_year'), hand: val('iv_hand'), km: numv('iv_km'), color: val('iv_color'), fuel: val('iv_fuel'), plate: val('iv_plate'), price: numv('iv_price'), description: val('iv_desc'), images: state.images, cover_idx: state.cover, status: $('iv_status').value, published: $('iv_pub').checked };
       var btn = this; btn.disabled = true; $('iv_msg').style.color = 'var(--muted)'; $('iv_msg').textContent = 'שומר…';
