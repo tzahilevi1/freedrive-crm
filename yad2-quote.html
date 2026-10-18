@@ -64,8 +64,8 @@
       <label>📷 תמונות הרכב (אפשר כמה)</label>
       <input type="file" id="car_files" accept="image/*" multiple>
       <div class="msg muted" id="imgmsg"></div>
-      <label>💰 מחירון לוי יצחק (₪)</label>
-      <input id="list_price" inputmode="numeric" placeholder="מחיר מחירון (לא חובה)">
+      <label class="req">💰 מחירון לוי יצחק (₪)</label>
+      <input id="list_price" inputmode="numeric" placeholder="מחיר מחירון" required>
       <label>📋 תמונת מחירון (לא חובה)</label>
       <input type="file" id="list_price_file" accept="image/*">
     </div>
@@ -75,7 +75,7 @@
       <div class="grid">
         <div><label class="req">שם הלקוח</label><input id="customer_name" required></div>
         <div><label class="req">טלפון הלקוח</label><input id="customer_phone" inputmode="tel" required></div>
-        <div><label class="req">ת.ז</label><input id="customer_id" inputmode="numeric" required></div>
+        <div><label>ת.ז (לא חובה)</label><input id="customer_id" inputmode="numeric"></div>
       </div>
     </div>
 
@@ -145,7 +145,7 @@
   });
   $('qf').addEventListener('submit',function(e){
     e.preventDefault();
-    var _req=[['agent_name','שם הסוכן'],['branch','סניף'],['agent_phone','טלפון הסוכן'],['customer_name','שם הלקוח'],['customer_phone','טלפון הלקוח'],['customer_id','ת.ז הלקוח']];
+    var _req=[['agent_name','שם הסוכן'],['branch','סניף'],['agent_phone','טלפון הסוכן'],['customer_name','שם הלקוח'],['customer_phone','טלפון הלקוח'],['list_price','מחירון לוי יצחק']];
     var _miss=_req.filter(function(r){return !(($(r[0]).value||'').trim());}).map(function(r){return r[1];});
     if(_miss.length){$('formmsg').className='msg err';$('formmsg').textContent='חובה למלא: '+_miss.join(', ');return;}
     var btn=$('send'); btn.disabled=true; $('formmsg').className='msg muted'; $('formmsg').textContent='מעלה קבצים…';
