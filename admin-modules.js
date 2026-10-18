@@ -505,22 +505,35 @@
   function tlCard(label, val, color) { return '<div class="card" style="padding:12px 14px"><div class="muted" style="font-size:12px">' + label + '</div><div style="font-weight:800;font-size:18px;margin-top:3px' + (color ? ';color:' + color : '') + '">' + val + '</div></div>'; }
 
   /* ============================ ספקי יד2 ============================ */
-  window.C2B_renderTenderSuppliers = function () {
+  window.C2B_renderTenderSuppliers = function (filter) {
     view('<div class="loading">טוען ספקים…</div>');
     db.from('tender_suppliers').select('*').order('name').then(function (r) {
       if (r.error) return view('<div class="card"><h3>ספקים</h3><p class="muted">שגיאה: ' + esc(r.error.message) + '</p></div>');
       var rows = r.data || [];
-      var list = rows.map(function (s) {
+      //  "active" = מקבל מכרזים. סינון: מקבלים / לא-מקבלים — שליטה מי מקבל מכרזים ומי לא.
+      var nOn = rows.filter(function (s) { return s.active !== false; }).length, nOff = rows.length - nOn;
+      var shown = filter === 'on' ? rows.filter(function (s) { return s.active !== false; })
+                : filter === 'off' ? rows.filter(function (s) { return s.active === false; }) : rows;
+      function chip(k, label, n) { return '<button class="btn btn-ghost btn-sm' + ((filter || '') === k ? ' active' : '') + '" data-sf="' + k + '">' + label + ' <span class="muted" style="font-size:11px">(' + n + ')</span></button>'; }
+      var list = shown.map(function (s) {
+        var on = s.active !== false;
         return '<div class="card" style="padding:12px 14px;display:flex;justify-content:space-between;align-items:center;gap:10px">' +
-          '<div><div style="font-weight:700">' + esc(s.name) + (s.active ? '' : ' <span class="muted" style="font-weight:400">(לא פעיל)</span>') + '</div>' +
-          '<div class="muted" style="font-size:12.5px;margin-top:2px">' + [s.phone ? '📱 ' + esc(s.phone) : '', s.email ? '✉ ' + esc(s.email) : '', s.region ? esc(s.region) : ''].filter(Boolean).join(' · ') + '</div></div>' +
-          '<div style="display:flex;gap:6px"><button class="btn btn-ghost btn-sm" data-sedit="' + s.id + '">✏️</button><button class="btn btn-ghost btn-sm" data-sdel="' + s.id + '" style="color:var(--danger)">🗑</button></div></div>';
+          '<div style="flex:1;min-width:0"><div style="font-weight:700;display:flex;align-items:center;gap:8px;flex-wrap:wrap">' + esc(s.name) +
+            '<span style="font-size:10.5px;font-weight:700;padding:1px 9px;border-radius:999px;' + (on ? 'background:rgba(31,138,76,.14);color:#1f8a4c' : 'background:rgba(107,114,128,.16);color:#6b7280') + '">' + (on ? '✓ מקבל מכרזים' : '✕ לא מקבל') + '</span></div>' +
+          '<div class="muted" style="font-size:12.5px;margin-top:3px">' + [s.phone ? '📱 ' + esc(s.phone) : '', s.email ? '✉ ' + esc(s.email) : '', s.region ? esc(s.region) : ''].filter(Boolean).join(' · ') + '</div></div>' +
+          '<div style="display:flex;gap:10px;align-items:center;flex-shrink:0">' +
+            '<label title="מקבל מכרזים" style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;white-space:nowrap"><input type="checkbox" data-stog="' + s.id + '"' + (on ? ' checked' : '') + '> ' + (on ? 'פעיל' : 'כבוי') + '</label>' +
+            '<button class="btn btn-ghost btn-sm" data-sedit="' + s.id + '">✏️</button><button class="btn btn-ghost btn-sm" data-sdel="' + s.id + '" style="color:var(--danger)">🗑</button></div></div>';
       }).join('');
       view('<div class="row-between" style="margin-bottom:12px;align-items:center"><h2 style="margin:0">🤝 ספקים <span class="muted" style="font-size:13px;font-weight:400">· ' + rows.length + '</span></h2><button class="btn btn-sm" id="supAdd">➕ ספק חדש</button></div>' +
-        '<div id="supEdit"></div><div style="display:flex;flex-direction:column;gap:8px">' + (list || '<div class="empty">אין ספקים עדיין</div>') + '</div>');
+        '<div id="supEdit"></div>' +
+        '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">' + chip('', 'הכל', rows.length) + chip('on', '✓ מקבלים מכרזים', nOn) + chip('off', '✕ לא מקבלים', nOff) + '</div>' +
+        '<div style="display:flex;flex-direction:column;gap:8px">' + (list || '<div class="empty">אין ספקים בקטגוריה זו</div>') + '</div>');
       $('supAdd').addEventListener('click', function () { openSupEdit(null); });
+      $('view').querySelectorAll('[data-sf]').forEach(function (b) { b.addEventListener('click', function () { window.C2B_renderTenderSuppliers(b.dataset.sf || null); }); });
+      $('view').querySelectorAll('[data-stog]').forEach(function (cb) { cb.addEventListener('change', function () { db.from('tender_suppliers').update({ active: cb.checked }).eq('id', cb.dataset.stog).then(function () { window.C2B_renderTenderSuppliers(filter); }); }); });
       $('view').querySelectorAll('[data-sedit]').forEach(function (b) { b.addEventListener('click', function () { openSupEdit(rows.filter(function (x) { return x.id == b.dataset.sedit; })[0]); }); });
-      $('view').querySelectorAll('[data-sdel]').forEach(function (b) { b.addEventListener('click', function () { if (confirm('למחוק את הספק?')) db.from('tender_suppliers').delete().eq('id', b.dataset.sdel).then(function () { window.C2B_renderTenderSuppliers(); }); }); });
+      $('view').querySelectorAll('[data-sdel]').forEach(function (b) { b.addEventListener('click', function () { if (confirm('למחוק את הספק?')) db.from('tender_suppliers').delete().eq('id', b.dataset.sdel).then(function () { window.C2B_renderTenderSuppliers(filter); }); }); });
     });
   };
   function supF(label, id, val, type) { return '<div class="field" style="margin:0"><label>' + label + '</label><input class="inp" id="' + id + '" type="' + (type || 'text') + '" value="' + esc(val == null ? '' : val) + '" style="width:100%"></div>'; }
@@ -575,6 +588,8 @@
 
   /* ============================ מכרזי יד2 ============================ */
   var TND_ST = { draft: ['טיוטה', '#8b6f2e'], open: ['פתוח', '#1f8a4c'], awarded: ['הוכרז זוכה', '#2563eb'], closed: ['נסגר', '#6b7280'], cancelled: ['בוטל', '#c0392b'] };
+  //  תיאור קצר לכל סטטוס — למקרא ול-tooltip על הצ'יפים (כדי שיובן מה כל שלב בחיי המכרז).
+  var TND_DESC = { draft: 'נוצר וטרם נשלח לסוחרים', open: 'נשלח לסוחרים — מקבל הצעות עד שעת הסגירה', awarded: 'נסגר ונבחר סוחר זוכה', closed: 'נסגר ללא הכרזת זוכה', cancelled: 'המכרז בוטל' };
   function tndTitle(t) { return [t.car_make, t.car_model, t.car_trim, t.car_year].filter(Boolean).join(' ') || 'רכב ללא שם'; }
   function remainTxt(t) {
     if (t.status !== 'open' || !t.closes_at) return '';
@@ -588,20 +603,35 @@
       if (r.error) return view('<div class="card"><h3>מכרזים</h3><p class="muted">שגיאה: ' + esc(r.error.message) + '</p></div>');
       var rows = r.data || [], counts = {};
       rows.forEach(function (t) { counts[t.status] = (counts[t.status] || 0) + 1; });
-      function chip(k, label) { return '<button class="btn btn-ghost btn-sm' + ((statusFilter || '') === k ? ' active' : '') + '" data-tf="' + k + '">' + label + ' (' + (k ? (counts[k] || 0) : rows.length) + ')</button>'; }
+      //  רק סטטוסים שבאמת בשימוש מקבלים צ'יפ (מלבד "הכל"). טיוטה/פתוח תמיד זמינים
+      //  (שלבי-פתיחה טבעיים) גם אם 0 כרגע, כדי שתמיד יהיה אפשר לסנן אליהם.
+      var ALWAYS = { draft: 1, open: 1 };
+      function chip(k, label) { return '<button class="btn btn-ghost btn-sm' + ((statusFilter || '') === k ? ' active' : '') + '" data-tf="' + k + '"' + (k && TND_DESC[k] ? ' title="' + esc(TND_DESC[k]) + '"' : '') + '>' + label + ' <span class="muted" style="font-size:11px">(' + (k ? (counts[k] || 0) : rows.length) + ')</span></button>'; }
+      var chipKeys = ['draft', 'open', 'awarded', 'closed', 'cancelled'].filter(function (k) { return ALWAYS[k] || counts[k]; });
+      var chipsHtml = chip('', 'הכל') + chipKeys.map(function (k) { return chip(k, TND_ST[k][0]); }).join('');
+      //  מקרא סטטוסים — כדי שיובן מה כל שלב (מוצגים רק סטטוסים קיימים + שלבי-פתיחה).
+      var legend = '<div class="muted" style="font-size:11.5px;margin:-4px 0 12px;line-height:1.9;display:flex;gap:14px;flex-wrap:wrap">' +
+        chipKeys.map(function (k) { return '<span><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:' + TND_ST[k][1] + ';margin-inline-end:5px"></span><b>' + esc(TND_ST[k][0]) + '</b> — ' + esc(TND_DESC[k]) + '</span>'; }).join('') + '</div>';
       var shown = statusFilter ? rows.filter(function (t) { return t.status === statusFilter; }) : rows;
       var cards = shown.map(function (t) {
-        var st = TND_ST[t.status] || ['—', '#888'], rem = remainTxt(t);
-        return '<div class="card" data-topen="' + t.id + '" style="cursor:pointer;padding:13px 15px">' +
-          '<div class="row-between" style="align-items:flex-start"><div style="font-weight:800;font-size:15px">' + esc(tndTitle(t)) + '</div>' +
-          '<span style="background:' + st[1] + ';color:#fff;font-size:11px;font-weight:700;padding:2px 9px;border-radius:999px;white-space:nowrap">' + st[0] + '</span></div>' +
-          '<div class="muted" style="font-size:12.5px;margin-top:4px">' + [t.agent_name ? '👤 ' + esc(t.agent_name) : '', t.agent_org ? esc(t.agent_org) : '', t.car_plate ? esc(t.car_plate) : ''].filter(Boolean).join(' · ') + '</div>' +
-          (rem ? '<div style="font-size:12px;color:var(--brand);margin-top:4px">⏱ ' + rem + '</div>' : '') + '</div>';
+        var st = TND_ST[t.status] || ['—', '#888'], rem = remainTxt(t), cov = (invImgs(t)[0]) || null;
+        var spec = [t.car_year || '', t.car_km != null && t.car_km !== '' ? Number(t.car_km).toLocaleString('en-US') + ' ק"מ' : '', t.car_hand ? 'יד ' + esc(t.car_hand) : '', t.car_fuel ? '⛽ ' + esc(t.car_fuel) : ''].filter(Boolean).join(' · ');
+        return '<div class="card" data-topen="' + t.id + '" style="cursor:pointer;padding:0;overflow:hidden;transition:box-shadow .15s" onmouseover="this.style.boxShadow=\'0 4px 16px rgba(16,24,40,.14)\'" onmouseout="this.style.boxShadow=\'\'">' +
+          '<div style="height:118px;background:#0b0f14;background-size:cover;background-position:center' + (cov ? ";background-image:url('" + esc(cov) + "')" : '') + ';position:relative">' +
+            (cov ? '' : '<div style="height:100%;display:flex;align-items:center;justify-content:center;color:#44505f;font-size:12px">🚗 אין תמונה</div>') +
+            '<span style="position:absolute;top:8px;inset-inline-start:8px;background:' + st[1] + ';color:#fff;font-size:11px;font-weight:700;padding:2px 10px;border-radius:999px;box-shadow:0 1px 5px rgba(0,0,0,.35)">' + st[0] + '</span>' +
+            (rem ? '<span style="position:absolute;bottom:8px;inset-inline-end:8px;background:rgba(0,0,0,.6);color:#fff;font-size:11px;font-weight:600;padding:2px 9px;border-radius:999px">⏱ ' + esc(rem) + '</span>' : '') +
+          '</div>' +
+          '<div style="padding:11px 13px">' +
+            '<div style="font-weight:800;font-size:14.5px;line-height:1.3">' + esc(tndTitle(t)) + '</div>' +
+            (spec ? '<div class="muted" style="font-size:12px;margin-top:3px">' + spec + '</div>' : '') +
+            '<div class="muted" style="font-size:11.5px;margin-top:6px;padding-top:6px;border-top:1px solid var(--line)">' + [t.agent_name ? '👤 ' + esc(t.agent_name) : '', t.agent_org ? esc(t.agent_org) : '', t.car_plate ? '🔖 ' + esc(t.car_plate) : ''].filter(Boolean).join(' · ') + '</div>' +
+          '</div></div>';
       }).join('');
-      view('<div class="row-between" style="margin-bottom:12px;align-items:center;flex-wrap:wrap;gap:8px"><h2 style="margin:0">🔨 מכרזים</h2><button class="btn btn-sm" id="tndAdd">➕ מכרז חדש</button></div>' +
+      view('<div class="row-between" style="margin-bottom:12px;align-items:center;flex-wrap:wrap;gap:8px"><h2 style="margin:0">🔨 מכרזים <span class="muted" style="font-size:14px">(' + rows.length + ')</span></h2><button class="btn btn-sm" id="tndAdd">➕ מכרז חדש</button></div>' +
         '<div id="tndEdit"></div>' +
-        '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">' + chip('', 'הכל') + chip('draft', 'טיוטה') + chip('open', 'פתוח') + chip('awarded', 'זוכה') + chip('closed', 'נסגר') + '</div>' +
-        '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px">' + (cards || '<div class="empty">אין מכרזים בסטטוס זה</div>') + '</div>');
+        '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">' + chipsHtml + '</div>' + legend +
+        '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:14px">' + (cards || '<div class="empty">אין מכרזים בסטטוס זה</div>') + '</div>');
       $('tndAdd').addEventListener('click', function () { openTndCreate(); });
       $('view').querySelectorAll('[data-tf]').forEach(function (b) { b.addEventListener('click', function () { window.C2B_renderTenders(b.dataset.tf || ''); }); });
       $('view').querySelectorAll('[data-topen]').forEach(function (b) { b.addEventListener('click', function () { openTnd(rows.filter(function (x) { return x.id === b.dataset.topen; })[0]); }); });
