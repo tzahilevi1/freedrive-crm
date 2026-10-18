@@ -340,7 +340,10 @@
           '<div style="padding:11px 13px"><div style="font-weight:800;font-size:15px">' + esc(invTitle(c)) + '</div>' +
             '<div class="muted" style="font-size:12.5px;margin-top:2px">' + [c.hand ? 'יד ' + esc(c.hand) : '', c.km != null ? Number(c.km).toLocaleString('en-US') + ' ק"מ' : '', c.plate ? esc(c.plate) : ''].filter(Boolean).join(' · ') + '</div>' +
             '<div style="font-weight:800;margin-top:6px">' + (c.price != null ? money(c.price) : '<span class="muted" style="font-weight:400">ללא מחיר</span>') + '</div>' +
-            (c.source === 'trade-in' ? '<div class="muted" style="font-size:11px;margin-top:4px">↩︎ טרייד-אין · ' + esc(c.source_org || '') + '</div>' : '') + '</div></div>';
+            (c.source === 'trade-in' ? '<div class="muted" style="font-size:11px;margin-top:4px">↩︎ טרייד-אין · ' + esc(c.source_org || '') + '</div>' : '') +
+            //  שינוי סטטוס ישירות מהרשימה (בלי לפתוח את הרכב). onclick עוצר את פתיחת-הכרטיס.
+            '<select class="inp" data-stsel="' + c.id + '" onclick="event.stopPropagation()" title="שינוי סטטוס מהיר" style="width:100%;margin-top:9px;font-size:12.5px;padding:5px 8px;cursor:pointer">' + ['intake', 'available', 'reserved', 'sold', 'hidden'].map(function (s) { return '<option value="' + s + '"' + (c.status === s ? ' selected' : '') + '>' + INV_ST[s][0] + '</option>'; }).join('') + '</select>' +
+            '</div></div>';
       }).join('');
       view('<div class="row-between" style="margin-bottom:12px;align-items:center;flex-wrap:wrap;gap:8px"><h2 style="margin:0">🚗 מלאי יד2</h2><button class="btn btn-sm" id="invAdd">➕ הוסף רכב</button></div>' +
         '<div id="invEdit"></div>' +
@@ -349,6 +352,14 @@
       $('invAdd').addEventListener('click', function () { openInvEdit(null); });
       $('view').querySelectorAll('[data-if]').forEach(function (b) { b.addEventListener('click', function () { window.C2B_renderInventory(b.dataset.if || ''); }); });
       $('view').querySelectorAll('[data-edit]').forEach(function (b) { b.addEventListener('click', function () { openInvEdit(rows.filter(function (x) { return x.id === b.dataset.edit; })[0]); }); });
+      //  שינוי-סטטוס מהיר מהרשימה — מעדכן ומצייר מחדש (שומר את הסינון הנוכחי).
+      $('view').querySelectorAll('[data-stsel]').forEach(function (sel) {
+        sel.addEventListener('click', function (e) { e.stopPropagation(); });
+        sel.addEventListener('change', function (e) {
+          e.stopPropagation(); var id = sel.dataset.stsel, st = sel.value; sel.disabled = true;
+          db.from('inventory').update({ status: st }).eq('id', id).then(function (r) { sel.disabled = false; if (!r.error) window.C2B_renderInventory(statusFilter); });
+        });
+      });
     });
   };
 
