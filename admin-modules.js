@@ -880,7 +880,9 @@
         var licEl = $('tndLic');
         var mkLic = function (href) { licEl.innerHTML = href ? '<a href="' + esc(href) + '" target="_blank" rel="noopener" class="btn btn-ghost btn-sm">📄 רישיון רכב</a>' : ''; };
         if (/^https?:\/\//i.test(t.license_doc)) mkLic(t.license_doc);
-        else db.storage.from('lead-docs').createSignedUrl(t.license_doc, 3600).then(function (r) { mkLic((r && r.data && r.data.signedUrl) || null); }, function () { mkLic(null); });
+        //  נתיב-יחסי בטוח בלבד (בלי scheme זר/'..') לפני חתימה — הגנה מפני נתיב לא-מהימן.
+        else if (/^[\w./-]+$/.test(t.license_doc) && t.license_doc.indexOf('..') < 0) db.storage.from('lead-docs').createSignedUrl(t.license_doc, 3600).then(function (r) { mkLic((r && r.data && r.data.signedUrl) || null); }, function () { mkLic(null); });
+        else mkLic(null);
       }
       // מנהל תמונות הרכב — נשמר מיידית למכרז (כדי שישלח בתמונות)
       var dImgs = invImgs(t).slice();
