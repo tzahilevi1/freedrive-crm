@@ -358,14 +358,16 @@
     car = car || {}; var isNew = !car.id, box = $('invEdit'); if (!box) return;
     box.innerHTML = '<div class="card" style="border:1px solid var(--line);background:var(--surface-2)">' +
       '<div class="row-between" style="margin-bottom:12px"><b>' + (isNew ? '➕ רכב חדש' : '✏️ ' + esc(invTitle(car))) + '</b><button class="btn btn-ghost btn-sm" id="invClose">✕ סגור</button></div>' +
-      '<div class="grid2">' + invF('יצרן', 'iv_make', car.make) + invF('דגם', 'iv_model', car.model) + invF('רמת גימור', 'iv_trim', car.trim) + invF('שנה', 'iv_year', car.year, 'number') + invF('יד', 'iv_hand', car.hand) + invF('ק"מ', 'iv_km', car.km, 'number') + invF('צבע', 'iv_color', car.color) + invF('סוג דלק', 'iv_fuel', car.fuel) + invF('מספר רכב', 'iv_plate', car.plate) + invF('מחיר מכירה (₪)', 'iv_price', car.price, 'number') + '</div>' +
+      //  מספר-רכב למעלה — נקודת-ההתחלה: שליפה אוטומטית ממשרד התחבורה ממלאת יצרן/דגם/רמת-גימור/שנה/צבע/סוג-דלק.
+      '<div class="field" style="margin:0 0 12px"><label>מספר רכב — התחל כאן (שליפה אוטומטית ממשרד התחבורה)</label><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><input class="inp" id="iv_plate" value="' + esc(car.plate || '') + '" placeholder="מספר רכב (ספרות)" inputmode="numeric" style="flex:1;min-width:150px"><button type="button" class="btn btn-sm" id="iv_plateLk">🔎 שלוף פרטי רכב</button><span id="iv_plateMsg" style="font-size:12px"></span></div></div>' +
+      '<div class="grid2">' + invF('יצרן', 'iv_make', car.make) + invF('דגם', 'iv_model', car.model) + invF('רמת גימור', 'iv_trim', car.trim) + invS('שנה', 'iv_year', car.year, invYears()) + invS('יד', 'iv_hand', car.hand, INV_HANDS) + invF('ק"מ', 'iv_km', car.km, 'number') + invF('צבע', 'iv_color', car.color) + invS('סוג דלק', 'iv_fuel', car.fuel, INV_FUELS) + invF('מחיר מכירה (₪)', 'iv_price', car.price, 'number') + '</div>' +
       '<div style="font-size:12px;color:var(--muted);font-weight:600;margin:12px 0 4px">💰 תמחור פנימי + יומן מסחר (לא מוצג באתרים)</div>' +
       '<div class="grid2">' + invF('מחיר מחירון (₪)', 'iv_listprice', '', 'number') + invF('מחיר מינימום (₪)', 'iv_minprice', '', 'number') + invF('מחיר מנהל (₪)', 'iv_mgrprice', '', 'number') + '</div>' +
       '<div class="grid2" style="margin-top:4px">' + invF('עלות רכישה (₪)', 'iv_pcost', '', 'number') + invF('תאריך רכישה', 'iv_pdate', '', 'date') + invF('נרכש מ- (ספק)', 'iv_psup') + invF('נמכר ל- (קונה)', 'iv_buyer') + '</div>' +
       '<div class="field" style="margin-top:10px"><label>תיאור</label><textarea class="inp" id="iv_desc" style="height:70px;width:100%">' + esc(car.description || '') + '</textarea></div>' +
       '<div style="margin-top:12px"><label style="font-size:13px;color:var(--muted);display:block;margin-bottom:6px">תמונות (לחיצה על תמונה = קביעת שער)</label><div id="iv_imgs" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px"></div><input type="file" id="iv_file" accept="image/*" multiple style="font-size:13px"> <span id="iv_upmsg" class="muted" style="font-size:12px"></span></div>' +
-      '<div class="grid2" style="margin-top:12px"><div class="field" style="margin:0"><label>סטטוס</label><select class="inp" id="iv_status" style="width:100%">' + ['intake', 'available', 'reserved', 'sold', 'hidden'].map(function (s) { return '<option value="' + s + '"' + ((car.status || 'intake') === s ? ' selected' : '') + '>' + INV_ST[s][0] + '</option>'; }).join('') + '</select></div>' +
-        '<label style="display:flex;align-items:center;gap:8px;margin-top:22px;font-size:14px"><input type="checkbox" id="iv_pub"' + (car.published ? ' checked' : '') + '> מפורסם (מוצג באתרים וב-CRM-ים)</label></div>' +
+      '<div class="grid2" style="margin-top:12px"><div class="field" style="margin:0"><label>סטטוס</label><select class="inp" id="iv_status" style="width:100%">' + ['intake', 'available', 'reserved', 'sold', 'hidden'].map(function (s) { return '<option value="' + s + '"' + ((car.status || (isNew ? 'available' : 'intake')) === s ? ' selected' : '') + '>' + INV_ST[s][0] + '</option>'; }).join('') + '</select></div>' +
+        '<label style="display:flex;align-items:center;gap:8px;margin-top:22px;font-size:14px"><input type="checkbox" id="iv_pub"' + ((isNew || car.published) ? ' checked' : '') + '> מפורסם (מוצג באתרים וב-CRM-ים)</label></div>' +
       '<div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-sm" id="iv_save">💾 שמור</button>' + (isNew ? '' : '<button class="btn btn-ghost btn-sm" id="iv_del" style="color:var(--danger)">🗑 מחק</button>') + '<span id="iv_msg" style="font-size:13px;margin-inline-start:8px"></span></div></div>';
     box.scrollIntoView({ behavior: 'smooth', block: 'start' });
     // טעינת תמחור פנימי קיים (טבלה נפרדת צוות-בלבד)
@@ -382,6 +384,20 @@
     }
     paintImgs();
     $('invClose').addEventListener('click', function () { box.innerHTML = ''; });
+    //  שליפת פרטי-רכב ממשרד התחבורה לפי מספר-רכב — ממלא יצרן/דגם/רמת-גימור/שנה/צבע/סוג-דלק.
+    if ($('iv_plateLk') && window.C2B_plateLookup) $('iv_plateLk').addEventListener('click', function () {
+      var plate = (($('iv_plate') && $('iv_plate').value) || '').replace(/\D/g, '');
+      if (!plate) { $('iv_plateMsg').style.color = 'var(--danger)'; $('iv_plateMsg').textContent = 'הזן מספר רכב'; return; }
+      var b = this; b.disabled = true; $('iv_plateMsg').style.color = 'var(--muted)'; $('iv_plateMsg').textContent = 'מחפש…';
+      window.C2B_plateLookup(plate, function (v, err) {
+        b.disabled = false;
+        if (err || !v) { $('iv_plateMsg').style.color = 'var(--danger)'; $('iv_plateMsg').textContent = err || 'לא נמצא רכב עם מספר זה'; return; }
+        function setv(id, x) { var e = $(id); if (e && x) e.value = x; }
+        setv('iv_make', v.make); setv('iv_model', v.model); setv('iv_trim', v.trim); setv('iv_color', v.color);
+        invSetSel('iv_year', v.year); invSetSel('iv_fuel', v.fuel);
+        $('iv_plateMsg').style.color = 'var(--ok)'; $('iv_plateMsg').textContent = '✔ נשלפו פרטי הרכב — השלם יד, ק"מ ותמונות';
+      });
+    });
     $('iv_file').addEventListener('change', function () {
       var files = Array.prototype.slice.call(this.files || []); if (!files.length) return;
       $('iv_upmsg').textContent = 'מעלה ' + files.length + '…'; var done = 0, errs = 0;
@@ -397,6 +413,20 @@
     function val(id) { var e = $(id); return e && e.value.trim() ? e.value.trim() : null; }
     function numv(id) { var e = $(id); return e && e.value !== '' ? Number(e.value) : null; }
     $('iv_save').addEventListener('click', function () {
+      //  רכב שמתפרסם לאתר (מפורסם או סטטוס "זמין") חייב להיות שלם: מספר-רכב, יצרן, דגם,
+      //  שנה, יד, ק"מ, סוג-דלק ולפחות תמונה אחת. טיוטה/אינטייק לא-מפורסמת — אפשר חלקי.
+      if ($('iv_pub').checked || $('iv_status').value === 'available') {
+        var miss = [];
+        if (!val('iv_plate')) miss.push('מספר רכב');
+        if (!val('iv_make')) miss.push('יצרן');
+        if (!val('iv_model')) miss.push('דגם');
+        if (!val('iv_year')) miss.push('שנה');
+        if (!val('iv_hand')) miss.push('יד');
+        if (numv('iv_km') == null) miss.push('ק"מ');
+        if (!val('iv_fuel')) miss.push('סוג דלק');
+        if (!state.images.length) miss.push('תמונה אחת לפחות');
+        if (miss.length) { $('iv_msg').style.color = 'var(--danger)'; $('iv_msg').textContent = 'כדי להוסיף למלאי ולפרסם באתר השלם: ' + miss.join(', '); return; }
+      }
       var patch = { make: val('iv_make'), model: val('iv_model'), trim: val('iv_trim'), year: numv('iv_year'), hand: val('iv_hand'), km: numv('iv_km'), color: val('iv_color'), fuel: val('iv_fuel'), plate: val('iv_plate'), price: numv('iv_price'), description: val('iv_desc'), images: state.images, cover_idx: state.cover, status: $('iv_status').value, published: $('iv_pub').checked };
       var btn = this; btn.disabled = true; $('iv_msg').style.color = 'var(--muted)'; $('iv_msg').textContent = 'שומר…';
       var pricing = { list_price: numv('iv_listprice'), min_price: numv('iv_minprice'), manager_price: numv('iv_mgrprice'), purchase_cost: numv('iv_pcost'), purchased_at: val('iv_pdate'), supplier_name: val('iv_psup'), buyer_name: val('iv_buyer') };
