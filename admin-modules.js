@@ -320,6 +320,38 @@
   function invTitle(car) { return [car.make, car.model, car.year].filter(Boolean).join(' ') || 'רכב ללא שם'; }
   function invBg(cov) { return "height:160px;background:#0b0f14;background-size:cover;background-position:center" + (cov ? ";background-image:url('" + esc(cov) + "')" : ""); }
 
+  //  תצוגת-הוצאות מרוכזת — סה"כ הוצאות פר-רכב + פילוח לפי סוג. לחיצה על רכב פותחת אותו.
+  window.C2B_renderInvExpenses = function () {
+    view('<div class="loading">טוען הוצאות…</div>');
+    Promise.all([
+      db.from('inventory_expenses').select('*').order('spent_at', { ascending: false }),
+      db.from('inventory').select('id,make,model,year,plate')
+    ]).then(function (res) {
+      var exps = (res[0] && res[0].data) || [], inv = (res[1] && res[1].data) || [];
+      var carById = {}; inv.forEach(function (c) { carById[c.id] = c; });
+      var byCar = {}, byKind = {}, grand = 0;
+      exps.forEach(function (e) {
+        var amt = +e.amount || 0; grand += amt;
+        byCar[e.inventory_id] = byCar[e.inventory_id] || { total: 0, n: 0 }; byCar[e.inventory_id].total += amt; byCar[e.inventory_id].n++;
+        byKind[e.kind || 'אחר'] = (byKind[e.kind || 'אחר'] || 0) + amt;
+      });
+      var carKeys = Object.keys(byCar).sort(function (a, b) { return byCar[b].total - byCar[a].total; });
+      var kindKeys = Object.keys(byKind).sort(function (a, b) { return byKind[b] - byKind[a]; });
+      function tlCard(lbl, v, col) { return '<div class="card" style="flex:1;min-width:150px;padding:12px 15px"><div class="muted" style="font-size:12px">' + lbl + '</div><div style="font-size:20px;font-weight:800' + (col ? ';color:' + col : '') + '">' + v + '</div></div>'; }
+      var carRows = carKeys.map(function (id) {
+        var c = carById[id] || {}, title = [c.make, c.model, c.year].filter(Boolean).join(' ') || 'רכב שנמחק';
+        return '<tr' + (carById[id] ? ' data-expcar="' + id + '" style="cursor:pointer"' : '') + '><td style="padding:8px 12px;font-weight:600">' + esc(title) + '</td><td style="padding:8px 12px;color:var(--muted)">' + esc(c.plate || '') + '</td><td style="padding:8px 12px">' + byCar[id].n + '</td><td style="padding:8px 12px;font-weight:800;color:var(--danger)">' + money(byCar[id].total) + '</td></tr>';
+      }).join('');
+      var kindRows = kindKeys.map(function (k) { var pct = grand ? Math.round(byKind[k] / grand * 100) : 0; return '<tr><td style="padding:7px 12px">' + esc(k) + '</td><td style="padding:7px 12px;font-weight:700">' + money(byKind[k]) + '</td><td style="padding:7px 12px;color:var(--muted)">' + pct + '%</td></tr>'; }).join('');
+      view('<h2 style="margin:0 0 4px">💸 הוצאות רכבים</h2><p class="muted" style="font-size:13px;margin-bottom:14px">ריכוז כל ההוצאות על רכבי המלאי — פר-רכב ולפי סוג.</p>' +
+        '<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px">' + tlCard('סה"כ הוצאות', money(grand), 'var(--danger)') + tlCard('רכבים עם הוצאות', carKeys.length) + tlCard('רשומות', exps.length) + '</div>' +
+        '<div class="grid2">' +
+          '<div class="card"><h3 style="margin:0 0 8px">לפי רכב</h3><div class="table-scroll"><table style="width:100%"><thead><tr style="color:var(--muted);font-size:12px;text-align:right"><th style="padding:6px 12px">רכב</th><th style="padding:6px 12px">לוחית</th><th style="padding:6px 12px">#</th><th style="padding:6px 12px">סה"כ</th></tr></thead><tbody>' + (carRows || '<tr><td colspan="4" class="empty">אין הוצאות</td></tr>') + '</tbody></table></div></div>' +
+          '<div class="card"><h3 style="margin:0 0 8px">לפי סוג הוצאה</h3><div class="table-scroll"><table style="width:100%"><thead><tr style="color:var(--muted);font-size:12px;text-align:right"><th style="padding:6px 12px">סוג</th><th style="padding:6px 12px">סכום</th><th style="padding:6px 12px">%</th></tr></thead><tbody>' + (kindRows || '<tr><td colspan="3" class="empty">אין</td></tr>') + '</tbody></table></div></div>' +
+        '</div>');
+      $('view').querySelectorAll('[data-expcar]').forEach(function (tr) { tr.addEventListener('click', function () { db.from('inventory').select('*').eq('id', tr.dataset.expcar).single().then(function (r) { if (r.data) { window.C2B_renderInventory(); setTimeout(function () { openInvEdit(r.data); }, 120); } }); }); });
+    }).catch(function (e) { view('<div class="card"><p class="muted">שגיאה: ' + esc(e.message || e) + '</p></div>'); });
+  };
   window.C2B_renderInventory = function (statusFilter) {
     view('<div class="loading">טוען מלאי…</div>');
     db.from('inventory').select('*').order('created_at', { ascending: false }).then(function (r) {
@@ -364,6 +396,8 @@
   };
 
   function invF(label, id, val, type) { return '<div class="field" style="margin:0"><label>' + label + '</label><input class="inp" id="' + id + '" type="' + (type || 'text') + '" value="' + esc(val == null ? '' : val) + '" style="width:100%"></div>'; }
+  var INV_DOC_TYPES = ['רישיון רכב', 'בדיקת רכב', 'סליקה', 'קאר זון', 'תשלומים', 'קבלות', 'הסכם', 'אחר'];
+  var INV_EXP_KINDS = ['שטיפה', 'תיקון', 'טיפול', 'צמיגים', 'פחחות וצבע', 'בדיקת מכון', 'הובלה', 'אגרות/רישוי', 'מתווך/עמלה', 'ריהוט/ניקיון', 'אחר'];
   //  שדות-רשימה למלאי: יד / סוג-דלק / שנה. ערך קיים שאינו ברשימה נשמר כאופציה (לא מאבדים נתונים ישנים).
   var INV_HANDS = ['יד ראשונה', 'יד שנייה', 'יד שלישית', 'יד רביעית', 'יד חמישית ומעלה'];
   var INV_FUELS = ['בנזין', 'דיזל', 'היברידי', 'היברידי נטען', 'חשמלי', 'גז'];
@@ -388,6 +422,16 @@
       '<div class="grid2" style="margin-top:4px">' + invF('עלות רכישה (₪)', 'iv_pcost', '', 'number') + invF('תאריך רכישה', 'iv_pdate', '', 'date') + invF('נרכש מ- (ספק)', 'iv_psup') + invF('נמכר ל- (קונה)', 'iv_buyer') + '</div>' +
       '<div class="field" style="margin-top:10px"><label>תיאור</label><textarea class="inp" id="iv_desc" style="height:70px;width:100%">' + esc(car.description || '') + '</textarea></div>' +
       '<div style="margin-top:12px"><label style="font-size:13px;color:var(--muted);display:block;margin-bottom:6px">תמונות (לחיצה על תמונה = קביעת שער)</label><div id="iv_imgs" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px"></div><input type="file" id="iv_file" accept="image/*" multiple style="font-size:13px"> <span id="iv_upmsg" class="muted" style="font-size:12px"></span></div>' +
+      //  מסמכי-רכב + הוצאות — זמינים אחרי שמירה ראשונה (צריך id לקישור).
+      (car.id ? '<div style="margin-top:14px;border-top:1px solid var(--line);padding-top:12px"><label style="font-size:13px;color:var(--muted);display:block;margin-bottom:6px">📎 מסמכי הרכב — רישיון / בדיקה / סליקה / קאר-זון / תשלומים / קבלות</label>' +
+        '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px"><select class="inp" id="iv_doctype" style="width:auto">' + INV_DOC_TYPES.map(function (d) { return '<option>' + esc(d) + '</option>'; }).join('') + '</select>' +
+        '<label class="btn btn-ghost btn-sm" style="cursor:pointer;margin:0">⬆ העלה מסמך<input type="file" id="iv_docfile" accept="image/*,application/pdf" style="display:none"></label><span id="iv_docmsg" class="muted" style="font-size:12px"></span></div>' +
+        '<div id="iv_doclist" style="display:flex;flex-direction:column;gap:5px"></div></div>' +
+        '<div style="margin-top:14px;border-top:1px solid var(--line);padding-top:12px"><label style="font-size:13px;color:var(--muted);display:block;margin-bottom:6px">💸 הוצאות על הרכב</label>' +
+        '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px"><select class="inp" id="iv_expkind" style="width:auto">' + INV_EXP_KINDS.map(function (k) { return '<option>' + esc(k) + '</option>'; }).join('') + '</select>' +
+        '<input class="inp" id="iv_expamt" type="number" inputmode="numeric" placeholder="סכום ₪" style="width:120px"><input class="inp" id="iv_expnote" placeholder="הערה (לא חובה)" style="width:160px"><button class="btn btn-sm" id="iv_expadd" type="button">+ הוסף</button></div>' +
+        '<div id="iv_explist"></div></div>'
+        : '<p class="muted" style="font-size:12px;margin-top:12px">💡 שמרו את הרכב כדי להוסיף מסמכים והוצאות.</p>') +
       '<div class="grid2" style="margin-top:12px"><div class="field" style="margin:0"><label>סטטוס</label><select class="inp" id="iv_status" style="width:100%">' + ['intake', 'available', 'reserved', 'sold', 'hidden'].map(function (s) { return '<option value="' + s + '"' + ((car.status || (isNew ? 'available' : 'intake')) === s ? ' selected' : '') + '>' + INV_ST[s][0] + '</option>'; }).join('') + '</select></div>' +
         '<label style="display:flex;align-items:center;gap:8px;margin-top:22px;font-size:14px"><input type="checkbox" id="iv_pub"' + ((isNew || car.published) ? ' checked' : '') + '> מפורסם (מוצג באתרים וב-CRM-ים)</label></div>' +
       '<div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-sm" id="iv_save">💾 שמור</button>' + (isNew ? '' : '<button class="btn btn-ghost btn-sm" id="iv_del" style="color:var(--danger)">🗑 מחק</button>') + '<span id="iv_msg" style="font-size:13px;margin-inline-start:8px"></span></div></div>';
@@ -432,6 +476,51 @@
       });
       this.value = '';
     });
+    //  ===== מסמכי-רכב (inventory.documents JSONB) =====
+    if (car.id) {
+      var docs = Array.isArray(car.documents) ? car.documents.slice() : [];
+      var paintDocs = function () {
+        var el = $('iv_doclist'); if (!el) return;
+        el.innerHTML = docs.length ? docs.map(function (d, i) {
+          return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:5px 8px;background:var(--surface-2);border-radius:8px"><a href="' + esc(d.url) + '" target="_blank" rel="noopener" style="font-size:12.5px">📄 ' + esc(d.type || 'מסמך') + (d.name ? ' · ' + esc(d.name) : '') + '</a><button class="btn btn-ghost btn-sm" data-docdel="' + i + '" style="color:var(--danger)">🗑</button></div>';
+        }).join('') : '<span class="muted" style="font-size:12px">אין מסמכים עדיין</span>';
+        el.querySelectorAll('[data-docdel]').forEach(function (b) { b.addEventListener('click', function () { docs.splice(+b.dataset.docdel, 1); db.from('inventory').update({ documents: docs }).eq('id', car.id).then(function () { car.documents = docs.slice(); paintDocs(); }); }); });
+      };
+      paintDocs();
+      if ($('iv_docfile')) $('iv_docfile').addEventListener('change', function () {
+        var f = this.files && this.files[0]; if (!f) return; var type = $('iv_doctype').value;
+        $('iv_docmsg').textContent = 'מעלה…';
+        var path = car.id + '/docs/' + Date.now() + '_' + Math.random().toString(36).slice(2, 6) + '.' + ((f.name.split('.').pop() || 'bin').toLowerCase());
+        db.storage.from('inventory').upload(path, f, { upsert: true, contentType: f.type || 'application/octet-stream' }).then(function (res) {
+          if (res.error) { $('iv_docmsg').textContent = 'שגיאה'; return; }
+          var url = db.storage.from('inventory').getPublicUrl(path).data.publicUrl;
+          docs.push({ type: type, url: url, name: f.name || '' });
+          db.from('inventory').update({ documents: docs }).eq('id', car.id).then(function () { car.documents = docs.slice(); $('iv_docmsg').textContent = '✔ הועלה'; paintDocs(); });
+        });
+        this.value = '';
+      });
+      //  ===== הוצאות-רכב (טבלת inventory_expenses) =====
+      var paintExp = function () {
+        db.from('inventory_expenses').select('*').eq('inventory_id', car.id).order('spent_at', { ascending: false }).then(function (r) {
+          var rows = r.data || [], el = $('iv_explist'); if (!el) return;
+          var total = rows.reduce(function (a, x) { return a + (+x.amount || 0); }, 0);
+          el.innerHTML = (rows.length ? rows.map(function (x) {
+            return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:5px 8px;border-bottom:1px solid var(--line)"><span style="font-size:12.5px">' + esc(x.kind) + (x.notes ? ' · ' + esc(x.notes) : '') + ' <span class="muted">· ' + esc(String(x.spent_at || '').slice(0, 10)) + '</span></span><span style="display:flex;align-items:center;gap:8px"><b>' + money(x.amount) + '</b><button class="btn btn-ghost btn-sm" data-expdel="' + x.id + '" style="color:var(--danger)">🗑</button></span></div>';
+          }).join('') : '<span class="muted" style="font-size:12px">אין הוצאות עדיין</span>') +
+            '<div style="display:flex;justify-content:space-between;padding:8px;font-weight:800;border-top:2px solid var(--line);margin-top:4px"><span>סה"כ הוצאות</span><span style="color:var(--danger)">' + money(total) + '</span></div>';
+          el.querySelectorAll('[data-expdel]').forEach(function (b) { b.addEventListener('click', function () { db.from('inventory_expenses').delete().eq('id', b.dataset.expdel).then(function () { paintExp(); }); }); });
+        });
+      };
+      paintExp();
+      if ($('iv_expadd')) $('iv_expadd').addEventListener('click', function () {
+        var amt = $('iv_expamt').value !== '' ? Number($('iv_expamt').value) : null;
+        if (amt == null) { alert('הזינו סכום'); return; }
+        db.from('inventory_expenses').insert({ inventory_id: car.id, kind: $('iv_expkind').value, amount: amt, notes: ($('iv_expnote').value || '').trim() || null }).then(function (r) {
+          if (r.error) { alert('שגיאה: ' + r.error.message); return; }
+          $('iv_expamt').value = ''; $('iv_expnote').value = ''; paintExp();
+        });
+      });
+    }
     function val(id) { var e = $(id); return e && e.value.trim() ? e.value.trim() : null; }
     function numv(id) { var e = $(id); return e && e.value !== '' ? Number(e.value) : null; }
     $('iv_save').addEventListener('click', function () {
