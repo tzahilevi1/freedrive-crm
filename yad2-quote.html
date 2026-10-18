@@ -64,14 +64,18 @@
       <label>📷 תמונות הרכב (אפשר כמה)</label>
       <input type="file" id="car_files" accept="image/*" multiple>
       <div class="msg muted" id="imgmsg"></div>
+      <label>💰 מחירון לוי יצחק (₪)</label>
+      <input id="list_price" inputmode="numeric" placeholder="מחיר מחירון (לא חובה)">
+      <label>📋 תמונת מחירון (לא חובה)</label>
+      <input type="file" id="list_price_file" accept="image/*">
     </div>
 
     <div class="card">
       <h2>פרטי הלקוח (בעל הרכב)</h2>
       <div class="grid">
-        <div><label>שם הלקוח</label><input id="customer_name"></div>
-        <div><label>טלפון הלקוח</label><input id="customer_phone" inputmode="tel"></div>
-        <div><label>ת.ז</label><input id="customer_id" inputmode="numeric"></div>
+        <div><label class="req">שם הלקוח</label><input id="customer_name" required></div>
+        <div><label class="req">טלפון הלקוח</label><input id="customer_phone" inputmode="tel" required></div>
+        <div><label class="req">ת.ז</label><input id="customer_id" inputmode="numeric" required></div>
       </div>
     </div>
 
@@ -79,8 +83,8 @@
       <h2>הפרטים שלכם (הסוכן)</h2>
       <div class="grid">
         <div><label class="req">שם הסוכן</label><input id="agent_name" required></div>
-        <div><label>סניף</label><input id="branch" placeholder="שם הסניף"></div>
-        <div><label>טלפון</label><input id="agent_phone" inputmode="tel"></div>
+        <div><label class="req">סניף</label><input id="branch" placeholder="שם הסניף" required></div>
+        <div><label class="req">טלפון</label><input id="agent_phone" inputmode="tel" required></div>
         <div><label>מייל (לא חובה)</label><input id="agent_email" type="email"></div>
       </div>
     </div>
@@ -141,18 +145,21 @@
   });
   $('qf').addEventListener('submit',function(e){
     e.preventDefault();
-    if(!($('agent_name').value||'').trim()){$('formmsg').className='msg err';$('formmsg').textContent='חובה להזין שם סוכן';return;}
+    var _req=[['agent_name','שם הסוכן'],['branch','סניף'],['agent_phone','טלפון הסוכן'],['customer_name','שם הלקוח'],['customer_phone','טלפון הלקוח'],['customer_id','ת.ז הלקוח']];
+    var _miss=_req.filter(function(r){return !(($(r[0]).value||'').trim());}).map(function(r){return r[1];});
+    if(_miss.length){$('formmsg').className='msg err';$('formmsg').textContent='חובה למלא: '+_miss.join(', ');return;}
     var btn=$('send'); btn.disabled=true; $('formmsg').className='msg muted'; $('formmsg').textContent='מעלה קבצים…';
-    var lf=($('license_file').files||[])[0], cf=[].slice.call($('car_files').files||[]).slice(0,8);
-    var licB64=null, imgsB64=[], jobs=[];
+    var lf=($('license_file').files||[])[0], cf=[].slice.call($('car_files').files||[]).slice(0,8), lpf=($('list_price_file').files||[])[0];
+    var licB64=null, imgsB64=[], lpB64=null, jobs=[];
     if(lf) jobs.push(fileToB64(lf,2200,0.85).then(function(b){ licB64=b; }));   // רישיון ברזולוציה גבוהה-יותר (קריאוּת)
+    if(lpf) jobs.push(fileToB64(lpf,1800,0.82).then(function(b){ lpB64=b; }));   // תמונת מחירון (אופציונלי)
     cf.forEach(function(f){ jobs.push(fileToB64(f,1600,0.82).then(function(b){ if(b) imgsB64.push(b); })); });
     Promise.all(jobs).then(function(){
       $('formmsg').textContent='שולח…';
       var body={car_make:$('car_make').value,car_model:$('car_model').value,car_trim:$('car_trim').value,car_year:$('car_year').value,car_hand:$('car_hand').value,car_km:$('car_km').value,car_color:$('car_color').value,car_fuel:$('car_fuel').value,car_plate:$('plate').value,car_description:$('car_description').value,
         agent_name:$('agent_name').value,branch:$('branch').value,agent_phone:$('agent_phone').value,agent_email:$('agent_email').value,
         customer_name:$('customer_name').value,customer_phone:$('customer_phone').value,customer_id:$('customer_id').value,
-        license_b64:licB64,images_b64:imgsB64};
+        list_price:$('list_price').value,license_b64:licB64,images_b64:imgsB64,list_price_b64:lpB64};
       fetch(ENDPOINT,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
         .then(function(r){return r.json();}).then(function(j){
           if(j&&j.ok){ $('qf').style.display='none'; $('done').style.display='block'; }
