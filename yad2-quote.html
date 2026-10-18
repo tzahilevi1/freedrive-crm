@@ -59,10 +59,24 @@
       </div>
       <label>הערות</label>
       <textarea id="car_description" rows="2" placeholder="מצב הרכב, תוספות, בעיות ידועות…"></textarea>
+      <label>📄 תמונת רישיון רכב</label>
+      <input type="file" id="license_file" accept="image/*">
+      <label>📷 תמונות הרכב (אפשר כמה)</label>
+      <input type="file" id="car_files" accept="image/*" multiple>
+      <div class="msg muted" id="imgmsg"></div>
     </div>
 
     <div class="card">
-      <h2>הפרטים שלכם</h2>
+      <h2>פרטי הלקוח (בעל הרכב)</h2>
+      <div class="grid">
+        <div><label>שם הלקוח</label><input id="customer_name"></div>
+        <div><label>טלפון הלקוח</label><input id="customer_phone" inputmode="tel"></div>
+        <div><label>ת.ז</label><input id="customer_id" inputmode="numeric"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>הפרטים שלכם (הסוכן)</h2>
       <div class="grid">
         <div><label class="req">שם הסוכן</label><input id="agent_name" required></div>
         <div><label>סניף</label><input id="branch" placeholder="שם הסניף"></div>
@@ -85,8 +99,17 @@
 
 <script>
 (function(){
-  var ENDPOINT='https://xppsvottiwbjsjlusief.supabase.co/functions/v1/quote-intake';
+  var YAD2_URL='https://xppsvottiwbjsjlusief.supabase.co';
+  var YAD2_ANON='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhwcHN2b3R0aXdianNqbHVzaWVmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTEzNzg5NzYsImV4cCI6MjEwNjk1NDk3Nn0.b9WaudA0bbKQiEVHtdnChETITTq4Tl2oPEHPnzwWsZo';
+  var ENDPOINT=YAD2_URL+'/functions/v1/quote-intake';
   var $=function(id){return document.getElementById(id);};
+  function uploadFile(f){
+    if(!f||f.size>12582912) return Promise.resolve(null);
+    var ext=((f.name||'').split('.').pop()||'jpg').toLowerCase().replace(/[^a-z0-9]/g,'').slice(0,5)||'jpg';
+    var path='landing/'+Date.now()+'-'+Math.random().toString(16).slice(2,8)+'.'+ext;
+    return fetch(YAD2_URL+'/storage/v1/object/tradein/'+path,{method:'POST',headers:{apikey:YAD2_ANON,Authorization:'Bearer '+YAD2_ANON,'Content-Type':f.type||'image/jpeg'},body:f})
+      .then(function(r){ return r.ok ? (YAD2_URL+'/storage/v1/object/public/tradein/'+path) : null; }).catch(function(){ return null; });
+  }
   // שליפת פרטי-רכב ממשרד התחבורה (data.gov.il)
   var DATASETS=['053cea08-09bc-40ec-8f7a-156f0677aff3','0866573c-40cd-4ca8-91d2-9dd2d7a492e5','bf9df4e2-d90d-4c0a-a400-19e15af8e95f'];
   $('lk').addEventListener('click',function(){
@@ -109,13 +132,23 @@
   $('qf').addEventListener('submit',function(e){
     e.preventDefault();
     if(!($('agent_name').value||'').trim()){$('formmsg').className='msg err';$('formmsg').textContent='חובה להזין שם סוכן';return;}
-    var btn=$('send'); btn.disabled=true; $('formmsg').className='msg muted'; $('formmsg').textContent='שולח…';
-    var body={car_make:$('car_make').value,car_model:$('car_model').value,car_trim:$('car_trim').value,car_year:$('car_year').value,car_hand:$('car_hand').value,car_km:$('car_km').value,car_color:$('car_color').value,car_fuel:$('car_fuel').value,car_plate:$('plate').value,car_description:$('car_description').value,agent_name:$('agent_name').value,branch:$('branch').value,agent_phone:$('agent_phone').value,agent_email:$('agent_email').value};
-    fetch(ENDPOINT,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
-      .then(function(r){return r.json();}).then(function(j){
-        if(j&&j.ok){ $('qf').style.display='none'; $('done').style.display='block'; }
-        else { btn.disabled=false; $('formmsg').className='msg err'; $('formmsg').textContent='שגיאה: '+((j&&j.error)||'נסו שוב'); }
-      }).catch(function(){ btn.disabled=false; $('formmsg').className='msg err'; $('formmsg').textContent='שגיאת רשת — נסו שוב'; });
+    var btn=$('send'); btn.disabled=true; $('formmsg').className='msg muted'; $('formmsg').textContent='מעלה קבצים…';
+    var lf=($('license_file').files||[])[0], cf=[].slice.call($('car_files').files||[]);
+    var licUrl=null, imgUrls=[], jobs=[];
+    if(lf) jobs.push(uploadFile(lf).then(function(u){ licUrl=u; }));
+    cf.forEach(function(f){ jobs.push(uploadFile(f).then(function(u){ if(u) imgUrls.push(u); })); });
+    Promise.all(jobs).then(function(){
+      $('formmsg').textContent='שולח…';
+      var body={car_make:$('car_make').value,car_model:$('car_model').value,car_trim:$('car_trim').value,car_year:$('car_year').value,car_hand:$('car_hand').value,car_km:$('car_km').value,car_color:$('car_color').value,car_fuel:$('car_fuel').value,car_plate:$('plate').value,car_description:$('car_description').value,
+        agent_name:$('agent_name').value,branch:$('branch').value,agent_phone:$('agent_phone').value,agent_email:$('agent_email').value,
+        customer_name:$('customer_name').value,customer_phone:$('customer_phone').value,customer_id:$('customer_id').value,
+        license_doc:licUrl,images:imgUrls};
+      fetch(ENDPOINT,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
+        .then(function(r){return r.json();}).then(function(j){
+          if(j&&j.ok){ $('qf').style.display='none'; $('done').style.display='block'; }
+          else { btn.disabled=false; $('formmsg').className='msg err'; $('formmsg').textContent='שגיאה: '+((j&&j.error)||'נסו שוב'); }
+        }).catch(function(){ btn.disabled=false; $('formmsg').className='msg err'; $('formmsg').textContent='שגיאת רשת — נסו שוב'; });
+    });
   });
   $('again').addEventListener('click',function(){ location.reload(); });
 })();
