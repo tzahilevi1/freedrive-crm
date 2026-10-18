@@ -478,23 +478,33 @@
     });
     //  ===== מסמכי-רכב (inventory.documents JSONB) =====
     if (car.id) {
+      //  מסמכי-רכב רגישים (רישיון/תשלומים/קבלות) → דלי פרטי lead-docs + signed URL (לא ציבורי).
       var docs = Array.isArray(car.documents) ? car.documents.slice() : [];
+      function safeHttp(u) { u = String(u || ''); return /^https?:\/\//i.test(u) ? u : null; }   // חוסם javascript:/data: (XSS)
       var paintDocs = function () {
         var el = $('iv_doclist'); if (!el) return;
-        el.innerHTML = docs.length ? docs.map(function (d, i) {
-          return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:5px 8px;background:var(--surface-2);border-radius:8px"><a href="' + esc(d.url) + '" target="_blank" rel="noopener" style="font-size:12.5px">📄 ' + esc(d.type || 'מסמך') + (d.name ? ' · ' + esc(d.name) : '') + '</a><button class="btn btn-ghost btn-sm" data-docdel="' + i + '" style="color:var(--danger)">🗑</button></div>';
-        }).join('') : '<span class="muted" style="font-size:12px">אין מסמכים עדיין</span>';
-        el.querySelectorAll('[data-docdel]').forEach(function (b) { b.addEventListener('click', function () { docs.splice(+b.dataset.docdel, 1); db.from('inventory').update({ documents: docs }).eq('id', car.id).then(function () { car.documents = docs.slice(); paintDocs(); }); }); });
+        if (!docs.length) { el.innerHTML = '<span class="muted" style="font-size:12px">אין מסמכים עדיין</span>'; return; }
+        Promise.all(docs.map(function (d) {
+          if (d.path) return db.storage.from('lead-docs').createSignedUrl(d.path, 3600).then(function (r) { return (r && r.data && r.data.signedUrl) || null; }, function () { return null; });
+          return Promise.resolve(safeHttp(d.url));   // תאימות-לאחור לרשומות ישנות עם url
+        })).then(function (urls) {
+          el.innerHTML = docs.map(function (d, i) {
+            var u = safeHttp(urls[i]);
+            var label = '📄 ' + esc(d.type || 'מסמך') + (d.name ? ' · ' + esc(d.name) : '');
+            var link = u ? '<a href="' + esc(u) + '" target="_blank" rel="noopener" style="font-size:12.5px">' + label + '</a>' : '<span class="muted" style="font-size:12.5px">' + label + ' (לא זמין)</span>';
+            return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:5px 8px;background:var(--surface-2);border-radius:8px">' + link + '<button class="btn btn-ghost btn-sm" data-docdel="' + i + '" style="color:var(--danger)">🗑</button></div>';
+          }).join('');
+          el.querySelectorAll('[data-docdel]').forEach(function (b) { b.addEventListener('click', function () { docs.splice(+b.dataset.docdel, 1); db.from('inventory').update({ documents: docs }).eq('id', car.id).then(function () { car.documents = docs.slice(); paintDocs(); }); }); });
+        });
       };
       paintDocs();
       if ($('iv_docfile')) $('iv_docfile').addEventListener('change', function () {
         var f = this.files && this.files[0]; if (!f) return; var type = $('iv_doctype').value;
         $('iv_docmsg').textContent = 'מעלה…';
-        var path = car.id + '/docs/' + Date.now() + '_' + Math.random().toString(36).slice(2, 6) + '.' + ((f.name.split('.').pop() || 'bin').toLowerCase());
-        db.storage.from('inventory').upload(path, f, { upsert: true, contentType: f.type || 'application/octet-stream' }).then(function (res) {
-          if (res.error) { $('iv_docmsg').textContent = 'שגיאה'; return; }
-          var url = db.storage.from('inventory').getPublicUrl(path).data.publicUrl;
-          docs.push({ type: type, url: url, name: f.name || '' });
+        var path = 'inventory/' + car.id + '/' + Date.now() + '_' + Math.random().toString(36).slice(2, 6) + '.' + ((f.name.split('.').pop() || 'bin').toLowerCase());
+        db.storage.from('lead-docs').upload(path, f, { upsert: true, contentType: f.type || 'application/octet-stream' }).then(function (res) {
+          if (res.error) { $('iv_docmsg').textContent = 'שגיאה: ' + res.error.message; return; }
+          docs.push({ type: type, path: path, name: f.name || '' });
           db.from('inventory').update({ documents: docs }).eq('id', car.id).then(function () { car.documents = docs.slice(); $('iv_docmsg').textContent = '✔ הועלה'; paintDocs(); });
         });
         this.value = '';

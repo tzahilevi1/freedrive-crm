@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>בקשת הצעת מחיר · יד 2</title>
+<meta name="robots" content="noindex">
+<style>
+  :root{--brand:#f3a71d;--brand-deep:#a57214;--ink:#1b2430;--muted:#6b7684;--line:#e6e9ef;--bg:#f5f7fa}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:"Segoe UI",Arial,sans-serif;background:var(--bg);color:var(--ink);line-height:1.6}
+  .wrap{max-width:640px;margin:0 auto;padding:18px 16px 60px}
+  .hero{background:linear-gradient(135deg,#1b2430,#2b3a4d);color:#fff;border-radius:18px;padding:26px 22px;text-align:center;margin-bottom:18px}
+  .hero h1{margin:0 0 6px;font-size:24px}
+  .hero p{margin:0;color:#c7d0db;font-size:14px}
+  .card{background:#fff;border:1px solid var(--line);border-radius:16px;padding:18px;margin-bottom:14px;box-shadow:0 2px 12px rgba(16,24,40,.05)}
+  .card h2{margin:0 0 12px;font-size:16px}
+  label{display:block;font-size:13px;color:var(--muted);margin:10px 0 4px;font-weight:600}
+  .req::after{content:" *";color:#c0392b}
+  input,select,textarea{width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:10px;font-size:15px;font-family:inherit;background:#fff}
+  input:focus,select:focus,textarea:focus{outline:none;border-color:var(--brand)}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .row{display:flex;gap:8px;align-items:flex-end}
+  .btn{background:var(--brand);color:#111;border:none;border-radius:12px;padding:13px 20px;font-size:16px;font-weight:800;cursor:pointer;width:100%}
+  .btn:disabled{opacity:.6;cursor:default}
+  .btn-sm{width:auto;padding:11px 14px;font-size:14px;white-space:nowrap}
+  .msg{font-size:13px;margin-top:6px;min-height:18px}
+  .ok{color:#1f8a4c}.err{color:#c0392b}
+  .done{text-align:center;padding:40px 20px}
+  .done .big{font-size:52px}
+  .muted{color:var(--muted);font-size:12.5px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="hero">
+    <h1>🚗 בקשת הצעת מחיר — יד 2</h1>
+    <p>מלאו את פרטי הרכב ופרטיכם, ונחזור אליכם עם הצעת מחיר.</p>
+  </div>
+
+  <form id="qf" autocomplete="off">
+    <div class="card">
+      <h2>פרטי הרכב</h2>
+      <label>מספר רכב — התחילו כאן (שליפה אוטומטית)</label>
+      <div class="row">
+        <input id="plate" inputmode="numeric" placeholder="מספר רכב (ספרות)">
+        <button type="button" class="btn btn-sm" id="lk">🔎 שלוף</button>
+      </div>
+      <div class="msg muted" id="lkmsg"></div>
+      <div class="grid">
+        <div><label>יצרן</label><input id="car_make"></div>
+        <div><label>דגם</label><input id="car_model"></div>
+        <div><label>רמת גימור</label><input id="car_trim"></div>
+        <div><label>שנה</label><input id="car_year" inputmode="numeric"></div>
+        <div><label>יד</label><select id="car_hand"><option value="">—</option><option>יד ראשונה</option><option>יד שנייה</option><option>יד שלישית</option><option>יד רביעית</option><option>יד חמישית ומעלה</option></select></div>
+        <div><label>ק"מ</label><input id="car_km" inputmode="numeric"></div>
+        <div><label>צבע</label><input id="car_color"></div>
+        <div><label>סוג דלק</label><select id="car_fuel"><option value="">—</option><option>בנזין</option><option>דיזל</option><option>היברידי</option><option>היברידי נטען</option><option>חשמלי</option><option>גז</option></select></div>
+      </div>
+      <label>הערות</label>
+      <textarea id="car_description" rows="2" placeholder="מצב הרכב, תוספות, בעיות ידועות…"></textarea>
+    </div>
+
+    <div class="card">
+      <h2>הפרטים שלכם</h2>
+      <div class="grid">
+        <div><label class="req">שם הסוכן</label><input id="agent_name" required></div>
+        <div><label>סניף</label><input id="branch" placeholder="שם הסניף"></div>
+        <div><label>טלפון</label><input id="agent_phone" inputmode="tel"></div>
+        <div><label>מייל (לא חובה)</label><input id="agent_email" type="email"></div>
+      </div>
+    </div>
+
+    <button type="submit" class="btn" id="send">📤 שלח בקשת הצעת מחיר</button>
+    <div class="msg" id="formmsg"></div>
+  </form>
+
+  <div id="done" class="done card" style="display:none">
+    <div class="big">✅</div>
+    <h2 style="margin:10px 0 4px">הבקשה נשלחה בהצלחה!</h2>
+    <p class="muted">נחזור אליכם עם הצעת מחיר בהקדם.</p>
+    <button class="btn btn-sm" id="again" style="margin-top:10px">שליחת בקשה נוספת</button>
+  </div>
+</div>
+
+<script>
+(function(){
+  var ENDPOINT='https://xppsvottiwbjsjlusief.supabase.co/functions/v1/quote-intake';
+  var $=function(id){return document.getElementById(id);};
+  // שליפת פרטי-רכב ממשרד התחבורה (data.gov.il)
+  var DATASETS=['053cea08-09bc-40ec-8f7a-156f0677aff3','0866573c-40cd-4ca8-91d2-9dd2d7a492e5','bf9df4e2-d90d-4c0a-a400-19e15af8e95f'];
+  $('lk').addEventListener('click',function(){
+    var p=($('plate').value||'').replace(/\D/g,''); if(!p){$('lkmsg').textContent='הזינו מספר רכב';return;}
+    var b=this; b.disabled=true; $('lkmsg').className='msg muted'; $('lkmsg').textContent='מחפש…';
+    var i=0;
+    (function tryOne(){
+      if(i>=DATASETS.length){b.disabled=false;$('lkmsg').className='msg err';$('lkmsg').textContent='לא נמצא רכב';return;}
+      fetch('https://data.gov.il/api/3/action/datastore_search?resource_id='+DATASETS[i]+'&filters='+encodeURIComponent(JSON.stringify({mispar_rechev:+p})))
+        .then(function(r){return r.json();}).then(function(j){
+          var rec=(j&&j.result&&j.result.records||[])[0];
+          if(rec){ b.disabled=false;
+            $('car_make').value=(rec.tozeret_nm||'').replace(/\s+/g,' ').trim(); $('car_model').value=rec.kinuy_mishari||rec.degem_nm||''; $('car_trim').value=rec.ramat_gimur||''; $('car_year').value=rec.shnat_yitzur||''; $('car_color').value=rec.tzeva_rechev||'';
+            if(rec.sug_delek_nm){var f=$('car_fuel');for(var k=0;k<f.options.length;k++)if(f.options[k].value===rec.sug_delek_nm){f.value=rec.sug_delek_nm;break;}}
+            $('lkmsg').className='msg ok'; $('lkmsg').textContent='✔ נשלפו פרטי הרכב — השלימו יד, ק"מ ופרטיכם';
+          } else { i++; tryOne(); }
+        }).catch(function(){ i++; tryOne(); });
+    })();
+  });
+  $('qf').addEventListener('submit',function(e){
+    e.preventDefault();
+    if(!($('agent_name').value||'').trim()){$('formmsg').className='msg err';$('formmsg').textContent='חובה להזין שם סוכן';return;}
+    var btn=$('send'); btn.disabled=true; $('formmsg').className='msg muted'; $('formmsg').textContent='שולח…';
+    var body={car_make:$('car_make').value,car_model:$('car_model').value,car_trim:$('car_trim').value,car_year:$('car_year').value,car_hand:$('car_hand').value,car_km:$('car_km').value,car_color:$('car_color').value,car_fuel:$('car_fuel').value,car_plate:$('plate').value,car_description:$('car_description').value,agent_name:$('agent_name').value,branch:$('branch').value,agent_phone:$('agent_phone').value,agent_email:$('agent_email').value};
+    fetch(ENDPOINT,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
+      .then(function(r){return r.json();}).then(function(j){
+        if(j&&j.ok){ $('qf').style.display='none'; $('done').style.display='block'; }
+        else { btn.disabled=false; $('formmsg').className='msg err'; $('formmsg').textContent='שגיאה: '+((j&&j.error)||'נסו שוב'); }
+      }).catch(function(){ btn.disabled=false; $('formmsg').className='msg err'; $('formmsg').textContent='שגיאת רשת — נסו שוב'; });
+  });
+  $('again').addEventListener('click',function(){ location.reload(); });
+})();
+</script>
+</body>
+</html>
