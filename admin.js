@@ -744,7 +744,9 @@
   }
   function applyRole(role) {
     $('nav').querySelectorAll('.nav-item, .nav-group-label').forEach(function (it) {
-      if (it.classList.contains('nav-group-label')) { it.style.display = role === 'admin' ? '' : 'none'; return; }
+      //  כותרת-הקבוצה "תקשורת ומערכת" היא טוגל מתקפל — מוצגת לכולם (גם לא-אדמין
+      //  רואה תחתיה את הפריטים המותרים לו, כמו הצעות-מחיר/מסמכים).
+      if (it.classList.contains('nav-group-label')) { it.style.display = (it.id === 'sysGroupToggle' || role === 'admin') ? '' : 'none'; return; }
       //  פריט סופר-אדמין (ניהול ארגונים) — רק לבעל הפלטפורמה, לא למנהל ארגון רגיל.
       if (it.dataset.super) { it.style.display = (window.C2B && window.C2B.isSuper) ? '' : 'none'; return; }
       //  פריט שמסומן data-senior הוא תצוגת ניהול בתוך תפריט שפתוח לכולם
@@ -810,6 +812,15 @@
   });
   // activity screen now lives in the header (next to the bell)
   $('activityBtn').addEventListener('click', function () { go('activity'); });
+  if ($('auditBtn')) $('auditBtn').addEventListener('click', function () { go('audit'); });
+  //  קבוצת "תקשורת ומערכת" מתקפלת — חץ מודגש פותח/סוגר; המצב נזכר (localStorage).
+  (function () {
+    var tog = $('sysGroupToggle'), body = $('sysGroupBody'), arr = $('sysGroupArrow'); if (!tog || !body) return;
+    var open = false; try { open = localStorage.getItem('fdSysGroupOpen') === '1'; } catch (e) {}
+    function apply() { body.style.display = open ? '' : 'none'; if (arr) arr.textContent = open ? '▾' : '▸'; }
+    apply();
+    tog.addEventListener('click', function () { open = !open; try { localStorage.setItem('fdSysGroupOpen', open ? '1' : '0'); } catch (e) {} apply(); });
+  })();
 
   // ---------- מחשבון מימון רכב (הלוואת בלון) — פופאפ מההדר ----------
   var FINANCE_COMPANIES = [
@@ -930,6 +941,8 @@
       ['settings:quick', '\ud83d\udcac הודעות מהירות'],
       ['settings:phone', '\u260e\ufe0f טלפוניה'],
       ['settings:actions', '\u26a1 פעולות'],
+      ['automations', '🤖 אוטומציות'],
+      ['orgs', '🏢 ארגונים'],
       ['branches', '\ud83c\udfe2 סניפים'],
       ['ctemplates', '\ud83d\udcdc תבניות הסכמים']
     ]
@@ -945,7 +958,7 @@
     var g = subGroup(nav);
     if (!g) { el.style.display = 'none'; el.innerHTML = ''; return; }
     el.style.display = '';
-    el.innerHTML = SUBTABS[g].filter(function (t) { return navAllowed(t[0], (window.C2B && window.C2B.role) || ''); })
+    el.innerHTML = SUBTABS[g].filter(function (t) { if (t[0] === 'orgs' && !(window.C2B && window.C2B.isSuper)) return false; return navAllowed(t[0], (window.C2B && window.C2B.role) || ''); })
       .map(function (t) {
         return '<button data-sub="' + t[0] + '"' + (nav === t[0] ? ' class="active"' : '') + '>' + t[1] + '</button>';
       }).join('');

@@ -307,6 +307,14 @@
      בפרויקט yad2; מסך הקריאה (C2B_renderYad2Stock) בשאר המותגים — קורא חי
      מ-yad2 (published+available), כך שמכירה/הוספה מתעדכנת מיד בכולם. */
   var INV_ST = { intake: ['קליטה', '#8b6f2e'], available: ['זמין', '#1f8a4c'], reserved: ['שמור', '#b8860b'], sold: ['נמכר', '#c0392b'], hidden: ['מוסתר', '#6b7280'] };
+  //  תיאור קצר לכל סטטוס מלאי — למקרא ול-tooltip. כולם בשימוש (כל אחד מצב-ניהול שונה):
+  var INV_DESC = {
+    intake: 'נקלט למערכת, בהשלמת פרטים — לא מוצג באתר',
+    available: 'מפורסם ומוצג באתרים — זמין למכירה',
+    reserved: 'שמור ללקוח — זמנית לא זמין לאחרים',
+    sold: 'נמכר — ירד מהאתר, לא מוצג לציבור',
+    hidden: 'הוסתר ידנית — לא מוצג באתר (בלי למחוק)'
+  };
   function invImgs(car) { try { return Array.isArray(car.images) ? car.images : JSON.parse(car.images || '[]'); } catch (e) { return []; } }
   function invCover(car) { var im = invImgs(car); return im.length ? im[Math.min(car.cover_idx || 0, im.length - 1)] : null; }
   function invTitle(car) { return [car.make, car.model, car.year].filter(Boolean).join(' ') || 'רכב ללא שם'; }
@@ -318,7 +326,10 @@
       if (r.error) return view('<div class="card"><h3>מלאי יד2</h3><p class="muted">שגיאה: ' + esc(r.error.message) + '</p></div>');
       var rows = r.data || [], counts = {};
       rows.forEach(function (c) { counts[c.status] = (counts[c.status] || 0) + 1; });
-      function chip(k, label) { return '<button class="btn btn-ghost btn-sm' + ((statusFilter || '') === k ? ' active' : '') + '" data-if="' + k + '">' + label + ' (' + (k ? (counts[k] || 0) : rows.length) + ')</button>'; }
+      function chip(k, label) { return '<button class="btn btn-ghost btn-sm' + ((statusFilter || '') === k ? ' active' : '') + '" data-if="' + k + '"' + (k && INV_DESC[k] ? ' title="' + esc(INV_DESC[k]) + '"' : '') + '>' + label + ' <span class="muted" style="font-size:11px">(' + (k ? (counts[k] || 0) : rows.length) + ')</span></button>'; }
+      //  מקרא סטטוסים — כדי שיובן מה כל שלב (עיגול-צבע + תיאור קצר).
+      var invLegend = '<div class="muted" style="font-size:11.5px;margin:-4px 0 12px;line-height:1.9;display:flex;gap:14px;flex-wrap:wrap">' +
+        ['intake', 'available', 'reserved', 'sold', 'hidden'].map(function (k) { return '<span><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:' + INV_ST[k][1] + ';margin-inline-end:5px"></span><b>' + esc(INV_ST[k][0]) + '</b> — ' + esc(INV_DESC[k]) + '</span>'; }).join('') + '</div>';
       var shown = statusFilter ? rows.filter(function (c) { return c.status === statusFilter; }) : rows;
       var cards = shown.map(function (c) {
         var cov = invCover(c), st = INV_ST[c.status] || ['—', '#888'];
@@ -333,7 +344,7 @@
       }).join('');
       view('<div class="row-between" style="margin-bottom:12px;align-items:center;flex-wrap:wrap;gap:8px"><h2 style="margin:0">🚗 מלאי יד2</h2><button class="btn btn-sm" id="invAdd">➕ הוסף רכב</button></div>' +
         '<div id="invEdit"></div>' +
-        '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">' + chip('', 'הכל') + chip('intake', 'קליטה') + chip('available', 'זמין') + chip('reserved', 'שמור') + chip('sold', 'נמכר') + chip('hidden', 'מוסתר') + '</div>' +
+        '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">' + chip('', 'הכל') + chip('intake', 'קליטה') + chip('available', 'זמין') + chip('reserved', 'שמור') + chip('sold', 'נמכר') + chip('hidden', 'מוסתר') + '</div>' + invLegend +
         '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px">' + (cards || '<div class="empty">אין רכבים בסטטוס זה</div>') + '</div>');
       $('invAdd').addEventListener('click', function () { openInvEdit(null); });
       $('view').querySelectorAll('[data-if]').forEach(function (b) { b.addEventListener('click', function () { window.C2B_renderInventory(b.dataset.if || ''); }); });
