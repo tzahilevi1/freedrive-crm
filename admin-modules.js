@@ -889,11 +889,20 @@
       if ($('tnd_saveQuote')) $('tnd_saveQuote').addEventListener('click', function () {
         var v = ($('tnd_ourquote').value || '').trim(), q = v === '' ? null : Number(v);
         var lp = ($('tnd_listprice').value || '').trim(), lpv = lp === '' ? null : Number(lp);
+        var prevQuote = t.our_quote;   // לזהות אם ההצעה חדשה/שונה → מייל למנהל
         var btn = this; btn.disabled = true; $('tnd_quoteMsg').style.color = 'var(--muted)'; $('tnd_quoteMsg').textContent = 'שומר…';
         db.from('tenders').update({ our_quote: q, list_price: lpv }).eq('id', t.id).then(function (r) {
           btn.disabled = false;
           if (r.error) { $('tnd_quoteMsg').style.color = 'var(--danger)'; $('tnd_quoteMsg').textContent = 'שגיאה: ' + esc(r.error.message); return; }
           t.our_quote = q; t.list_price = lpv; $('tnd_quoteMsg').style.color = 'var(--ok)'; $('tnd_quoteMsg').textContent = '✔ נשמר';
+          //  שלב 1 — ברגע שניתנה/שונתה הצעת-מחיר, מנהל-הסניף מקבל מייל (לשליחה ידנית לסוכנים).
+          if (q != null && Number(q) !== Number(prevQuote)) {
+            $('tnd_quoteMsg').textContent = '✔ נשמר · שולח למנהל…';
+            db.rpc('tender_quote_notify', { p_tender_id: t.id }).then(function (nr) {
+              if (nr && nr.data && nr.data.ok) $('tnd_quoteMsg').textContent = '✔ נשמר · נשלח מייל למנהל (' + (nr.data.sent || 0) + ')';
+              else $('tnd_quoteMsg').textContent = '✔ נשמר (המייל למנהל לא נשלח)';
+            }, function () { $('tnd_quoteMsg').textContent = '✔ נשמר (המייל למנהל לא נשלח)'; });
+          }
         });
       });
       //  העלאת תמונת-מחירון (לדלי tradein הציבורי) — אופציונלי.
