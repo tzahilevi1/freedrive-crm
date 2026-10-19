@@ -3427,7 +3427,10 @@
       //  שמירה-אוטומטית: ברגע ש"יצירת הסכם לחתימה" נפתח, ההסכם נשמר מיד (contract_html) →
       //  has_contract הופך ל-✅, ולא ניתן יותר לשלוח קישור-חתימה עם הסכם ריק (באג #4752).
       //  רק לעסקה קיימת שאינה חתומה, ולא בריענון שאחרי שמירה (justSaved) כדי לא ליצור לולאה.
-      if (deal.id && !deal.signature && !justSaved) {
+      //  ‏deal._sigLoaded: contractViewInner קורא ל-contractView פעם שנייה אחרי טעינת החתימה
+      //  (3452-3458); בלי התנאי הזה ה-auto-save רץ בשתי הקריאות ושתיהן קוראות wasContract=false
+      //  (מרוץ) → "נוצר הסכם" + קידום-סטטוס מתועדים פעמיים. התנאי מריץ אותו רק במעבר-הרינדור.
+      if (deal.id && !deal.signature && !justSaved && deal._sigLoaded) {
         var _autoHtml = contractHTML(deal, null);
         if (_autoHtml && _autoHtml.length > 50) {
           db.from('deals').select('has_contract').eq('id', deal.id).single().then(function (pre) {
