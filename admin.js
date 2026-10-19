@@ -383,11 +383,19 @@
     return out;
   };
 
-  // רשימת המותגים-השיווקיים (מ-brand_companies) — לסינון דוחות "לפי מותג" (רק המותגים שלנו, לא יצרנים)
+  // רשימת המותגים-השיווקיים — לבוררים/סינון "לפי מותג" (רק המותגים שלנו, לא יצרנים).
+  //  איחוד שני המקורות (brand_companies + field_options field='brand') כדי שהבוררים
+  //  יציגו תמיד את **כל** המותגים, גם אם מותג נוסף רק לאחד מהם (מונע חוסר-התאמה).
   window.C2B.marketingBrands = [];
   function loadBrandCompanies() {
-    db.from('brand_companies').select('brand').then(function (r) {
-      window.C2B.marketingBrands = (r.data || []).map(function (o) { return o.brand; });
+    Promise.all([
+      db.from('brand_companies').select('brand'),
+      db.from('field_options').select('value').eq('field', 'brand')
+    ]).then(function (res) {
+      var seen = {}, out = [];
+      ((res[0] && res[0].data) || []).forEach(function (o) { if (o.brand && !seen[o.brand]) { seen[o.brand] = 1; out.push(o.brand); } });
+      ((res[1] && res[1].data) || []).forEach(function (o) { if (o.value && !seen[o.value]) { seen[o.value] = 1; out.push(o.value); } });
+      window.C2B.marketingBrands = out.sort(function (a, b) { return String(a).localeCompare(String(b), 'he'); });
     }, function () {});
   }
 
