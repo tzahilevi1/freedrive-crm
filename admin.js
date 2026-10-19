@@ -8016,9 +8016,15 @@
       db.from('profiles').select('user_id,full_name,role,wa_number_id').eq('active', true).order('full_name'),
       db.from('wa_threads').select('id', { count: 'exact', head: true }),
       db.from('wa_outbox').select('id', { count: 'exact', head: true }).eq('status', 'queued'),
+      db.from('org_integrations').select('config').eq('platform', 'heyy').maybeSingle(),
     ]).then(function (r) {
       var nums = r[0].data || [], profs = r[1].data || [];
       var nThreads = r[2].count || 0, nQueued = r[3].count || 0;
+      var heyOid = (window.C2B && window.C2B.orgId) || 1;
+      var heyCfg = (r[4] && r[4].data && r[4].data.config) || {};
+      var heySecret = heyCfg.webhook_secret || '';
+      var heyHasKey = !!heyCfg.api_key;
+      var heyUrl = SUPABASE_URL + '/functions/v1/heyy-webhook/' + (heySecret || '<הסוד>');
       var byNum = {}; nums.forEach(function (n) { byNum[n.id] = n; });
       var rows = nums.map(function (n) {
         var owners = profs.filter(function (x) { return x.wa_number_id === n.id; })
@@ -8043,11 +8049,15 @@
 
         '<div class="card"><h3>\ud83d\udd0c \u05d4\u05d7\u05d9\u05d1\u05d5\u05e8 \u05dc-Heyy</h3>' +
           '<div class="table-scroll"><table><tbody>' +
-          '<tr><td style="width:180px">\u05db\u05ea\u05d5\u05d1\u05ea \u05d4\u05d5\u05d5\u05d1\u05d4\u05d5\u05e7</td><td class="ltr"><bdi style="font-size:12px">' +
-            esc(SUPABASE_URL + '/functions/v1/heyy-webhook/<\u05d4\u05e1\u05d5\u05d3>') + '</bdi>' +
-            '<div class="muted" style="font-size:11.5px">\u05e0\u05e8\u05e9\u05de\u05ea \u05d1-app.heyy.io \u2190 Settings \u2190 Webhooks. \u05d0\u05d9\u05e8\u05d5\u05e2\u05d9\u05dd: Message received + Message sent</div></td></tr>' +
-          '<tr><td>\u05de\u05e4\u05ea\u05d7 API</td><td><span id="heyKeyState" class="muted">\u05d1\u05d5\u05d3\u05e7\\u2026</span>' +
-            '<div class="muted" style="font-size:11.5px">\u05e0\u05e9\u05de\u05e8 \u05d1-Supabase \u05db-HEYY_API_KEY. \u05e0\u05d5\u05e6\u05e8 \u05d1-app.heyy.io/settings/api-keys</div></td></tr>' +
+          '<tr><td style="width:180px">\u05db\u05ea\u05d5\u05d1\u05ea \u05d4\u05d5\u05d5\u05d4\u05d5\u05e7</td><td>' +
+            (heySecret
+              ? '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><input class="inp ltr" id="heyHookUrl" readonly value="' + esc(heyUrl) + '" style="flex:1;min-width:220px;font-size:12px" onclick="this.select()"><button class="btn btn-sm" id="heyHookCopy">\u05d4\u05e2\u05ea\u05e7</button></div>'
+              : '<div class="muted" style="font-size:12px">\u05e2\u05d3\u05d9\u05d9\u05df \u05dc\u05d0 \u05e0\u05d5\u05e6\u05e8 \u05e1\u05d5\u05d3. <button class="btn btn-sm" id="heyHookGen">\ud83d\udd10 \u05e6\u05d5\u05e8 \u05e1\u05d5\u05d3 \u05d5\u05db\u05ea\u05d5\u05d1\u05ea</button></div>') +
+            '<div class="muted" style="font-size:11.5px;margin-top:4px">\u05d4\u05d3\u05d1\u05e7 \u05d0\u05ea \u05d4\u05db\u05ea\u05d5\u05d1\u05ea \u05d4\u05de\u05dc\u05d0\u05d4 \u05d1-app.heyy.io \u2190 Settings \u2190 Webhooks. \u05d0\u05d9\u05e8\u05d5\u05e2\u05d9\u05dd: Message received + Message sent.' +
+            (heySecret ? ' <a href="#" id="heyHookRot">\u05e1\u05d5\u05d1\u05d1 \u05e1\u05d5\u05d3</a>' : '') + '</div></td></tr>' +
+          '<tr><td>\u05de\u05e4\u05ea\u05d7 API</td><td>' +
+            '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><input class="inp ltr" id="heyApiKey" type="password" placeholder="' + (heyHasKey ? '\u05de\u05d5\u05d2\u05d3\u05e8 \u2713 \u2014 \u05d4\u05d6\u05df \u05de\u05d7\u05d3\u05e9 \u05dc\u05d4\u05d7\u05dc\u05e4\u05d4' : '\u05d4\u05d3\u05d1\u05e7 \u05db\u05d0\u05df \u05d0\u05ea \u05de\u05e4\u05ea\u05d7 \u05d4-API \u05de-HEYY') + '" style="flex:1;min-width:220px"><button class="btn btn-sm" id="heyKeySave">\ud83d\udcbe \u05e9\u05de\u05d5\u05e8</button> <span id="heyKeyState" class="muted" style="font-size:12px">\u05d1\u05d5\u05d3\u05e7\u2026</span></div>' +
+            '<div class="muted" style="font-size:11.5px;margin-top:4px">\u05e0\u05d5\u05e6\u05e8 \u05d1-app.heyy.io/settings/api-keys. \u05e0\u05e9\u05de\u05e8 \u05d1\u05d0\u05e8\u05d2\u05d5\u05df (\u05d2\u05d9\u05e9\u05ea-\u05de\u05e0\u05d4\u05dc \u05d1\u05dc\u05d1\u05d3).</div></td></tr>' +
           '<tr><td>\u05e9\u05e2\u05d5\u05df \u05d4\u05ea\u05d6\u05de\u05d5\u05df</td><td>\u05e8\u05e5 \u05db\u05dc \u05d3\u05e7\u05d4 \u00b7 ' + nQueued + ' \u05de\u05de\u05ea\u05d9\u05e0\u05d5\u05ea \u05dc\u05e9\u05dc\u05d9\u05d7\u05d4</td></tr>' +
           '<tr><td>\u05e9\u05d9\u05d7\u05d5\u05ea \u05d1\u05de\u05e2\u05e8\u05db\u05ea</td><td>' + nThreads + '</td></tr>' +
           '</tbody></table></div>' +
@@ -8062,6 +8072,45 @@
         if (d.ok) { el.style.color = 'var(--ok)'; el.textContent = '\u25cf \u05de\u05d5\u05d2\u05d3\u05e8 \u05d5\u05e2\u05d5\u05d1\u05d3'; }
         else { el.style.color = 'var(--danger)'; el.textContent = '\u25cb ' + (d.error || '\u05dc\u05d0 \u05e0\u05d1\u05d3\u05e7'); }
       });
+
+      // ---- \u05e0\u05d9\u05d4\u05d5\u05dc \u05d4\u05d7\u05d9\u05d1\u05d5\u05e8 \u05dc-Heyy: \u05e1\u05d5\u05d3-\u05d4\u05d5\u05d5\u05d4\u05d5\u05e7 + \u05de\u05e4\u05ea\u05d7 API (\u05e0\u05e9\u05de\u05e8\u05d9\u05dd \u05d1-org_integrations, \u05d2\u05d9\u05e9\u05ea-\u05de\u05e0\u05d4\u05dc) ----
+      function heySaveCfg(patch, done) {
+        var merged = Object.assign({}, heyCfg, patch);
+        db.from('org_integrations').upsert({ org_id: heyOid, platform: 'heyy', config: merged, connected: true, updated_at: new Date().toISOString() }, { onConflict: 'org_id,platform' }).then(function (u) { if (!(u && u.error)) heyCfg = merged; done && done(u); });
+      }
+      function heyRandSecret() {
+        var a = new Uint8Array(24);
+        if (window.crypto && window.crypto.getRandomValues) window.crypto.getRandomValues(a);
+        else for (var i = 0; i < a.length; i++) a[i] = Math.floor(Math.random() * 256);
+        return Array.prototype.map.call(a, function (b) { return ('0' + b.toString(16)).slice(-2); }).join('');
+      }
+      if ($('heyHookCopy')) $('heyHookCopy').onclick = function () {
+        var inp = $('heyHookUrl'); if (!inp) return; inp.select();
+        try { navigator.clipboard.writeText(inp.value); } catch (e) { try { document.execCommand('copy'); } catch (e2) {} }
+        var b = this; b.textContent = '\u05d4\u05d5\u05e2\u05ea\u05e7 \u2713'; setTimeout(function () { b.textContent = '\u05d4\u05e2\u05ea\u05e7'; }, 1500);
+      };
+      if ($('heyHookGen')) $('heyHookGen').onclick = function () {
+        this.disabled = true; this.textContent = '\u05d9\u05d5\u05e6\u05e8\u2026';
+        heySaveCfg({ webhook_secret: heyRandSecret() }, function () { renderHeyCfg(); });
+      };
+      if ($('heyHookRot')) $('heyHookRot').onclick = function (e) {
+        e.preventDefault();
+        if (!confirm('\u05dc\u05e1\u05d5\u05d1\u05d1 \u05d0\u05ea \u05d4\u05e1\u05d5\u05d3? \u05d4\u05db\u05ea\u05d5\u05d1\u05ea \u05d4\u05d9\u05e9\u05e0\u05d4 \u05ea\u05e4\u05e1\u05d9\u05e7 \u05dc\u05e2\u05d1\u05d5\u05d3 \u2014 \u05ea\u05e6\u05d8\u05e8\u05da \u05dc\u05e2\u05d3\u05db\u05df \u05d0\u05ea \u05d4\u05db\u05ea\u05d5\u05d1\u05ea \u05d4\u05d7\u05d3\u05e9\u05d4 \u05d1-HEYY.')) return;
+        heySaveCfg({ webhook_secret: heyRandSecret() }, function () { renderHeyCfg(); });
+      };
+      if ($('heyKeySave')) $('heyKeySave').onclick = function () {
+        var v = (($('heyApiKey') || {}).value || '').trim(), st = $('heyKeyState');
+        if (!v) { if (st) { st.style.color = 'var(--warn)'; st.textContent = '\u05d4\u05d3\u05d1\u05e7 \u05de\u05e4\u05ea\u05d7 \u05e7\u05d5\u05d3\u05dd'; } return; }
+        if (st) { st.style.color = 'var(--muted)'; st.textContent = '\u05e9\u05d5\u05de\u05e8 \u05d5\u05d1\u05d5\u05d3\u05e7\u2026'; }
+        heySaveCfg({ api_key: v }, function (u) {
+          if (u && u.error) { if (st) { st.style.color = 'var(--danger)'; st.textContent = '\u05e9\u05d2\u05d9\u05d0\u05d4: ' + u.error.message; } return; }
+          db.functions.invoke('heyy-send', { body: { action: 'templates' } }).then(function (rr) {
+            var d = rr.data || {}; if (!st) return;
+            if (d.ok) { st.style.color = 'var(--ok)'; st.textContent = '\u25cf \u05de\u05d5\u05d2\u05d3\u05e8 \u05d5\u05e2\u05d5\u05d1\u05d3'; if ($('heyApiKey')) $('heyApiKey').value = ''; }
+            else { st.style.color = 'var(--danger)'; st.textContent = '\u25cb ' + (d.error || '\u05dc\u05d0 \u05e2\u05d1\u05e8 \u05d0\u05d9\u05de\u05d5\u05ea'); }
+          });
+        });
+      };
 
       if ($('heyAddNum')) $('heyAddNum').onclick = function () { heyNumBox(null); };
       host.querySelectorAll('[data-numedit]').forEach(function (b) {
