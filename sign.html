@@ -51,23 +51,38 @@
 <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.7/dist/purify.min.js" integrity="sha384-XQqX/4yiUGu+oyr87jvWzRuqBUK/adrY0DunhL+tID9m/9dwSpV8h9Fk/Sg6ifVQ" crossorigin="anonymous"></script>
 <script>
 (function () {
-  var db = window.supabase.createClient(
-    'https://gfwopgoydfqiouratcpc.supabase.co',
-    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdmd29wZ295ZGZxaW91cmF0Y3BjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc2NDg0NTUsImV4cCI6MjEwMzIyNDQ1NX0.ukPDUGS7KjYgD7jAhzSqAEKo_eJ8gQwsHMqTBGXeux8'
-  );
+  //  לקוח-מאסטר לפתירת-ארגון (fleet_resolve); db מוחלף לפרויקט-הארגון לפי ?o=slug.
+  //  כך קישור-חתימה מכל ארגון פונה לפרויקט הנכון וממותג בשמו — ולא תמיד "פרי דרייב".
+  var MASTER = window.supabase.createClient('https://gfwopgoydfqiouratcpc.supabase.co', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdmd29wZ295ZGZxaW91cmF0Y3BjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc2NDg0NTUsImV4cCI6MjEwMzIyNDQ1NX0.ukPDUGS7KjYgD7jAhzSqAEKo_eJ8gQwsHMqTBGXeux8');
+  var db = MASTER;
   function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
   function nis(n){return n==null||n===''?'—':'₪'+Number(n).toLocaleString('en-US');}
-  var q=new URLSearchParams(location.search), D=q.get('d'), T=q.get('t');
+  var q=new URLSearchParams(location.search), O=q.get('o'), D=q.get('d'), T=q.get('t');
   var content=document.getElementById('content');
   function fail(t){content.innerHTML='<div class="card big-ok"><div class="em">🔗</div><h3 style="justify-content:center">'+esc(t)+'</h3></div>';}
 
+  function applyBrand(name,branding){
+    if(name){var h=document.querySelector('.card h1'); if(h)h.textContent=name; window._brandName=name; try{document.title=name+' · חתימה על הסכם';}catch(e){}}
+    if(branding&&branding.color){try{document.documentElement.style.setProperty('--brand',branding.color);}catch(e){}}
+    if(branding&&branding.logo){window._brandLogo=branding.logo;}
+  }
+  function loadContract(){
+    db.rpc('get_contract',{p_deal:D,p_token:T}).then(function(r){
+      if(r.error||!r.data||!r.data.ok){fail('הקישור אינו תקין או שפג תוקפו.');return;}
+      var d=r.data;
+      if(d.signed){content.innerHTML='<div class="card big-ok"><div class="em">✅</div><h3 style="justify-content:center;color:var(--ok)">ההסכם כבר נחתם</h3><p class="sub">תודה!</p></div>';return;}
+      render(d);
+    });
+  }
+
   if(!D||!T){fail('קישור לא תקין.');return;}
-  db.rpc('get_contract',{p_deal:D,p_token:T}).then(function(r){
-    if(r.error||!r.data||!r.data.ok){fail('הקישור אינו תקין או שפג תוקפו.');return;}
-    var d=r.data;
-    if(d.signed){content.innerHTML='<div class="card big-ok"><div class="em">✅</div><h3 style="justify-content:center;color:var(--ok)">ההסכם כבר נחתם</h3><p class="sub">תודה!</p></div>';return;}
-    render(d);
-  });
+  if(O && O!=='freedrive'){
+    MASTER.rpc('fleet_resolve',{p_slug:O}).then(function(r){
+      var cfg=r&&r.data;
+      if(cfg&&cfg.supabase_url&&cfg.anon_key){ db=window.supabase.createClient(cfg.supabase_url,cfg.anon_key); applyBrand(cfg.name,cfg.branding); }
+      loadContract();
+    },function(){ loadContract(); });
+  } else { loadContract(); }
 
   function row(k,v){return '<tr><td class="k">'+k+'</td><td class="v">'+v+'</td></tr>';}
   function clausesHtml(d){

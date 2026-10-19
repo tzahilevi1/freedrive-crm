@@ -3569,7 +3569,9 @@
         if (signUrl) return cb(signUrl);
         db.rpc('make_sign_token', { p_deal: deal.id }).then(function (r) {
           if (r.error || !r.data) { alert('שגיאה ביצירת קישור: ' + ((r.error && r.error.message) || '')); return; }
-          signUrl = signBase + '?d=' + deal.id + '&t=' + r.data; cb(signUrl);
+          //  ‏?o=slug — כדי ש-sign.html יפנה לפרויקט-הארגון הנכון (לא רק המאסטר) וימתג בשמו.
+          var _oslug = (window.__fleetCfg && window.__fleetCfg.slug) || '';
+          signUrl = signBase + (_oslug ? '?o=' + encodeURIComponent(_oslug) + '&' : '?') + 'd=' + deal.id + '&t=' + r.data; cb(signUrl);
         });
       }
       var linkMsg = $('cLinkMsg');
