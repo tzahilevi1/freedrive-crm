@@ -8041,7 +8041,8 @@
 
       host.innerHTML =
         '<div class="card"><div class="row-between"><h3 style="margin:0">\ud83d\udfe2 \u05de\u05e1\u05e4\u05e8\u05d9 \u05d5\u05d5\u05d8\u05e1\u05d0\u05e4</h3>' +
-          '<button class="btn btn-ghost btn-sm" id="heyAddNum">\u2795 \u05de\u05e1\u05e4\u05e8</button></div>' +
+          '<div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn btn-ghost btn-sm" id="heyPullChans">\ud83d\udd04 \u05e9\u05dc\u05d5\u05e3 \u05de-HEYY</button>' +
+          '<button class="btn btn-ghost btn-sm" id="heyAddNum">\u2795 \u05de\u05e1\u05e4\u05e8</button></div></div>' +
           '<div class="table-scroll" style="margin-top:10px"><table><thead><tr>' +
           '<th>\u05e9\u05dd</th><th>\u05de\u05e1\u05e4\u05e8</th><th>\u05de\u05e6\u05d1</th><th>\u05de\u05e9\u05d5\u05d9\u05da \u05dc</th><th></th>' +
           '</tr></thead><tbody id="heyNums">' + (rows || '<tr><td colspan="5" class="empty">\u05d0\u05d9\u05df \u05de\u05e1\u05e4\u05e8\u05d9\u05dd</td></tr>') + '</tbody></table></div>' +
@@ -8067,9 +8068,9 @@
           '</div><div id="heyOut" style="margin-top:12px"></div></div>';
 
       //  \u05de\u05e6\u05d1 \u05d4\u05de\u05e4\u05ea\u05d7 \u05e0\u05d1\u05d3\u05e7 \u05d3\u05e8\u05da \u05e7\u05e8\u05d9\u05d0\u05d4 \u05d0\u05de\u05d9\u05ea\u05d9\u05ea \u05d5\u05dc\u05d0 \u05de\u05d5\u05e6\u05d2 \u05e2\u05e8\u05db\u05d5
-      db.functions.invoke('heyy-send', { body: { action: 'templates' } }).then(function (rr) {
+      db.functions.invoke('heyy-send', { body: { action: 'channels' } }).then(function (rr) {
         var d = rr.data || {}, el = $('heyKeyState'); if (!el) return;
-        if (d.ok) { el.style.color = 'var(--ok)'; el.textContent = '\u25cf \u05de\u05d5\u05d2\u05d3\u05e8 \u05d5\u05e2\u05d5\u05d1\u05d3'; }
+        if (d.ok) { el.style.color = 'var(--ok)'; el.textContent = '\u25cf \u05de\u05d5\u05d2\u05d3\u05e8 \u05d5\u05e2\u05d5\u05d1\u05d3 \u00b7 ' + (d.total || 0) + ' \u05e2\u05e8\u05d5\u05e6\u05d9\u05dd'; }
         else { el.style.color = 'var(--danger)'; el.textContent = '\u25cb ' + (d.error || '\u05dc\u05d0 \u05e0\u05d1\u05d3\u05e7'); }
       });
 
@@ -8104,14 +8105,22 @@
         if (st) { st.style.color = 'var(--muted)'; st.textContent = '\u05e9\u05d5\u05de\u05e8 \u05d5\u05d1\u05d5\u05d3\u05e7\u2026'; }
         heySaveCfg({ api_key: v }, function (u) {
           if (u && u.error) { if (st) { st.style.color = 'var(--danger)'; st.textContent = '\u05e9\u05d2\u05d9\u05d0\u05d4: ' + u.error.message; } return; }
-          db.functions.invoke('heyy-send', { body: { action: 'templates' } }).then(function (rr) {
+          db.functions.invoke('heyy-send', { body: { action: 'sync_channels' } }).then(function (rr) {
             var d = rr.data || {}; if (!st) return;
-            if (d.ok) { st.style.color = 'var(--ok)'; st.textContent = '\u25cf \u05de\u05d5\u05d2\u05d3\u05e8 \u05d5\u05e2\u05d5\u05d1\u05d3'; if ($('heyApiKey')) $('heyApiKey').value = ''; }
+            if (d.ok) { st.style.color = 'var(--ok)'; st.textContent = '\u25cf \u05de\u05d5\u05d2\u05d3\u05e8 \u05d5\u05e2\u05d5\u05d1\u05d3 \u00b7 \u05e0\u05e9\u05dc\u05e4\u05d5 ' + (d.saved || 0) + ' \u05de\u05e1\u05e4\u05e8\u05d9\u05dd'; if ($('heyApiKey')) $('heyApiKey').value = ''; setTimeout(renderHeyCfg, 1200); }
             else { st.style.color = 'var(--danger)'; st.textContent = '\u25cb ' + (d.error || '\u05dc\u05d0 \u05e2\u05d1\u05e8 \u05d0\u05d9\u05de\u05d5\u05ea'); }
           });
         });
       };
 
+      if ($('heyPullChans')) $('heyPullChans').onclick = function () {
+        var b = this, old = b.textContent; b.disabled = true; b.textContent = 'שולף…';
+        db.functions.invoke('heyy-send', { body: { action: 'sync_channels' } }).then(function (rr) {
+          var d = rr.data || {};
+          if (d.ok) { b.textContent = '✓ נשלפו ' + (d.saved || 0); setTimeout(renderHeyCfg, 1000); }
+          else { b.disabled = false; b.textContent = old; alert('שגיאה: ' + (d.error || 'שליפה נכשלה')); }
+        }, function (e) { b.disabled = false; b.textContent = old; alert('שגיאה: ' + ((e && e.message) || e)); });
+      };
       if ($('heyAddNum')) $('heyAddNum').onclick = function () { heyNumBox(null); };
       host.querySelectorAll('[data-numedit]').forEach(function (b) {
         b.onclick = function () { heyNumBox(byNum[b.dataset.numedit]); };
