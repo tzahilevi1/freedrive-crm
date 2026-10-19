@@ -145,6 +145,9 @@
 
   function badge(k, clickable, leadId) { var s = stDef(k); return '<span class="tag' + (clickable ? ' click" data-st-lead="' + leadId + '" data-cur="' + k : '') + '" style="border-color:' + s.color + ';color:' + s.color + ';background:' + s.color + '18">' + s.icon + ' ' + esc(s.label) + (clickable ? ' ▾' : '') + '</span>'; }
   function initials(name) { return String(name || '?').trim().split(/\s+/).map(function (w) { return w.charAt(0); }).slice(0, 2).join('') || '?'; }
+  //  תגית-מותג לחיצה (שינוי-מהיר מרשימת-הלידים, כמו הסטטוס). class נפרד (bchip) כדי לא להתנגש בקישור-הסטטוס.
+  function brandChip(brand, leadId) { return '<span class="tag bchip" data-brand-lead="' + leadId + '" data-cur="' + esc(brand || '') + '" style="cursor:pointer;border-color:var(--line);color:var(--ink)">🏷️ ' + esc(brand || '— מותג —') + ' ▾</span>'; }
+  function brandList() { return (window.C2B && window.C2B.marketingBrands && window.C2B.marketingBrands.length) ? window.C2B.marketingBrands : ((C.lists && C.lists.brand) || []); }
   function waIntl(phone) { var p = String(phone || '').replace(/\D/g, ''); if (p.charAt(0) === '0') p = '972' + p.slice(1); return p; }
   //  wa.me מפנה ל-web.whatsapp.com, והדפדפן מאפס את שם הלשונית בניווט
   //  חוצה-מקורות — לכן target בלבד לא מספיק והלחיצה השנייה פתחה עוד
@@ -198,6 +201,19 @@
     m.style.left = Math.max(8, r.left + window.scrollX - 60) + 'px';
     m.querySelectorAll('.si').forEach(function (si) { si.addEventListener('click', function (e) { e.stopPropagation(); onPick(si.dataset.k); closeStMenu(); }); });
     setTimeout(function () { document.addEventListener('click', closeStMenu, { once: true }); }, 0);
+  }
+  //  בוחר-מותג (שינוי-מהיר מרשימת-הלידים) — מקביל ל-openStatusMenu.
+  function closeBrdMenu() { var m = document.getElementById('brdmenu'); if (m) m.remove(); }
+  function openBrandMenu(anchor, current, onPick) {
+    closeBrdMenu();
+    var opts = brandList(); var m = document.createElement('div'); m.className = 'stmenu'; m.id = 'brdmenu'; m.style.minWidth = '170px'; m.style.maxHeight = '280px'; m.style.overflowY = 'auto';
+    m.innerHTML = opts.map(function (b) { return '<div class="si" data-b="' + esc(b) + '">🏷️ ' + esc(b) + (b === current ? ' ✓' : '') + '</div>'; }).join('') || '<div class="si muted" style="padding:8px 12px">אין מותגים ברשימה — הוסיפו בהגדרות ← רשימות</div>';
+    document.body.appendChild(m);
+    var r = anchor.getBoundingClientRect();
+    m.style.top = (r.bottom + window.scrollY + 4) + 'px';
+    m.style.left = Math.max(8, r.left + window.scrollX - 40) + 'px';
+    m.querySelectorAll('.si[data-b]').forEach(function (si) { si.addEventListener('click', function (e) { e.stopPropagation(); onPick(si.dataset.b); closeBrdMenu(); }); });
+    setTimeout(function () { document.addEventListener('click', closeBrdMenu, { once: true }); }, 0);
   }
   // ---- quick-assign a lead to a salesperson (from the leads table) ----
   function closeAssignMenu() { var m = document.getElementById('assignmenu'); if (m) m.remove(); }
@@ -450,7 +466,7 @@
     { key: 'car_category', label: 'סוג רכב', w: 110, cell: function (l) { return '<td>' + (l.car_category ? '<span class="tag">' + esc(l.car_category) + '</span>' : '<span class="muted">—</span>') + '</td>'; } },
     { key: 'car', label: 'רכב', w: 280, cell: function (l) { return '<td class="ltr wrap2" title="' + esc(l.car || '') + '">' + esc(l.car || '—') + '</td>'; } },
     { key: 'updated', label: 'עדכון אחרון', w: 150, descFirst: true, sort: function (l) { return l.updated_at || l.status_changed_at || l.created_at || ''; }, cell: function (l) { return '<td class="muted">' + fmt(l.updated_at || l.status_changed_at || l.created_at) + '</td>'; } },
-    { key: 'brand', label: 'מותג', w: 120, def: false, cell: function (l) { return '<td>' + esc(l.brand || '—') + '</td>'; } },
+    { key: 'brand', label: 'מותג', w: 130, def: false, cell: function (l) { return '<td>' + brandChip(l.brand, l.id) + '</td>'; } },
     { key: 'city', label: 'עיר', w: 110, def: false, cell: function (l) { return '<td>' + esc(l.city || '—') + '</td>'; } },
     { key: 'email', label: 'אימייל', w: 210, def: false, cell: function (l) { return '<td class="muted ltr" title="' + esc(l.email || '') + '">' + esc(l.email || '—') + '</td>'; } },
     { key: 'id_num', label: 'ת.ז / ח.פ', w: 130, def: false, cell: function (l) { return '<td class="muted ltr" title="' + esc(l.id_num || '') + '">' + esc(l.id_num || '—') + '</td>'; } },
@@ -590,6 +606,23 @@
       });
     });
   }
+  //  שינוי מותג מרשימת-הלידים — מעדכן במקום (כמו הסטטוס), בלי לרנדר מחדש את כל הטבלה.
+  function bindListBrandChip(el) {
+    el.addEventListener('click', function (e) {
+      e.stopPropagation();
+      openBrandMenu(el, el.dataset.cur, function (to) {
+        var leadId = el.dataset.brandLead;
+        if (to === el.dataset.cur) return;
+        db.from('leads').update({ brand: to }).eq('id', leadId).then(function (u) {
+          if (u.error) return alert('שגיאה: ' + u.error.message);
+          for (var i = 0; i < cache.length; i++) if (String(cache[i].id) === String(leadId)) { cache[i].brand = to; break; }
+          logActivity(leadId, 'note', 'מותג שונה ל: ' + to).then(function () {}, function () {});
+          var td = el.closest('td');
+          if (td) { td.innerHTML = brandChip(to, leadId); var nw = td.querySelector('[data-brand-lead]'); if (nw) bindListBrandChip(nw); }
+        });
+      });
+    });
+  }
   function draw() {
     var rows = leadCols ? leadCols.sortRows(listRows()) : listRows();
     orderIds = rows.map(function (l) { return l.id; });
@@ -618,6 +651,7 @@
     bindBulk();
     C.$('ltbl').querySelectorAll('td[data-open]').forEach(function (td) { td.addEventListener('click', function () { window.C2B_openLeadCard(td.parentNode.dataset.lead); }); });
     C.$('ltbl').querySelectorAll('.tag.click').forEach(bindListStatusBadge);
+    C.$('ltbl').querySelectorAll('[data-brand-lead]').forEach(bindListBrandChip);
     C.$('ltbl').querySelectorAll('.assign-chip').forEach(function (el) {
       el.addEventListener('click', function (e) { e.stopPropagation(); openAssignMenu(el, el.dataset.assign, el.dataset.cur, function (uid) { assignLead(el.dataset.assign, uid); }); });
     });
