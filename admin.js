@@ -8132,6 +8132,7 @@
   // (ManyChat הוסר מהמערכת — שליחת WhatsApp מתבצעת דרך Heyy)
 
   // ---- מרכז חיבורים · מקורות לידים (integrations) ----
+  var _intgFilter = 'all';   // סינון חיבורים: all / active / dormant / off
   function renderIntegrations() {
     var host = $('integrationsCard'); if (!host) return;
     var FN = SUPABASE_URL + '/functions/v1/ingest';
@@ -8155,15 +8156,22 @@
       if (r && r.error) { host.innerHTML = '<div class="card" style="border:1px solid var(--warn);background:rgba(245,158,11,.08)"><b style="color:var(--warn)">⚠️ מרכז חיבורים לא זמין</b> — הריצו את <b>supabase/integrations.sql</b> בבסיס הנתונים.</div>'; return; }
       var list = r.data || [];
       var brandOpts = ((_res[1] && _res[1].data) || []).map(function (x) { return x.value; });
-      var rows = list.map(function (it) {
+      //  סטטוס-פעילות: פעיל = ליד ב-14 יום ומתג דלוק; רדום = מתג דלוק בלי לידים לאחרונה; כבוי = מתג כבוי.
+      var _now = Date.now();
+      function statusOf(it) { if (!it.active) return 'off'; if (it.last_lead_at && (_now - new Date(it.last_lead_at).getTime()) < 14 * 86400000) return 'active'; return 'dormant'; }
+      function daysAgo(ts) { var d = Math.floor((_now - new Date(ts).getTime()) / 86400000); return d <= 0 ? 'היום' : d === 1 ? 'אתמול' : 'לפני ' + d + ' ימים'; }
+      var ST = { active: ['🟢 פעיל', 'var(--ok)'], dormant: ['🟡 רדום', 'var(--warn)'], off: ['⚫ כבוי', 'var(--muted)'] };
+      var _cnt = { all: list.length, active: 0, dormant: 0, off: 0 };
+      list.forEach(function (it) { _cnt[statusOf(it)]++; });
+      var rows = list.filter(function (it) { return _intgFilter === 'all' || statusOf(it) === _intgFilter; }).map(function (it) {
         var p = PLAT[it.platform] || ['🔗', it.platform], url = FN + '?key=' + it.ingest_key, fm = it.field_map || {};
         var maps = Object.keys(fm).map(function (k) { return '<span class="tag" style="margin:2px">' + esc(k) + ' → ' + esc(fm[k]) + ' <b data-fmdel="' + esc(it.id) + '|' + esc(k) + '" style="cursor:pointer;color:var(--danger)">✕</b></span>'; }).join('') || '<span class="muted" style="font-size:12px">אין מיפוי ידני — זיהוי אוטומטי פעיל (שם/טלפון/מייל/עיר/רכב)</span>';
         return '<div class="card" style="box-shadow:none;border:1px solid var(--line);margin:0 0 10px;padding:14px">' +
-          '<div class="row-between" style="margin-bottom:8px"><div style="display:flex;align-items:center;gap:8px;min-width:0"><span style="font-size:20px">' + p[0] + '</span><b>' + esc(it.label || p[1]) + '</b>' + (it.source_label ? ' <span class="muted" style="font-size:12px">· ' + esc(it.source_label) + '</span>' : '') + '</div>' +
+          '<div class="row-between" style="margin-bottom:8px"><div style="display:flex;align-items:center;gap:8px;min-width:0;flex-wrap:wrap"><span style="font-size:20px">' + p[0] + '</span><b>' + esc(it.label || p[1]) + '</b>' + (it.source_label ? ' <span class="muted" style="font-size:12px">· ' + esc(it.source_label) + '</span>' : '') + '<span style="background:' + ST[statusOf(it)][1] + ';color:#fff;font-size:10.5px;padding:2px 8px;border-radius:999px;white-space:nowrap">' + ST[statusOf(it)][0] + '</span></div>' +
           '<div style="display:flex;align-items:center;gap:10px"><label class="cp-sw" title="פעיל"><input type="checkbox" data-itact="' + esc(it.id) + '"' + (it.active ? ' checked' : '') + '><span class="cp-sl"></span></label><button class="btn btn-ghost btn-sm" data-itdel="' + esc(it.id) + '" style="color:var(--danger)">🗑️</button></div></div>' +
           '<div style="display:flex;gap:6px;align-items:center;margin-bottom:6px"><input class="inp" readonly value="' + esc(url) + '" style="flex:1;font-size:11px;direction:ltr" onclick="this.select()"><button class="btn btn-sm" data-itcopy="' + esc(url) + '">📋 העתק</button></div>' +
           '<p class="muted" style="font-size:11.5px;margin:0 0 8px">' + (HINT[it.platform] || '') + '</p>' +
-          '<div style="font-size:12px;margin-bottom:6px">📊 <b>' + (it.lead_count || 0) + '</b> לידים' + (it.last_lead_at ? ' · אחרון: ' + fmtDateTime(it.last_lead_at) : '') + '</div>' +
+          '<div style="font-size:12px;margin-bottom:6px">📊 <b>' + (it.lead_count || 0) + '</b> לידים' + (it.last_lead_at ? ' · ליד אחרון ' + daysAgo(it.last_lead_at) + ' <span class="muted">(' + fmtDateTime(it.last_lead_at) + ')</span>' : ' · <span class="muted">עדיין לא נכנסו לידים</span>') + '</div>' +
           //  בחירת-מותג לחיבור — כל ליד מהחיבור נכנס תחת המותג הזה; "מותג חדש" מוסיף לרשימת-המותגים.
           '<div style="display:flex;gap:6px;align-items:center;margin-bottom:8px;flex-wrap:wrap"><span style="font-size:12.5px;color:var(--muted)">🏷️ מותג:</span>' +
             '<select class="inp" data-itbrand="' + esc(it.id) + '" style="width:200px;font-size:12.5px"><option value="">— מותג הארגון (ברירת מחדל) —</option>' +
@@ -8184,10 +8192,12 @@
           '</div><span id="niMsg" style="font-size:12px;margin-inline-start:4px"></span></div>';
       host.innerHTML = '<div class="card"><div class="row-between"><h3 style="margin:0">🔌 חיבורים · מקורות לידים</h3><span class="muted" style="font-size:12px">Google · Taboola · Outbrain · קישורית · Webhook</span></div>' +
         '<p class="muted" style="font-size:13px;margin:6px 0 14px">כל חיבור מקבל כתובת ייחודית שקולטת לידים ישירות ל-CRM. תומך בריבוי חשבונות — הוסיפו כמה שתרצו.</p>' +
+        '<div style="display:flex;gap:6px;flex-wrap:wrap;margin:0 0 12px">' + [['all', 'הכל'], ['active', '🟢 פעילים'], ['dormant', '🟡 רדומים'], ['off', '⚫ כבויים']].map(function (c) { return '<button class="btn btn-sm' + (_intgFilter === c[0] ? '' : ' btn-ghost') + '" data-intgf="' + c[0] + '">' + c[1] + ' (' + _cnt[c[0]] + ')</button>'; }).join('') + '</div>' +
         addBox +
         rows +
         '<div id="fbSection" style="border-top:1px solid var(--line);margin-top:12px;padding-top:12px"><div class="row-between"><b style="font-size:13.5px">📘 פייסבוק · טפסי לידים <span class="muted" style="font-weight:400;font-size:12px">(כל הדפים מהטוקנים המחוברים)</span></b><button class="btn btn-sm" id="fbLoad">🔄 טען טפסים מפייסבוק</button></div><div id="fbForms" style="margin-top:8px"></div></div>' +
       '</div>';
+      host.querySelectorAll('[data-intgf]').forEach(function (b) { b.addEventListener('click', function () { _intgFilter = b.dataset.intgf; renderIntegrations(); }); });
       $('niAdd').addEventListener('click', function () {
         var plat = $('niPlat').value, label = $('niLabel').value.trim(), src = $('niSource').value.trim();
         if (!label) { $('niMsg').style.color = 'var(--danger)'; $('niMsg').textContent = 'הזינו שם לחיבור'; return; }
