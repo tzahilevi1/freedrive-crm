@@ -148,6 +148,9 @@
   //  תגית-מותג לחיצה (שינוי-מהיר מרשימת-הלידים, כמו הסטטוס). class נפרד (bchip) כדי לא להתנגש בקישור-הסטטוס.
   function brandChip(brand, leadId) { return '<span class="tag bchip" data-brand-lead="' + leadId + '" data-cur="' + esc(brand || '') + '" style="cursor:pointer;border-color:var(--line);color:var(--ink)">🏷️ ' + esc(brand || '— מותג —') + ' ▾</span>'; }
   function brandList() { return (window.C2B && window.C2B.marketingBrands && window.C2B.marketingBrands.length) ? window.C2B.marketingBrands : ((C.lists && C.lists.brand) || []); }
+  //  סוג-תנועה (utm_medium) — רשימת קיצורים קנונית לשינוי-מהיר מרשימת-הלידים.
+  var MEDIUMS = ['cpc', 'seo', 'geo', 'social', 'email', 'referral', 'organic', 'direct', 'sms', 'display', 'video', 'affiliate'];
+  function mediumChip(m, leadId) { return '<span class="tag mchip" data-med-lead="' + leadId + '" data-cur="' + esc(m || '') + '" style="cursor:pointer;border-color:var(--line);color:var(--ink);direction:ltr">' + esc(m || '—') + ' ▾</span>'; }
   function waIntl(phone) { var p = String(phone || '').replace(/\D/g, ''); if (p.charAt(0) === '0') p = '972' + p.slice(1); return p; }
   //  wa.me מפנה ל-web.whatsapp.com, והדפדפן מאפס את שם הלשונית בניווט
   //  חוצה-מקורות — לכן target בלבד לא מספיק והלחיצה השנייה פתחה עוד
@@ -214,6 +217,19 @@
     m.style.left = Math.max(8, r.left + window.scrollX - 40) + 'px';
     m.querySelectorAll('.si[data-b]').forEach(function (si) { si.addEventListener('click', function (e) { e.stopPropagation(); onPick(si.dataset.b); closeBrdMenu(); }); });
     setTimeout(function () { document.addEventListener('click', closeBrdMenu, { once: true }); }, 0);
+  }
+  //  בוחר סוג-תנועה (utm_medium) — רשימת קיצורים קבועה.
+  function closeMedMenu() { var m = document.getElementById('medmenu'); if (m) m.remove(); }
+  function openMediumMenu(anchor, current, onPick) {
+    closeMedMenu();
+    var m = document.createElement('div'); m.className = 'stmenu'; m.id = 'medmenu'; m.style.minWidth = '150px'; m.style.maxHeight = '300px'; m.style.overflowY = 'auto';
+    m.innerHTML = MEDIUMS.map(function (v) { return '<div class="si" data-m="' + esc(v) + '" style="direction:ltr;text-align:left">' + esc(v) + (v === current ? ' ✓' : '') + '</div>'; }).join('');
+    document.body.appendChild(m);
+    var r = anchor.getBoundingClientRect();
+    m.style.top = (r.bottom + window.scrollY + 4) + 'px';
+    m.style.left = Math.max(8, r.left + window.scrollX - 20) + 'px';
+    m.querySelectorAll('.si[data-m]').forEach(function (si) { si.addEventListener('click', function (e) { e.stopPropagation(); onPick(si.dataset.m); closeMedMenu(); }); });
+    setTimeout(function () { document.addEventListener('click', closeMedMenu, { once: true }); }, 0);
   }
   // ---- quick-assign a lead to a salesperson (from the leads table) ----
   function closeAssignMenu() { var m = document.getElementById('assignmenu'); if (m) m.remove(); }
@@ -478,7 +494,7 @@
     { key: 'created', label: 'נוצר בתאריך', w: 140, def: false, descFirst: true, sort: function (l) { return l.created_at || ''; }, cell: function (l) { return '<td class="muted">' + fmt(l.created_at) + '</td>'; } },
     //  שאר שדות הליד. עד היום הם נראו רק בכרטיס הליד, ולכן אי אפשר
     //  היה לסנן, למיין או לייצא לפיהם מתוך הרשימה.
-    C.txtCol('utm_medium', 'utm_medium', { ltr: true, w: 130 }),
+    { key: 'utm_medium', label: 'utm_medium', w: 120, def: false, sort: function (l) { return l.utm_medium || ''; }, cell: function (l) { return '<td>' + mediumChip(l.utm_medium, l.id) + '</td>'; } },
     C.txtCol('utm_content', 'utm_content', { ltr: true, w: 170 }),
     C.txtCol('utm_term', 'utm_term', { ltr: true, w: 170 }),
     C.txtCol('campaign', 'שם הקמפיין', { w: 210 }),
@@ -623,6 +639,23 @@
       });
     });
   }
+  //  שינוי סוג-תנועה (utm_medium) מרשימת-הלידים — עדכון במקום.
+  function bindListMediumChip(el) {
+    el.addEventListener('click', function (e) {
+      e.stopPropagation();
+      openMediumMenu(el, el.dataset.cur, function (to) {
+        var leadId = el.dataset.medLead;
+        if (to === el.dataset.cur) return;
+        db.from('leads').update({ utm_medium: to }).eq('id', leadId).then(function (u) {
+          if (u.error) return alert('שגיאה: ' + u.error.message);
+          for (var i = 0; i < cache.length; i++) if (String(cache[i].id) === String(leadId)) { cache[i].utm_medium = to; break; }
+          logActivity(leadId, 'note', 'סוג תנועה שונה ל: ' + to).then(function () {}, function () {});
+          var td = el.closest('td');
+          if (td) { td.innerHTML = mediumChip(to, leadId); var nw = td.querySelector('[data-med-lead]'); if (nw) bindListMediumChip(nw); }
+        });
+      });
+    });
+  }
   function draw() {
     var rows = leadCols ? leadCols.sortRows(listRows()) : listRows();
     orderIds = rows.map(function (l) { return l.id; });
@@ -652,6 +685,7 @@
     C.$('ltbl').querySelectorAll('td[data-open]').forEach(function (td) { td.addEventListener('click', function () { window.C2B_openLeadCard(td.parentNode.dataset.lead); }); });
     C.$('ltbl').querySelectorAll('.tag.click').forEach(bindListStatusBadge);
     C.$('ltbl').querySelectorAll('[data-brand-lead]').forEach(bindListBrandChip);
+    C.$('ltbl').querySelectorAll('[data-med-lead]').forEach(bindListMediumChip);
     C.$('ltbl').querySelectorAll('.assign-chip').forEach(function (el) {
       el.addEventListener('click', function (e) { e.stopPropagation(); openAssignMenu(el, el.dataset.assign, el.dataset.cur, function (uid) { assignLead(el.dataset.assign, uid); }); });
     });
