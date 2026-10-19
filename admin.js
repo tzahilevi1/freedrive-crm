@@ -8147,9 +8147,14 @@
     };
     var CRMF = [['', '—'], ['name', 'שם'], ['phone', 'טלפון'], ['email', 'אימייל'], ['car', 'רכב'], ['city', 'עיר'], ['message', 'הודעה'], ['id_num', 'ת.ז/ח.פ'], ['marketing_company', 'חברת שיווק'], ['utm_source', 'utm_source'], ['utm_campaign', 'utm_campaign']];
     function crmSel(id) { return '<select class="inp" id="' + id + '" style="width:120px;font-size:12px">' + CRMF.map(function (f) { return '<option value="' + f[0] + '">' + f[1] + '</option>'; }).join('') + '</select>'; }
-    db.from('integrations').select('*').order('created_at').then(function (r) {
+    Promise.all([
+      db.from('integrations').select('*').order('created_at'),
+      db.from('field_options').select('value').eq('field', 'brand').order('value')
+    ]).then(function (_res) {
+      var r = _res[0];
       if (r && r.error) { host.innerHTML = '<div class="card" style="border:1px solid var(--warn);background:rgba(245,158,11,.08)"><b style="color:var(--warn)">⚠️ מרכז חיבורים לא זמין</b> — הריצו את <b>supabase/integrations.sql</b> בבסיס הנתונים.</div>'; return; }
       var list = r.data || [];
+      var brandOpts = ((_res[1] && _res[1].data) || []).map(function (x) { return x.value; });
       var rows = list.map(function (it) {
         var p = PLAT[it.platform] || ['🔗', it.platform], url = FN + '?key=' + it.ingest_key, fm = it.field_map || {};
         var maps = Object.keys(fm).map(function (k) { return '<span class="tag" style="margin:2px">' + esc(k) + ' → ' + esc(fm[k]) + ' <b data-fmdel="' + esc(it.id) + '|' + esc(k) + '" style="cursor:pointer;color:var(--danger)">✕</b></span>'; }).join('') || '<span class="muted" style="font-size:12px">אין מיפוי ידני — זיהוי אוטומטי פעיל (שם/טלפון/מייל/עיר/רכב)</span>';
@@ -8159,6 +8164,12 @@
           '<div style="display:flex;gap:6px;align-items:center;margin-bottom:6px"><input class="inp" readonly value="' + esc(url) + '" style="flex:1;font-size:11px;direction:ltr" onclick="this.select()"><button class="btn btn-sm" data-itcopy="' + esc(url) + '">📋 העתק</button></div>' +
           '<p class="muted" style="font-size:11.5px;margin:0 0 8px">' + (HINT[it.platform] || '') + '</p>' +
           '<div style="font-size:12px;margin-bottom:6px">📊 <b>' + (it.lead_count || 0) + '</b> לידים' + (it.last_lead_at ? ' · אחרון: ' + fmtDateTime(it.last_lead_at) : '') + '</div>' +
+          //  בחירת-מותג לחיבור — כל ליד מהחיבור נכנס תחת המותג הזה; "מותג חדש" מוסיף לרשימת-המותגים.
+          '<div style="display:flex;gap:6px;align-items:center;margin-bottom:8px;flex-wrap:wrap"><span style="font-size:12.5px;color:var(--muted)">🏷️ מותג:</span>' +
+            '<select class="inp" data-itbrand="' + esc(it.id) + '" style="width:200px;font-size:12.5px"><option value="">— מותג הארגון (ברירת מחדל) —</option>' +
+            brandOpts.map(function (b) { return '<option' + (((it.config || {}).brand === b) ? ' selected' : '') + '>' + esc(b) + '</option>'; }).join('') +
+            '<option value="__new__">➕ מותג חדש…</option></select>' +
+            '<span class="muted" style="font-size:11.5px">הלידים מהחיבור ייכנסו תחת מותג זה</span></div>' +
           '<details><summary style="cursor:pointer;font-size:12.5px;color:var(--brand)">מיפוי שדות (מתקדם — לרוב לא צריך)</summary><div style="margin-top:8px">' + maps +
             '<div style="display:flex;gap:6px;align-items:center;margin-top:8px;flex-wrap:wrap"><input class="inp" id="fmk_' + esc(it.id) + '" placeholder="שם השדה הנכנס (למשל FULL_NAME)" style="width:190px;font-size:12px"> → ' + crmSel('fmv_' + it.id) + ' <button class="btn btn-sm" data-fmadd="' + esc(it.id) + '">הוסף מיפוי</button></div>' +
           '</div></details>' +
@@ -8188,6 +8199,24 @@
       host.querySelectorAll('[data-itcopy]').forEach(function (b) { b.addEventListener('click', function () { var t = b.dataset.itcopy; function ok() { b.textContent = '✓ הועתק'; setTimeout(function () { b.textContent = '📋 העתק'; }, 1500); } if (navigator.clipboard) { navigator.clipboard.writeText(t).then(ok, function () { prompt('העתיקו:', t); }); } else { prompt('העתיקו:', t); } }); });
       host.querySelectorAll('[data-itdel]').forEach(function (b) { b.addEventListener('click', function () { if (!confirm('למחוק את החיבור? לידים שכבר נכנסו יישארו.')) return; db.from('integrations').delete().eq('id', b.dataset.itdel).then(renderIntegrations); }); });
       host.querySelectorAll('[data-itact]').forEach(function (cb) { cb.addEventListener('change', function () { db.from('integrations').update({ active: cb.checked }).eq('id', cb.dataset.itact).then(function () {}); }); });
+      //  בחירת/הוספת מותג לחיבור — נשמר ב-config.brand; ingest מציב אותו על כל ליד מהחיבור.
+      host.querySelectorAll('[data-itbrand]').forEach(function (sel) {
+        sel.addEventListener('change', function () {
+          var id = sel.dataset.itbrand, val = sel.value;
+          var it = list.filter(function (x) { return x.id === id; })[0]; if (!it) return;
+          function saveBrand(brand) {
+            var cfg = Object.assign({}, it.config || {}); if (brand) cfg.brand = brand; else delete cfg.brand;
+            db.from('integrations').update({ config: cfg }).eq('id', id).then(function () { renderIntegrations(); });
+          }
+          if (val === '__new__') {
+            var nn = (prompt('שם המותג החדש (ייכנס לרשימת המותגים):') || '').trim();
+            if (!nn) { renderIntegrations(); return; }
+            function afterOpt() { db.from('brand_companies').upsert({ brand: nn, company: nn }, { onConflict: 'brand' }).then(function () { saveBrand(nn); }); }
+            if (brandOpts.indexOf(nn) >= 0) afterOpt();
+            else db.from('field_options').insert({ field: 'brand', value: nn }).then(afterOpt);
+          } else saveBrand(val);
+        });
+      });
       host.querySelectorAll('[data-fmadd]').forEach(function (b) { b.addEventListener('click', function () { var id = b.dataset.fmadd, k = ($('fmk_' + id).value || '').trim(), v = $('fmv_' + id).value; if (!k || !v) return; var it = list.filter(function (x) { return x.id === id; })[0]; var fm = Object.assign({}, it.field_map || {}); fm[k] = v; db.from('integrations').update({ field_map: fm }).eq('id', id).then(renderIntegrations); }); });
       host.querySelectorAll('[data-fmdel]').forEach(function (b) { b.addEventListener('click', function () { var parts = b.dataset.fmdel.split('|'), id = parts[0], key = parts.slice(1).join('|'); var it = list.filter(function (x) { return x.id === id; })[0]; if (!it) return; var fm = Object.assign({}, it.field_map || {}); delete fm[key]; db.from('integrations').update({ field_map: fm }).eq('id', id).then(renderIntegrations); }); });
       // ---- פייסבוק: טעינת דפים+טפסים דרך fb-forms ----
