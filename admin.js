@@ -7678,6 +7678,15 @@
     var host = $('permBox'); if (!host) return;
     if (!(window.C2B.role === 'admin' || window.C2B.isSuper)) { host.innerHTML = '<div class="card"><div class="sec-note">רק מנהל מערכת מגדיר הרשאות.</div></div>'; return; }
     var ROLES = [['branch', 'מנהל סניף'], ['brand_manager', 'מנהל מותג'], ['sales', 'סוכן מכירות'], ['files', 'מנהלת תיקי לקוחות'], ['accounting', 'מנהלת חשבונות'], ['coordinator', 'מתאמת פגישות']];
+    //  היקף-הנתונים בפועל (נאכף ב-RLS, מעבר לאילו מסכים רואים) — כדי שהמנהל יידע למה כל תפקיד חשוף.
+    var ROLE_SCOPE = {
+      branch: 'רואה את כל הלידים והנתונים בארגון (למעט מסכי-ניהול מערכת).',
+      brand_manager: 'רואה רק לידים של המותגים שהוקצו לו; הדוחות/דשבורד מסתננים אליהם; משייך רק לסוכניו.',
+      sales: 'רואה רק את הלידים שהוקצו אליו אישית.',
+      files: 'רואה רק לידים שיש להם עסקה חתומה (תיקי לקוחות).',
+      accounting: 'רואה לידים עם עסקה חתומה + נתוני הנהלת-חשבונות.',
+      coordinator: 'רואה את כל הפגישות בארגון. אין לו גישה ללידים.'
+    };
     host.innerHTML = '<div class="ai-empty">טוען…</div>';
     db.from('admin_config').select('value').eq('key', 'role_views').maybeSingle().then(function (r) {
       var rv = (r && r.data && r.data.value) || {}, views = window.C2B.GRANTABLE_VIEWS || [];
@@ -7687,9 +7696,11 @@
           var on = cur.indexOf(v[0]) >= 0;
           return '<label style="display:inline-flex;align-items:center;gap:4px;margin:3px 10px 3px 0;font-size:12.5px;white-space:nowrap"><input type="checkbox" data-pv="' + role[0] + ':' + v[0] + '"' + (on ? ' checked' : '') + '> ' + esc(v[1]) + '</label>';
         }).join('');
-        return '<div class="card cl-sub" style="margin-bottom:12px"><b>' + esc(role[1]) + '</b><div style="margin-top:8px;line-height:2.2">' + cells + '</div></div>';
+        return '<div class="card cl-sub" style="margin-bottom:12px"><b>' + esc(role[1]) + '</b>' +
+          (ROLE_SCOPE[role[0]] ? '<div class="muted" style="font-size:11.5px;margin-top:3px">🔒 חשיפת-נתונים: ' + esc(ROLE_SCOPE[role[0]]) + '</div>' : '') +
+          '<div style="margin-top:8px;line-height:2.2">' + cells + '</div></div>';
       }).join('');
-      host.innerHTML = '<p class="muted" style="font-size:12.5px;margin:0 0 12px;line-height:1.7">סמנו אילו תצוגות כל תפקיד רואה. מנהל-מערכת תמיד רואה הכל. כל משתמש יורש אוטומטית מהתפקיד שלו — העדכון חל ברענון הבא של המשתמש.</p>' + rows +
+      host.innerHTML = '<p class="muted" style="font-size:12.5px;margin:0 0 12px;line-height:1.7">הסימון קובע <b>אילו מסכים</b> כל תפקיד רואה. השורה 🔒 שמתחת לכל תפקיד מתארת <b>אילו נתונים</b> הוא חשוף אליהם בתוך המסכים — נאכף אוטומטית באבטחה (RLS), לא רק בתצוגה. מנהל-מערכת תמיד רואה הכל. כל משתמש יורש אוטומטית מתפקידו — חל ברענון הבא.</p>' + rows +
         '<div style="margin-top:8px"><button class="btn btn-sm" id="permSave">💾 שמור הרשאות</button> <span id="permMsg" class="muted" style="font-size:12px;margin-inline-start:8px"></span></div>';
       $('permSave').onclick = function () {
         var map = {}; ROLES.forEach(function (role) { map[role[0]] = []; });
