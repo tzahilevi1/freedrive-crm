@@ -264,6 +264,8 @@
     closeAssignMenu();
     var m = document.createElement('div'); m.className = 'stmenu'; m.id = 'assignmenu'; m.style.minWidth = '190px';
     var uids = Object.keys(profiles);
+    //  מנהל-מותג מעביר רק לסוכנים שתחתיו (manager_id); נטען בבוט ל-window.C2B.myReps.
+    if (C.role === 'brand_manager' && window.C2B.myReps) uids = uids.filter(function (u) { return window.C2B.myReps.indexOf(u) >= 0; });
     m.innerHTML = '<div class="si" data-uid="" style="color:var(--muted)">— בטל שיוך —</div>' +
       (uids.length ? uids.map(function (uid) { return '<div class="si" data-uid="' + uid + '"><span class="avatar" style="width:22px;height:22px;font-size:11px;margin-inline-end:7px">' + esc(initials(profiles[uid])) + '</span>' + esc(profiles[uid]) + (uid === current ? ' ✓' : '') + '</div>'; }).join('') : '<div class="si muted">אין סוכנים זמינים</div>');
     document.body.appendChild(m);

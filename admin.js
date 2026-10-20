@@ -353,17 +353,30 @@
           initOrgSwitcher();
         }, function () { initOrgSwitcher(); });
       }
-      window.C2B.views = (r.data && r.data.views && r.data.views.length) ? r.data.views : (DEFAULT_VIEWS[window.C2B.role] || ['dashboard']);
-      // מסך ניהול חדש שנוסף בקוד לא מופיע אצל מי שרשימת המסכים שלו כבר
-      // שמורה במסד — והיא נשמרת לכל משתמש שנערך אי פעם. מנהל מערכת
-      // חייב לראות את מסכי הניהול תמיד, ולכן הם מתווספים ולא נגזרים.
-      if (window.C2B.role === 'admin') {
-        (DEFAULT_VIEWS.admin || []).forEach(function (v) {
-          if (window.C2B.views.indexOf(v) < 0) window.C2B.views.push(v);
-        });
+      // תצוגות פר-תפקיד: נקבעות מ-admin_config.role_views (הגדרות←הרשאות), לא פר-משתמש.
+      //  נפילה-לאחור ל-DEFAULT_VIEWS אם אין רשומה/נכשלה הטעינה — כדי לא לנעול החוצה.
+      function _finishBoot() {
+        //  מנהל מערכת תמיד רואה הכל — התצוגות לא נגזרות עליו אלא מתווספות.
+        if (window.C2B.role === 'admin') {
+          (DEFAULT_VIEWS.admin || []).forEach(function (v) { if (window.C2B.views.indexOf(v) < 0) window.C2B.views.push(v); });
+        }
+        if (r.data && r.data.full_name) { window.C2B.userName = r.data.full_name; $('whoami').textContent = r.data.full_name + ' · ' + roleLabel(window.C2B.role); }
+        //  מנהל-מותג: טוען את הסוכנים שתחתיו (manager_id) — בורר-השיוך מסנן אליהם.
+        if (window.C2B.role === 'brand_manager' && window.C2B.userId) {
+          db.from('profiles').select('user_id').eq('manager_id', window.C2B.userId).then(function (rp) { window.C2B.myReps = ((rp && rp.data) || []).map(function (x) { return x.user_id; }); }, function () { window.C2B.myReps = []; });
+        }
+        applyRole(window.C2B.role); refreshBadges(); go(lastView() || 'dashboard');
       }
-      if (r.data && r.data.full_name) { window.C2B.userName = r.data.full_name; $('whoami').textContent = r.data.full_name + ' · ' + roleLabel(window.C2B.role); }
-      applyRole(window.C2B.role); refreshBadges(); go(lastView() || 'dashboard');
+      db.from('admin_config').select('value').eq('key', 'role_views').maybeSingle().then(function (rv) {
+        var rViews = (rv && rv.data && rv.data.value) || {};
+        window.C2B.roleViews = rViews;
+        var rl = rViews[window.C2B.role];
+        window.C2B.views = (rl && rl.length) ? rl.slice() : (DEFAULT_VIEWS[window.C2B.role] || ['dashboard']);
+        _finishBoot();
+      }, function () {
+        window.C2B.views = DEFAULT_VIEWS[window.C2B.role] || ['dashboard'];
+        _finishBoot();
+      });
     });
   }
   // admin-managed dropdown lists (brand / source / marketing_company / utm_source)
@@ -701,7 +714,7 @@
     var el = e.target.closest && e.target.closest('[data-call]');
     if (el) { e.preventDefault(); e.stopPropagation(); window.C2B.dial(el.getAttribute('data-call'), el.getAttribute('data-lead') || null); }
   });
-  var ROLE_LABELS = { admin: 'מנהל מערכת', sales: 'סוכן מכירות', files: 'מנהלת תיקי לקוחות', accounting: 'מנהלת חשבונות', branch: 'מנהל סניף' };
+  var ROLE_LABELS = { admin: 'מנהל מערכת', sales: 'סוכן מכירות', files: 'מנהלת תיקי לקוחות', accounting: 'מנהלת חשבונות', branch: 'מנהל סניף', brand_manager: 'מנהל מותג', coordinator: 'מתאמת פגישות' };
   function roleLabel(r) { return ROLE_LABELS[r] || r; }
   // views a user MAY open. Admin sees all; others see dashboard+activity always,
   // plus whatever the admin granted (profiles.views). These are the defaults.
@@ -717,7 +730,11 @@
     accounting: ['dashboard', 'accounting', 'calls', 'cars', 'appointments', 'tasks', 'reports', 'ai', 'quotes', 'documents', 'heyy'],
     // מנהל סניף: רואה הכל, למעט מסכי הניהול של המערכת (משתמשים, הגדרות, אוטומציות)
     branch: ['dashboard', 'leads', 'files', 'accounting', 'calls', 'cars', 'appointments', 'tasks', 'analytics',
-             'reports', 'agents', 'ai', 'quotes', 'documents', 'whatsapp', 'heyy', 'emails', 'sms', 'users', 'audit']
+             'reports', 'agents', 'ai', 'quotes', 'documents', 'whatsapp', 'heyy', 'emails', 'sms', 'users', 'audit'],
+    // מנהל מותג: ניהול לידים/דוחות של המותגים שלו (ההגבלה-למותג נאכפת ב-RLS)
+    brand_manager: ['dashboard', 'leads', 'files', 'calls', 'cars', 'appointments', 'tasks', 'analytics', 'reports', 'ai', 'quotes', 'documents', 'heyy'],
+    // מתאמת פגישות: רואה את כל הפגישות בארגון
+    coordinator: ['dashboard', 'appointments']
   };
   // screens the admin can grant when creating a user (label + key)
   //  תצוגות שניתן להקצות למשתמש. ביד2 — התצוגות הייעודיות (מכרזים/ספקים/מלאי/יומן מסחר/בקשות הצעת מחיר)
@@ -951,6 +968,7 @@
       ['settings:quick', '\ud83d\udcac הודעות מהירות'],
       ['settings:phone', '\u260e\ufe0f טלפוניה'],
       ['settings:actions', '\u26a1 פעולות'],
+      ['settings:permissions', '🔐 הרשאות'],
       ['automations', '🤖 אוטומציות'],
       ['orgs', '🏢 ארגונים'],
       ['branches', '\ud83c\udfe2 סניפים'],
@@ -3383,8 +3401,13 @@
 
   // ---------- APPOINTMENTS (calendar) ----------
   var APPT_MODES = ['פרונטלי', 'טלפוני', 'וידאו', 'בסניף'];
+  //  סטטוסי-פגישה לניהול המתאמת (תזכורת→אישור→הגעה). legacy 'handled'/'new' ממופים.
+  var APPT_STATUSES = [['pending', 'ממתינה'], ['reminded', 'תזכורת נשלחה'], ['confirmed', 'אישרה הגעה'], ['arrived', 'הגיע/ה'], ['no_show', 'לא הגיע/ה'], ['cancelled', 'בוטלה']];
+  var APPT_DONE = ['arrived', 'no_show', 'cancelled', 'handled'];
+  function apptStLabel(s) { var x = APPT_STATUSES.filter(function (o) { return o[0] === s; })[0]; return x ? x[1] : (s === 'handled' ? 'בוצעה' : (!s || s === 'new' ? 'ממתינה' : s)); }
+  function apptWa(p) { p = String(p || '').replace(/\D/g, ''); if (!p) return ''; if (p.charAt(0) === '0') p = '972' + p.slice(1); else if (p.slice(0, 3) !== '972') p = '972' + p; return p; }
   var APPT_COLS = [
-    { key: 'status', label: 'סטטוס', cell: function (a) { return '<td>' + (a._handled ? '<span class="done-badge">✓ בוצעה</span>' : a._soon ? '<span class="task-open">● עתידית</span>' : a._overdue ? '<span class="tag" style="background:rgba(220,38,38,.12);color:var(--danger)">⏰ עברה</span>' : '<span class="tag">חדשה</span>') + '</td>'; } },
+    { key: 'status', label: 'סטטוס', cell: function (a) { var done = APPT_DONE.indexOf(a.status) >= 0, col = a.status === 'arrived' ? 'rgba(22,163,74,.14);color:#16a34a' : a.status === 'no_show' ? 'rgba(220,38,38,.12);color:var(--danger)' : a.status === 'confirmed' ? 'rgba(37,99,235,.12);color:#2563eb' : a.status === 'reminded' ? 'rgba(245,158,11,.14);color:#b45309' : 'var(--surface-2)'; return '<td><span class="tag" style="background:' + col + '">' + esc(apptStLabel(a.status)) + '</span>' + (!done && a._overdue ? ' <span class="muted" style="font-size:10px">⏰ עבר</span>' : '') + '</td>'; } },
     { key: 'name', label: 'שם', fixed: true, cell: function (a) { return '<td><b>' + esc(a.name) + '</b>' + (a._lid ? ' <span class="muted" style="font-size:11px">→ לכרטיס</span>' : '') + '</td>'; } },
     { key: 'phone', label: 'טלפון', cell: function (a) { return '<td>' + esc(a.phone || '—') + '</td>'; } },
     { key: 'when', label: 'מועד', descFirst: true, sort: function (a) { return a._dt || ''; }, cell: function (a) { return '<td><input type="datetime-local" class="inp" data-appt-when="' + a.id + '" value="' + a._dt + '" onclick="event.stopPropagation()" style="font-size:12.5px"></td>'; } },
@@ -3406,7 +3429,12 @@
       cell: function (a) { return '<td>' + (a._lid ? '<span class="tag">✓ מקושר</span>' : '<span class="muted">—</span>') + '</td>'; } },
     { key: 'appt_id', label: 'מזהה פגישה', def: false, w: 130, sortable: false,
       cell: function (a) { return '<td class="muted ltr" style="font-size:11px;user-select:all">' + esc(String(a.id).slice(0, 8)) + '</td>'; } },
-    { key: 'action', label: 'פעולה', cell: function (a) { return '<td><button class="btn btn-sm ' + (a._handled ? 'btn-ghost' : '') + '" data-appt="' + a.id + '" data-to="' + (a._handled ? 'new' : 'handled') + '" onclick="event.stopPropagation()">' + (a._handled ? 'החזר' : 'סמן כבוצעה') + '</button></td>'; } }
+    { key: 'action', label: 'ניהול', cell: function (a) {
+      var opts = APPT_STATUSES.map(function (o) { return '<option value="' + o[0] + '"' + ((a.status === o[0] || (o[0] === 'pending' && (!a.status || a.status === 'new'))) ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('');
+      var wn = apptWa(a.phone);
+      var wa = wn ? '<a class="btn btn-ghost btn-sm" href="https://wa.me/' + wn + '?text=' + encodeURIComponent('תזכורת לפגישה') + '" target="fd-whatsapp" rel="noopener" title="תזכורת בוואטסאפ" data-appt-wa="' + a.id + '" onclick="event.stopPropagation()">💬</a>' : '';
+      var mail = a.email ? '<button class="btn btn-ghost btn-sm" data-appt-remind="' + a.id + '" title="שלח תזכורת-מייל" onclick="event.stopPropagation()">📨</button>' : '';
+      return '<td onclick="event.stopPropagation()"><div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap"><select class="inp" data-appt-status="' + a.id + '" style="width:auto;font-size:12px">' + opts + '</select>' + mail + wa + '</div></td>'; } }
   ];
   var apptCols = null;
   var apptFilter = 'all';
@@ -3428,14 +3456,14 @@
       function leadOf(a) { return a.lead_id || byPhone[String(a.phone || '').replace(/\D/g, '')] || null; }
       function whenMs(a) { return a.appt_at ? new Date(a.appt_at).getTime() : (a.created_at ? new Date(a.created_at).getTime() : 0); }
       var now = Date.now();
-      var upcoming = appts.filter(function (a) { return a.status !== 'handled' && whenMs(a) >= now; });
-      var doneA = appts.filter(function (a) { return a.status === 'handled'; });
-      var overdue = appts.filter(function (a) { return a.status !== 'handled' && whenMs(a) < now; });   // עברו — לא בוצעו וחלף מועדן
+      var upcoming = appts.filter(function (a) { return APPT_DONE.indexOf(a.status) < 0 && whenMs(a) >= now; });
+      var doneA = appts.filter(function (a) { return APPT_DONE.indexOf(a.status) >= 0; });
+      var overdue = appts.filter(function (a) { return APPT_DONE.indexOf(a.status) < 0 && whenMs(a) < now; });   // עברו — לא בוצעו/טופלו וחלף מועדן
       var list = apptFilter === 'upcoming' ? upcoming : apptFilter === 'done' ? doneA : apptFilter === 'overdue' ? overdue : appts;
       function tab(k, label, n) { return '<button data-af="' + k + '"' + (apptFilter === k ? ' class="active"' : '') + '>' + label + ' (' + n + ')</button>'; }
       var brandOpts = ((window.C2B.lists && window.C2B.lists.brand) || []).map(function (v) { return '<option value="' + esc(v) + '">'; }).join('');
       function dtLocal(a) { var t = a.appt_at ? new Date(a.appt_at) : null; if (!t || isNaN(t)) return ''; var p = function (n) { return ('0' + n).slice(-2); }; return t.getFullYear() + '-' + p(t.getMonth() + 1) + '-' + p(t.getDate()) + 'T' + p(t.getHours()) + ':' + p(t.getMinutes()); }
-      list.forEach(function (a) { a._handled = a.status === 'handled'; a._lid = leadOf(a); a._soon = !a._handled && whenMs(a) >= now; a._overdue = !a._handled && whenMs(a) < now; a._dt = dtLocal(a); });
+      list.forEach(function (a) { a._handled = APPT_DONE.indexOf(a.status) >= 0; a._lid = leadOf(a); a._soon = !a._handled && whenMs(a) >= now; a._overdue = !a._handled && whenMs(a) < now; a._dt = dtLocal(a); });
       if (!apptCols) apptCols = window.C2B.colPicker('appointments', APPT_COLS, renderAppointments, { sortable: true });
       var rows = apptCols.sortRows(list).map(function (a) {
         return '<tr' + (a._lid ? ' data-lead="' + a._lid + '" title="פתח כרטיס לקוח"' : '') + ' style="' + (a._lid ? 'cursor:pointer;' : '') + (a._handled ? 'background:rgba(22,163,74,.06)' : '') + '">' + apptCols.cells(a) + '</tr>';
@@ -3454,6 +3482,17 @@
       $('view').querySelectorAll('[data-appt-brand]').forEach(function (inp) { inp.addEventListener('change', function () { db.from('appointments').update({ brand: inp.value.trim() || null }).eq('id', inp.dataset.apptBrand).then(function () {}, function () {}); }); });
       $('view').querySelectorAll('[data-appt-note]').forEach(function (inp) { inp.addEventListener('change', function () { db.from('appointments').update({ note: inp.value.trim() || null }).eq('id', inp.dataset.apptNote).then(function () {}, function () {}); }); });
       $('view').querySelectorAll('button[data-appt]').forEach(function (b) { b.addEventListener('click', function () { db.from('appointments').update({ status: b.dataset.to }).eq('id', b.dataset.appt).then(renderAppointments); }); });
+      //  ניהול-מתאמת: סטטוס (RPC — מתעד הגעה/אי-הגעה בליד) · תזכורת-מייל · וואטסאפ מסמן reminded
+      $('view').querySelectorAll('[data-appt-status]').forEach(function (s) { s.addEventListener('change', function () {
+        db.rpc('appt_set_status', { p_appt: s.dataset.apptStatus, p_status: s.value }).then(function (r) { if (r && r.error) alert('שגיאה: ' + r.error.message); renderAppointments(); }, function (e) { alert('שגיאה: ' + ((e && e.message) || e)); });
+      }); });
+      $('view').querySelectorAll('[data-appt-remind]').forEach(function (b) { b.addEventListener('click', function () {
+        b.disabled = true; var old = b.textContent; b.textContent = '…';
+        db.rpc('appt_send_reminder', { p_appt: b.dataset.apptRemind }).then(function (r) { if (r && r.error) { b.disabled = false; b.textContent = old; alert('שגיאה: ' + r.error.message); return; } renderAppointments(); }, function (e) { b.disabled = false; b.textContent = old; alert('שגיאה: ' + ((e && e.message) || e)); });
+      }); });
+      $('view').querySelectorAll('[data-appt-wa]').forEach(function (aEl) { aEl.addEventListener('click', function () {
+        db.from('appointments').update({ status: 'reminded', reminder_sent_at: new Date().toISOString() }).eq('id', aEl.dataset.apptWa).then(function () {}, function () {});
+      }); });
     });
   }
   // ---- create a new appointment (from the calendar view) ----
@@ -4839,7 +4878,7 @@
   var repTab = 'manager', salesSub = 'overview', mktSub = 'overview';
 
   // ---------- USERS & ROLES (admin only) ----------
-  var ROLES = [['admin', 'מנהל מערכת'], ['sales', 'סוכן מכירות'], ['files', 'מנהלת תיקי לקוחות'], ['accounting', 'מנהלת חשבונות'], ['branch', 'מנהל סניף']];
+  var ROLES = [['admin', 'מנהל מערכת'], ['sales', 'סוכן מכירות'], ['files', 'מנהלת תיקי לקוחות'], ['accounting', 'מנהלת חשבונות'], ['branch', 'מנהל סניף'], ['brand_manager', 'מנהל מותג'], ['coordinator', 'מתאמת פגישות']];
   function roleName(k) { var x = ROLES.filter(function (r) { return r[0] === k; })[0]; return x ? x[1] : k; }
   function viewsLabel(v, role) {
     var isDefault = !(v && v.length);
@@ -6911,7 +6950,7 @@
           return '<tr><td><span class="avatar" style="margin-inline-end:8px">' + esc((p.full_name || '?').charAt(0)) + '</span>' + esc(p.full_name || '—') +
             (p.email ? '<div class="muted" style="font-size:11px">' + esc(p.email) + '</div>' : '') + '</td>' +
             '<td>' + esc(roleLabel(p.role)) + '</td>' +
-            '<td style="white-space:normal;max-width:260px">' + (p.role === 'admin' ? '<span class="muted" style="font-size:12.5px">👑 רואה את הכל</span>' : viewsLabel(p.views, p.role)) + '</td>' +
+            '<td style="white-space:normal;max-width:260px">' + (p.role === 'admin' ? '<span class="muted" style="font-size:12.5px">👑 רואה את הכל</span>' : viewsLabel((window.C2B.roleViews && window.C2B.roleViews[p.role]) || DEFAULT_VIEWS[p.role], p.role)) + '</td>' +
             '<td>' + (p.active ? '<span style="color:var(--ok);font-weight:700">✓ פעיל</span>' : '<span style="color:var(--danger);font-weight:700">✕ לא פעיל</span>') + '</td>' +
             '<td class="muted" style="font-size:12px">🔒 מנהל מערכת</td></tr>';
         }
@@ -6920,7 +6959,7 @@
           '<button data-actset="' + p.user_id + '" data-on="0" style="border:none;border-inline-start:1px solid var(--line);padding:6px 12px;font-size:12.5px;cursor:pointer;font-weight:600;background:' + (!p.active ? 'var(--danger)' : 'transparent') + ';color:' + (!p.active ? '#fff' : 'var(--muted)') + '">✕ לא פעיל</button></div>';
         return '<tr><td><span class="avatar" style="margin-inline-end:8px">' + esc((p.full_name || '?').charAt(0)) + '</span><span class="uname-txt" data-nameuid="' + p.user_id + '">' + esc(p.full_name || '—') + '</span> <button class="btn btn-ghost btn-sm" data-edituser="' + p.user_id + '" title="ערוך את כל פרטי המשתמש">✏️ ערוך</button>' + (p.email ? '<div class="muted" style="font-size:11px">' + esc(p.email) + '</div>' : '') + '</td>' +
           '<td><select class="inp" data-role="' + p.user_id + '">' + roleOpts.map(function (x) { return '<option value="' + x[0] + '"' + (p.role === x[0] ? ' selected' : '') + '>' + x[1] + '</option>'; }).join('') + '</select></td>' +
-          '<td style="white-space:normal;max-width:260px">' + (p.role === 'admin' ? '<span class="muted" style="font-size:12.5px">👑 מנהל מערכת — רואה את הכל (תצוגות לא חלות על מנהל)</span>' : viewsLabel(p.views, p.role) + ' <button class="btn btn-ghost btn-sm" data-editviews="' + p.user_id + '">✏️</button><div class="hidden" id="ev_' + p.user_id + '"></div>') + '</td>' +
+          '<td style="white-space:normal;max-width:260px">' + (p.role === 'admin' ? '<span class="muted" style="font-size:12.5px">👑 מנהל מערכת — רואה את הכל (תצוגות לא חלות על מנהל)</span>' : viewsLabel((window.C2B.roleViews && window.C2B.roleViews[p.role]) || DEFAULT_VIEWS[p.role], p.role) + ' <span class="muted" style="font-size:11px">(לפי התפקיד — עריכה בהגדרות←הרשאות)</span>') + '</td>' +
           '<td>' + seg + '</td>' +
           '<td>' + reset + '</td></tr>' +
           '<tr class="hidden" id="uedit_' + p.user_id + '"><td colspan="5" style="padding:0 8px"></td></tr>';
@@ -6933,9 +6972,11 @@
         '<div class="field" style="margin:0"><label>אימייל</label><input class="inp" id="nuEmail" type="email" placeholder="name@email.com"></div>' +
         '<div class="field" style="margin:0"><label>טלפון</label><input class="inp" id="nuPhone" type="tel" placeholder="050-0000000"></div>' +
         '<div class="field" style="margin:0"><label>תפקיד</label><select class="inp" id="nuRole">' + roleOpts.map(function (x) { return '<option value="' + x[0] + '">' + x[1] + '</option>'; }).join('') + '</select></div>' +
-        '<div class="field" style="margin:0"><label>מותג <span style="color:var(--danger)">*</span> <span class="muted" style="font-weight:400">— לאיזה מותג משויך</span></label><select class="inp" id="nuBrand">' + window.C2B.selOpts((window.C2B.marketingBrands || []), '', '— בחר מותג —') + '</select></div>' +
+        '<div class="field" id="nuBrandWrap" style="margin:0"><label>מותג <span style="color:var(--danger)">*</span> <span class="muted" style="font-weight:400">— לאיזה מותג משויך</span></label><select class="inp" id="nuBrand">' + window.C2B.selOpts((window.C2B.marketingBrands || []), '', '— בחר מותג —') + '</select></div>' +
+        '<div class="field" id="nuBrandsWrap" style="margin:0;display:none;grid-column:1/-1"><label>מותגים שהמנהל אחראי עליהם <span style="color:var(--danger)">*</span></label><div id="nuBrandsBox" style="border:1px solid var(--line);border-radius:8px;padding:8px;max-height:120px;overflow:auto;line-height:2.1">' + ((window.C2B.marketingBrands || []).map(function (b) { return '<label style="display:inline-flex;gap:4px;margin:2px 10px 2px 0;font-size:12.5px;white-space:nowrap"><input type="checkbox" data-nbrand="' + esc(b) + '"> ' + esc(b) + '</label>'; }).join('') || '<span class="muted" style="font-size:12px">אין מותגים</span>') + '</div></div>' +
+        '<div class="field" id="nuManagerWrap" style="margin:0;display:none"><label>מנהל מותג אחראי</label><select class="inp" id="nuManager"><option value="">— ללא —</option>' + ps.filter(function (x) { return x.role === 'brand_manager'; }).map(function (x) { return '<option value="' + esc(x.user_id) + '">' + esc(x.full_name || x.email) + '</option>'; }).join('') + '</select></div>' +
         '</div>' +
-        '<label style="font-size:13px;color:var(--muted);margin-top:12px;display:block">תצוגות שהמשתמש יראה (מוגדר לפי התפקיד — אפשר להוסיף/להוריד):</label><div id="nuViews">' + viewChecks('nv', DEFAULT_VIEWS.sales) + '</div>' +
+        '<p class="muted" style="font-size:12.5px;margin-top:12px">התצוגות נקבעות אוטומטית לפי התפקיד. לשינוי — הגדרות ← הרשאות.</p>' +
         '<div style="margin-top:14px"><button class="btn" id="nuCreate">צור משתמש ושלח הזמנה</button> <span id="nuMsg" style="font-size:13px;margin-inline-start:10px"></span></div><div id="nuResult" style="margin-top:12px"></div></div>';
       //  ערוצי Hey · WhatsApp עברו למסך "הגדרות ורשימות" → טלפוניה ווואטסאפ
       //  (הם הגדרת-מערכת, לא ניהול-משתמשים).
@@ -6961,20 +7002,38 @@
         } catch (e) { console.warn('access-sync failed', e); }
       }
 
-      // add-user: role change → reset the view checkboxes to that role's defaults
-      $('nuRole').addEventListener('change', function () { $('nuViews').innerHTML = viewChecks('nv', DEFAULT_VIEWS[this.value] || ['dashboard']); });
+      // תצוגות נקבעות אוטומטית לפי התפקיד (admin_config.role_views) — אין בחירה פר-משתמש.
+      // שדות פר-תפקיד: מנהל-מותג → ריבוי-מותגים; סוכן → מנהל-אחראי; מתאמת → בלי מותג.
+      function nuRoleSync() {
+        var r = $('nuRole').value;
+        if ($('nuBrandWrap')) $('nuBrandWrap').style.display = (r === 'brand_manager' || r === 'coordinator') ? 'none' : '';
+        if ($('nuBrandsWrap')) $('nuBrandsWrap').style.display = (r === 'brand_manager') ? '' : 'none';
+        if ($('nuManagerWrap')) $('nuManagerWrap').style.display = (r === 'sales') ? '' : 'none';
+      }
+      $('nuRole').addEventListener('change', nuRoleSync); nuRoleSync();
       $('nuCreate').addEventListener('click', function () {
         var name = $('nuName').value.trim(), email = $('nuEmail').value.trim(), role = $('nuRole').value, phone = ($('nuPhone') ? $('nuPhone').value.trim() : ''), brand = ($('nuBrand') ? $('nuBrand').value : '');
-        var views = []; $('nuViews').querySelectorAll('input[data-nv]:checked').forEach(function (c) { views.push(c.dataset.nv); });
+        var views = DEFAULT_VIEWS[role] || [];   // נגזר מהתפקיד; נשמר כגיבוי אך לא נקרא בבוט (role_views קובע)
+        var nuBrands = []; if (role === 'brand_manager') { Array.prototype.forEach.call(document.querySelectorAll('#nuBrandsBox input[data-nbrand]:checked'), function (c) { nuBrands.push(c.dataset.nbrand); }); }
+        var nuMgr = (role === 'sales' && $('nuManager')) ? ($('nuManager').value || '') : '';
         var msg = $('nuMsg');
         if (!email || email.indexOf('@') < 0) { msg.style.color = 'var(--danger)'; msg.textContent = 'הזינו אימייל תקין'; return; }
-        if (!brand) { msg.style.color = 'var(--danger)'; msg.textContent = 'בחרו מותג — שיוך המותג חובה'; return; }
+        if (role === 'brand_manager') { if (!nuBrands.length) { msg.style.color = 'var(--danger)'; msg.textContent = 'בחרו לפחות מותג אחד למנהל-המותג'; return; } brand = nuBrands[0]; }
+        else if (role !== 'coordinator') { if (!brand) { msg.style.color = 'var(--danger)'; msg.textContent = 'בחרו מותג — שיוך המותג חובה'; return; } }
         msg.style.color = 'var(--muted)'; msg.textContent = 'יוצר…'; this.disabled = true;
         var btn = this;
         db.rpc('admin_create_user', { p_email: email, p_name: name || email, p_role: role, p_views: views, p_phone: phone || null, p_brand: brand }).then(function (res) {
           btn.disabled = false;
           if (res.error) { msg.style.color = 'var(--danger)'; msg.textContent = 'שגיאה: ' + res.error.message; return; }
           var d = res.data || {};
+          //  אחרי יצירה: קובעים brands (מנהל-מותג) / manager_id (סוכן) על הפרופיל החדש.
+          var newUid = d.user_id || d.id || d.uid || null;
+          function _applyExtra(uid) {
+            if (role === 'brand_manager' && nuBrands.length) db.from('profiles').update({ brands: nuBrands }).eq('user_id', uid).then(function () {}, function () {});
+            if (nuMgr) db.from('profiles').update({ manager_id: nuMgr }).eq('user_id', uid).then(function () {}, function () {});
+          }
+          if (newUid) _applyExtra(newUid);
+          else if (role === 'brand_manager' || nuMgr) db.from('profiles').select('user_id').eq('email', email).maybeSingle().then(function (pr) { if (pr && pr.data) _applyExtra(pr.data.user_id); });
           msg.textContent = '';
           // always show the credentials (works even if email is blocked)
           $('nuResult').innerHTML = '<div class="card" id="nuBox" style="box-shadow:none;border:1px solid var(--line);margin:0">' +
@@ -7072,10 +7131,7 @@
           '<input class="inp" id="ue_agent_phone2" type="tel" value="' + esc(((p.agent_phone || '').split(',')[1] || '').trim()) + '" placeholder="למשל 0534495197" style="width:100%">' +
           '<span class="muted" style="font-size:11px">לנציג עם שני מספרים (כמו ליאור).</span></div>' +
       '</div>' +
-      (isSelf ? '' :
-        '<label id="ue_viewsWrap" class="hidden" style="display:flex;gap:8px;align-items:center;margin-top:10px;font-size:13px">' +
-          '<input type="checkbox" id="ue_resetViews" checked> עדכן גם את המסכים לברירת המחדל של התפקיד החדש' +
-        '</label>') +
+      '' +
       // התראות-מייל על ליד חדש (notify_staff). המתג מאפשר לבחור אם לקבל, בלי לגעת
       // בהרשאות. נמענים בפועל: מנהל-מערכת (ברירת-מחדל מקבל) ומנהל-סניף (ברירת-מחדל
       // לא — opt-in). סוכן/תיקים/חשבונות אינם נמענים ולכן אין להם מתג.
@@ -7617,6 +7673,36 @@
   var CONN_TIP = {
     facebook: '💡 לטוקן צריכות להיות ההרשאות <b>pages_show_list · leads_retrieval · ads_read</b>, ויש לשייך למשתמש-המערכת גם את <b>הדף וגם את חשבון-המודעות</b> שמריץ את הקמפיין — אחרת שם הקמפיין/הסדרה/המודעה לא יימשכו (יוצג שם-הטופס בלבד). את ה-Page ID לוקחים מעמוד "אודות" של הדף (או מרשימת הדפים של הטוקן).'
   };
+  //  מסך "הרשאות" — אילו תצוגות כל תפקיד רואה (admin_config.role_views). מנהל-בלבד.
+  function renderPermissions() {
+    var host = $('permBox'); if (!host) return;
+    if (!(window.C2B.role === 'admin' || window.C2B.isSuper)) { host.innerHTML = '<div class="card"><div class="sec-note">רק מנהל מערכת מגדיר הרשאות.</div></div>'; return; }
+    var ROLES = [['branch', 'מנהל סניף'], ['brand_manager', 'מנהל מותג'], ['sales', 'סוכן מכירות'], ['files', 'מנהלת תיקי לקוחות'], ['accounting', 'מנהלת חשבונות'], ['coordinator', 'מתאמת פגישות']];
+    host.innerHTML = '<div class="ai-empty">טוען…</div>';
+    db.from('admin_config').select('value').eq('key', 'role_views').maybeSingle().then(function (r) {
+      var rv = (r && r.data && r.data.value) || {}, views = window.C2B.GRANTABLE_VIEWS || [];
+      var rows = ROLES.map(function (role) {
+        var cur = rv[role[0]] || (DEFAULT_VIEWS[role[0]] || []);
+        var cells = views.map(function (v) {
+          var on = cur.indexOf(v[0]) >= 0;
+          return '<label style="display:inline-flex;align-items:center;gap:4px;margin:3px 10px 3px 0;font-size:12.5px;white-space:nowrap"><input type="checkbox" data-pv="' + role[0] + ':' + v[0] + '"' + (on ? ' checked' : '') + '> ' + esc(v[1]) + '</label>';
+        }).join('');
+        return '<div class="card cl-sub" style="margin-bottom:12px"><b>' + esc(role[1]) + '</b><div style="margin-top:8px;line-height:2.2">' + cells + '</div></div>';
+      }).join('');
+      host.innerHTML = '<p class="muted" style="font-size:12.5px;margin:0 0 12px;line-height:1.7">סמנו אילו תצוגות כל תפקיד רואה. מנהל-מערכת תמיד רואה הכל. כל משתמש יורש אוטומטית מהתפקיד שלו — העדכון חל ברענון הבא של המשתמש.</p>' + rows +
+        '<div style="margin-top:8px"><button class="btn btn-sm" id="permSave">💾 שמור הרשאות</button> <span id="permMsg" class="muted" style="font-size:12px;margin-inline-start:8px"></span></div>';
+      $('permSave').onclick = function () {
+        var map = {}; ROLES.forEach(function (role) { map[role[0]] = []; });
+        host.querySelectorAll('[data-pv]:checked').forEach(function (cb) { var p = cb.dataset.pv.split(':'); if (map[p[0]]) map[p[0]].push(p[1]); });
+        var msg = $('permMsg'); msg.style.color = 'var(--muted)'; msg.textContent = 'שומר…';
+        db.from('admin_config').upsert({ org_id: window.C2B.orgId || 1, key: 'role_views', value: map, updated_at: new Date().toISOString() }, { onConflict: 'org_id,key' }).then(function (u) {
+          if (u.error) { msg.style.color = 'var(--danger)'; msg.textContent = 'שגיאה: ' + u.error.message; return; }
+          window.C2B.roleViews = map; msg.style.color = 'var(--ok)'; msg.textContent = '✔ נשמר — משתמשים יראו את העדכון ברענון הבא';
+        });
+      };
+    });
+  }
+
   function renderConnections() {
     var host = $('connBox'); if (!host) return;
     if (!(window.C2B.role === 'admin' || window.C2B.isSuper)) { host.innerHTML = '<div class="card"><div class="sec-note">רק מנהל מערכת של הארגון מגדיר חיבורים.</div></div>'; return; }
@@ -7750,7 +7836,8 @@
         quick: ['\ud83d\udcac הודעות מהירות', 'תבניות לשליחה מהירה מכרטיס הליד.'],
         phone: ['\u260e\ufe0f טלפוניה וווטסאפ', 'חיוג מהמערכת, וכל החיבור של Hey · WhatsApp.'],
         connections: ['🔗 חיבורי פלטפורמה', 'חבר את החשבונות החיצוניים של הארגון — Voicenter, פייסבוק, WhatsApp. כל עסק בנפרד.'],
-        actions: ['\u26a1 פעולות', 'סרגל הפעולות שמופיע בכרטיס הליד.']
+        actions: ['\u26a1 פעולות', 'סרגל הפעולות שמופיע בכרטיס הליד.'],
+        permissions: ['🔐 הרשאות', 'אילו תצוגות כל תפקיד רואה. משתמש חדש יורש אוטומטית מהתפקיד שלו.']
       };
       var hd = HEAD[sec] || HEAD.lists, mid = '';
       if (sec === 'lists') mid = '<div style="margin-bottom:16px"><button class="btn btn-sm" id="seedSources">\ud83c\udfaf טען מקורות מומלצים</button></div>' + warn + cards;
@@ -7760,6 +7847,7 @@
       else if (sec === 'phone') mid = '<div id="telephonyCard"></div><div id="heyCard"></div><div id="waChannelsCard"></div>';
       else if (sec === 'hours') mid = '<div id="officeCard"></div>';
       else if (sec === 'connections') mid = '<div id="connBox"></div>';
+      else if (sec === 'permissions') mid = '<div id="permBox"></div>';
       else if (sec === 'actions') mid = actionEditorCard();
       view('<h2 style="margin:0 0 4px">' + hd[0] + '</h2>' +
         '<p class="muted" style="font-size:13px;margin-bottom:14px">' + hd[1] + '</p>' + mid);
@@ -7773,6 +7861,7 @@
       }
       if (sec === 'hours') renderOffice();
       if (sec === 'connections') renderConnections();
+      if (sec === 'permissions') renderPermissions();
       // מחיקת צ'יפ במקום — בלי לרענן את כל הדף
       function bindDel(bEl) {
         bEl.addEventListener('click', function () {
