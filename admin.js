@@ -7855,7 +7855,13 @@
       else if (sec === 'integrations') mid = '<div id="integrationsCard"></div>';
       else if (sec === 'brands') mid = '<div id="brandMapCard"></div>';
       else if (sec === 'quick') mid = '<div id="quickMsgCard"></div>';
-      else if (sec === 'phone') mid = '<div id="telephonyCard"></div><div id="heyCard"></div><div id="waChannelsCard"></div>';
+      else if (sec === 'phone') mid =
+        '<div id="phoneTabs" style="display:flex;gap:8px;flex-wrap:wrap;margin:0 0 14px">' +
+          '<button class="btn btn-sm" data-ptab="wa">🟢 HEYY · WhatsApp</button>' +
+          '<button class="btn btn-sm" data-ptab="vc">☎️ Voice Center</button>' +
+        '</div>' +
+        '<div id="phoneWa"><div id="heyCard"></div><div id="waChannelsCard"></div></div>' +
+        '<div id="phoneVc" style="display:none"><div id="telephonyCard"></div><div id="voicenterCard"></div></div>';
       else if (sec === 'hours') mid = '<div id="officeCard"></div>';
       else if (sec === 'connections') mid = '<div id="connBox"></div>';
       else if (sec === 'permissions') mid = '<div id="permBox"></div>';
@@ -7869,6 +7875,23 @@
       if (sec === 'phone') { renderTelephony(); renderHeyCfg();
         //  ערוצי Hey · WhatsApp — הועברו לכאן ממסך המשתמשים (הגדרת-מערכת)
         db.from('profiles').select('*').then(function (pr) { var el = $('waChannelsCard'); if (el) el.innerHTML = waNumbersCard((pr && pr.data) || []); });
+        renderVoicenterCfg();
+        //  מעבר בין תת-הלשוניות (HEYY/WhatsApp · Voice Center); נזכר ל-session
+        (function () {
+          var PK = 'c2b_phonetab_' + ((window.__fleetCfg && window.__fleetCfg.slug) || 'default');
+          function sel(k) {
+            try { sessionStorage.setItem(PK, k); } catch (e) {}
+            var wa = $('phoneWa'), vc = $('phoneVc'); if (!wa || !vc) return;
+            wa.style.display = k === 'vc' ? 'none' : '';
+            vc.style.display = k === 'vc' ? '' : 'none';
+            $('view').querySelectorAll('[data-ptab]').forEach(function (b) {
+              b.className = 'btn btn-sm' + (b.dataset.ptab === k ? '' : ' btn-ghost');
+            });
+          }
+          $('view').querySelectorAll('[data-ptab]').forEach(function (b) { b.onclick = function () { sel(b.dataset.ptab); }; });
+          var init = 'wa'; try { init = sessionStorage.getItem(PK) || 'wa'; } catch (e) {}
+          sel(init);
+        })();
       }
       if (sec === 'hours') renderOffice();
       if (sec === 'connections') renderConnections();
@@ -8250,6 +8273,82 @@
             }).join('') || '<tr><td colspan="3" class="empty">\u05e8\u05d9\u05e7</td></tr>') + '</tbody></table></div>';
         });
       };
+    });
+  }
+
+  // ---------- SETTINGS: Voice Center (Voicenter CDR + \u05e0\u05e6\u05d9\u05d2\u05d9\u05dd) ----------
+  //  self-service \u05db\u05de\u05d5 HEYY: \u05e1\u05d5\u05d3-\u05d4-webhook \u05d5\u05de\u05e1\u05e4\u05e8\u05d9-\u05d4\u05e0\u05e6\u05d9\u05d2\u05d9\u05dd \u05e0\u05e9\u05de\u05e8\u05d9\u05dd \u05d1-org_integrations
+  //  (platform='voicenter'). voicenter-cdr \u05e7\u05d5\u05e8\u05d0 \u05d0\u05ea \u05d4\u05e1\u05d5\u05d3 (DB-first), \u05d5-
+  //  call-transcribe/call-analyze \u05e7\u05d5\u05e8\u05d0\u05d9\u05dd \u05d0\u05ea \u05de\u05e1\u05e4\u05e8\u05d9-\u05d4\u05e0\u05e6\u05d9\u05d2\u05d9\u05dd (DB-first). \u05d0\u05d9\u05df \u05db\u05ea\u05d9\u05d1\u05ea-env.
+  function renderVoicenterCfg() {
+    var host = $('voicenterCard'); if (!host) return;
+    host.innerHTML = '<div class="card"><h3>\u260e\ufe0f Voice Center</h3><p class="muted" style="font-size:13px">\u05d8\u05d5\u05e2\u05df\u2026</p></div>';
+    var vcOid = (window.C2B && window.C2B.orgId) || 1;
+    Promise.all([
+      db.from('org_integrations').select('config').eq('platform', 'voicenter').maybeSingle(),
+      db.from('calls').select('id', { count: 'exact', head: true })
+    ]).then(function (r) {
+      var cfg = (r[0] && r[0].data && r[0].data.config) || {};
+      var secret = cfg.secret || '';
+      var agents = Array.isArray(cfg.agents) ? cfg.agents : [];
+      var nCalls = (r[1] && r[1].count) || 0;
+      var hookUrl = SUPABASE_URL + '/functions/v1/voicenter-cdr?secret=' + (secret || '<\u05d4\u05e1\u05d5\u05d3>');
+      var agRows = agents.map(function (a, i) {
+        return '<span class="tag" style="margin:3px"><bdi class="ltr">' + esc(String(a)) + '</bdi> <b data-vcdel="' + i + '" style="cursor:pointer;color:var(--danger)">\u2715</b></span>';
+      }).join('') || '<span class="muted" style="font-size:12px">\u05e2\u05d3\u05d9\u05d9\u05df \u05dc\u05d0 \u05d4\u05d5\u05d2\u05d3\u05e8\u05d5 \u05de\u05e1\u05e4\u05e8\u05d9 \u05e0\u05e6\u05d9\u05d2\u05d9\u05dd \u2014 \u05d9\u05ea\u05de\u05dc\u05dc\u05d5/\u05d9\u05e0\u05d5\u05ea\u05d7\u05d5 \u05e8\u05e7 \u05de\u05e1\u05e4\u05e8\u05d9\u05dd \u05e9\u05de\u05d5\u05d2\u05d3\u05e8\u05d9\u05dd \u05db\u05d0\u05df.</span>';
+
+      host.innerHTML =
+        '<div class="card"><div class="row-between"><h3 style="margin:0">\u260e\ufe0f Voice Center \u2014 \u05e7\u05dc\u05d9\u05d8\u05ea \u05e9\u05d9\u05d7\u05d5\u05ea</h3>' +
+          '<span class="muted" style="font-size:12px">' + nCalls + ' \u05e9\u05d9\u05d7\u05d5\u05ea \u05d1\u05de\u05e2\u05e8\u05db\u05ea</span></div>' +
+          '<p class="muted" style="font-size:13px;margin:6px 0 12px">\u05d7\u05d9\u05d1\u05d5\u05e8 Voicenter: \u05d4\u05d3\u05d1\u05d9\u05e7\u05d5 \u05d0\u05ea \u05db\u05ea\u05d5\u05d1\u05ea \u05d4-Webhook \u05d1\u05d7\u05e9\u05d1\u05d5\u05df Voicenter \u2014 \u05db\u05dc \u05e9\u05d9\u05d7\u05d4 \u05e9\u05ea\u05e1\u05ea\u05d9\u05d9\u05dd \u05ea\u05d9\u05e7\u05dc\u05d8 \u05db\u05d0\u05df \u05d0\u05d5\u05d8\u05d5\u05de\u05d8\u05d9\u05ea (CDR), \u05ea\u05e9\u05d5\u05d9\u05da \u05dc\u05dc\u05d9\u05d3, \u05d5\u05ea\u05ea\u05de\u05dc\u05dc+\u05ea\u05e0\u05d5\u05ea\u05d7.</p>' +
+          '<div class="table-scroll"><table><tbody>' +
+          '<tr><td style="width:180px">\u05db\u05ea\u05d5\u05d1\u05ea Webhook</td><td>' +
+            (secret
+              ? '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><input class="inp ltr" id="vcHookUrl" readonly value="' + esc(hookUrl) + '" style="flex:1;min-width:220px;font-size:12px" onclick="this.select()"><button class="btn btn-sm" id="vcHookCopy">\u05d4\u05e2\u05ea\u05e7</button></div>'
+              : '<div class="muted" style="font-size:12px">\u05e2\u05d3\u05d9\u05d9\u05df \u05dc\u05d0 \u05e0\u05d5\u05e6\u05e8 \u05e1\u05d5\u05d3. <button class="btn btn-sm" id="vcHookGen">\ud83d\udd10 \u05e6\u05d5\u05e8 \u05e1\u05d5\u05d3 \u05d5\u05db\u05ea\u05d5\u05d1\u05ea</button></div>') +
+            '<div class="muted" style="font-size:11.5px;margin-top:4px">\u05d4\u05d3\u05d1\u05d9\u05e7\u05d5 \u05d1\u05d7\u05e9\u05d1\u05d5\u05df Voicenter \u2190 \u05d4\u05d2\u05d3\u05e8\u05d5\u05ea \u2190 Webhook/API \u05dc\u05d0\u05d9\u05e8\u05d5\u05e2\u05d9 \u05e1\u05d9\u05d5\u05dd-\u05e9\u05d9\u05d7\u05d4 (CDR).' +
+            (secret ? ' <a href="#" id="vcHookRot">\u05e1\u05d5\u05d1\u05d1 \u05e1\u05d5\u05d3</a>' : '') + '</div></td></tr>' +
+          '<tr><td>\u05de\u05e1\u05e4\u05e8\u05d9 \u05e0\u05e6\u05d9\u05d2\u05d9\u05dd</td><td>' +
+            '<div id="vcAgents">' + agRows + '</div>' +
+            '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:8px"><input class="inp ltr" id="vcAgInp" placeholder="\u05de\u05e1\u05e4\u05e8 \u05e0\u05e6\u05d9\u05d2 (\u05dc\u05de\u05e9\u05dc 0532818920)" style="flex:1;min-width:180px"><button class="btn btn-sm" id="vcAgAdd">\u2795 \u05d4\u05d5\u05e1\u05e3</button></div>' +
+            '<div class="muted" style="font-size:11.5px;margin-top:4px">\u05e8\u05e7 \u05e9\u05d9\u05d7\u05d5\u05ea \u05e9\u05dc \u05d4\u05de\u05e1\u05e4\u05e8\u05d9\u05dd \u05d4\u05d0\u05dc\u05d4 \u05d9\u05ea\u05d5\u05de\u05dc\u05dc\u05d5 \u05d5\u05d9\u05e2\u05d1\u05e8\u05d5 \u05e0\u05d9\u05ea\u05d5\u05d7-AI. \u05de\u05e1\u05e4\u05e8 \u05d1\u05db\u05dc \u05e4\u05d5\u05e8\u05de\u05d8 (0\u2026, 972\u2026).</div></td></tr>' +
+          '</tbody></table></div></div>';
+
+      function vcSave(patch, done) {
+        var merged = Object.assign({}, cfg, patch);
+        db.from('org_integrations').upsert({ org_id: vcOid, platform: 'voicenter', config: merged, connected: true, updated_at: new Date().toISOString() }, { onConflict: 'org_id,platform' }).then(function (u) { if (!(u && u.error)) cfg = merged; done && done(u); });
+      }
+      function vcRand() {
+        var a = new Uint8Array(24);
+        if (window.crypto && window.crypto.getRandomValues) window.crypto.getRandomValues(a);
+        else for (var i = 0; i < a.length; i++) a[i] = Math.floor(Math.random() * 256);
+        return Array.prototype.map.call(a, function (b) { return ('0' + b.toString(16)).slice(-2); }).join('');
+      }
+      if ($('vcHookCopy')) $('vcHookCopy').onclick = function () {
+        var inp = $('vcHookUrl'); if (!inp) return; inp.select();
+        try { navigator.clipboard.writeText(inp.value); } catch (e) { try { document.execCommand('copy'); } catch (e2) {} }
+        var b = this; b.textContent = '\u05d4\u05d5\u05e2\u05ea\u05e7 \u2713'; setTimeout(function () { b.textContent = '\u05d4\u05e2\u05ea\u05e7'; }, 1500);
+      };
+      if ($('vcHookGen')) $('vcHookGen').onclick = function () {
+        this.disabled = true; this.textContent = '\u05d9\u05d5\u05e6\u05e8\u2026';
+        vcSave({ secret: vcRand() }, function () { renderVoicenterCfg(); });
+      };
+      if ($('vcHookRot')) $('vcHookRot').onclick = function (e) {
+        e.preventDefault();
+        if (!confirm('\u05dc\u05e1\u05d5\u05d1\u05d1 \u05d0\u05ea \u05d4\u05e1\u05d5\u05d3? \u05d4\u05db\u05ea\u05d5\u05d1\u05ea \u05d4\u05d9\u05e9\u05e0\u05d4 \u05ea\u05e4\u05e1\u05d9\u05e7 \u05dc\u05e2\u05d1\u05d5\u05d3 \u2014 \u05ea\u05e6\u05d8\u05e8\u05da \u05dc\u05e2\u05d3\u05db\u05df \u05d0\u05ea \u05d4\u05db\u05ea\u05d5\u05d1\u05ea \u05d4\u05d7\u05d3\u05e9\u05d4 \u05d1-Voicenter.')) return;
+        vcSave({ secret: vcRand() }, function () { renderVoicenterCfg(); });
+      };
+      if ($('vcAgAdd')) $('vcAgAdd').onclick = function () {
+        var v = (($('vcAgInp') || {}).value || '').replace(/[^0-9]/g, '');
+        if (!v) return;
+        vcSave({ agents: agents.concat([v]) }, function () { renderVoicenterCfg(); });
+      };
+      host.querySelectorAll('[data-vcdel]').forEach(function (b) {
+        b.onclick = function () {
+          var i = +b.dataset.vcdel, next = agents.slice(); next.splice(i, 1);
+          vcSave({ agents: next }, function () { renderVoicenterCfg(); });
+        };
+      });
     });
   }
 
