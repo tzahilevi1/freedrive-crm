@@ -1,5 +1,5 @@
 /* ============================================================
-   פרי דרייב — CRM module: clean leads table, full-page lead view
+   __BRAND_NAME__ — CRM module: clean leads table, full-page lead view
    (prev/next, clickable status, quick actions, car picker, timeline),
    manager dashboard, and a status menu reusable anywhere. window.C2B.
    ============================================================ */
@@ -9,14 +9,14 @@
   if (!C) return;
   var db = C.db, esc = C.esc, fmt = C.fmt, nis = C.nis, view = C.view, loading = C.loading, errBox = C.errBox;
   //  מיתוג פר-ארגון בזמן-ריצה (נטען ל-C.brand ב-boot). fallback לטוקן-הבנייה.
-  function bname() { var b = C.brand || {}; return b.name || 'פרי דרייב'; }
+  function bname() { var b = C.brand || {}; return b.name || '__BRAND_NAME__'; }
   function blegal() {
     var b = C.brand || {};
     if (b.legal_entity) return b.legal_entity;
-    //  נפילה לישות מה-build (‎.env / נ.ש פוקס מוטורס בע"מ ח.פ. 516742731‎) מותרת **רק** למותג-הבנייה עצמו:
+    //  נפילה לישות מה-build (‎.env / __LEGAL_ENTITY__‎) מותרת **רק** למותג-הבנייה עצמו:
     //  org הבית (שם הארגון === מותג-הבנייה) או פרויקט מותג-יחיד (אין C.brand).
     //  לארגון אחר בפלטפורמה המשותפת → ריק. אסור לחשוף ישות/ח.פ של חברה אחרת בהסכם.
-    if (!b.name || b.name === 'פרי דרייב') return LEGAL_ENTITY || '';
+    if (!b.name || b.name === '__BRAND_NAME__') return LEGAL_ENTITY || '';
     return '';
   }
   function bregno() { var b = C.brand || {}; return b.reg_no || ''; }
@@ -45,7 +45,7 @@
     { k: 'new', label: 'חדש', icon: '🆕', color: '#3b82f6', flow: true },
     { k: 'in_progress', label: 'בטיפול', icon: '📞', color: '#6366f1', flow: true },
     { k: 'meeting_set', label: 'פגישה נקבעה', icon: '📅', color: '#8b5cf6', flow: true },
-    { k: 'quote_sent', label: 'הצעת מחיר', icon: '💰', color: '#6E8B10', flow: true },
+    { k: 'quote_sent', label: 'הצעת מחיר', icon: '💰', color: '__BRAND_COLOR__', flow: true },
     { k: 'underwriting', label: 'בתהליך חיתום', icon: '📝', color: '#eab308', flow: true },
     { k: 'won', label: 'עסקה נסגרה', icon: '✅', color: '#16a34a', flow: true, terminal: true },
     { k: 'lost', label: 'לא רלוונטי', icon: '❌', color: '#e2555a', terminal: true },
@@ -373,7 +373,7 @@
   // יש שם אנגלי תקין ב-extra.name_en ("BYD Seal U"). מעדיפים אותו ומנרמלים אותיות.
   // הישות המשפטית שמופיעה בכותרת ההסכם. ריק = לא מוצגת שורה כלל,
   // וזה עדיף על פני הצגת ח.פ של חברה אחרת.
-  var LEGAL_ENTITY = 'נ.ש פוקס מוטורס בע"מ ח.פ. 516742731';
+  var LEGAL_ENTITY = '__LEGAL_ENTITY__';
 
   var CAR_ACR = { byd:'BYD', bmw:'BMW', mg:'MG', kia:'KIA', gac:'GAC', gwm:'GWM', ev:'EV', dm:'DM',
                   suv:'SUV', gt:'GT', phev:'PHEV', hev:'HEV', bev:'BEV', fl:'FL', vw:'VW', ds:'DS',
@@ -584,11 +584,11 @@
       C.$('lnew').addEventListener('click', newLeadForm);
       if (C.$('limport')) C.$('limport').addEventListener('click', leadImportForm);
       C.$('lq').addEventListener('input', draw);
-      C.$('lcsv').addEventListener('click', function () { C.exportCsv(listRows(), ['created_at', 'name', 'phone', 'email', 'car', 'source', 'status', 'city', 'brand', 'marketing_company', 'utm_source', 'utm_campaign', 'message'], 'free-drive-leads'); });
+      C.$('lcsv').addEventListener('click', function () { C.exportCsv(listRows(), ['created_at', 'name', 'phone', 'email', 'car', 'source', 'status', 'city', 'brand', 'marketing_company', 'utm_source', 'utm_campaign', 'message'], '__BRAND_SLUG__-leads'); });
       C.$('lxls').addEventListener('click', function () {
         var xcols = ['created_at', 'name', 'phone', 'email', 'car', 'source', 'status', 'city', 'brand', 'marketing_company', 'utm_source', 'utm_campaign', 'utm_medium', 'campaign', 'adset_name', 'ad_name', 'message'];
         var xlabels = { created_at: 'תאריך', name: 'שם', phone: 'טלפון', email: 'אימייל', car: 'רכב', source: 'מקור הגעה', status: 'סטטוס', city: 'עיר', brand: 'מותג', marketing_company: 'חברת שיווק', utm_source: 'פלטפורמה', utm_campaign: 'קמפיין', utm_medium: 'סוג תנועה', campaign: 'שם קמפיין', adset_name: 'סדרת מודעות', ad_name: 'מודעה', message: 'הודעה' };
-        C.exportXlsx(listRows(), xcols, 'free-drive-leads', xlabels);
+        C.exportXlsx(listRows(), xcols, '__BRAND_SLUG__-leads', xlabels);
       });
       leadCols.bind();
       draw();
@@ -809,20 +809,74 @@
   var IMPORT_FIELDS = [
     ['name', 'שם'], ['phone', 'טלפון'], ['email', 'אימייל'], ['car', 'רכב'], ['brand', 'מותג'],
     ['source', 'מקור הגעה'], ['city', 'עיר'], ['marketing_company', 'חברת שיווק'],
-    ['utm_source', 'utm_source'], ['utm_campaign', 'utm_campaign'], ['id_num', 'ת.ז / ח.פ'], ['message', 'הערה / תיאור']
+    ['status', 'סטטוס'], ['created_at', 'תאריך יצירה'], ['assigned_to', 'מנהל מכירות / נציג'],
+    ['close_reason', 'תוצאת שיחה / סיבה'], ['page_url', 'קישור לעמוד'],
+    ['utm_source', 'utm_source'], ['utm_medium', 'utm_medium'], ['utm_campaign', 'utm_campaign'],
+    ['utm_content', 'utm_content'], ['utm_term', 'utm_term'], ['ad_group', 'ad_group'],
+    ['external_id', 'מזהה ליד (מניעת כפילות)'], ['id_num', 'ת.ז / ח.פ'], ['message', 'הערה / תיאור']
   ];
-  // guess which lead field a CSV header maps to (Hebrew + English + Arabic)
+  // guess which lead field a CSV header maps to (Hebrew + English + Arabic + ייצוא Fireberry)
+  //  הסדר קובע: דפוסים ספציפיים (utm_*, תאריך, סטטוס, מזהה) לפני הכלליים (מקור).
   function guessField(header) {
-    var h = String(header || '').toLowerCase().trim();
+    var h = String(header || '').replace(/^﻿/, '').toLowerCase().trim();
     var R = [
-      ['name', /name|שם|full|الاسم/], ['phone', /phone|tel|טלפון|נייד|מספר|هاتف|جوال/], ['email', /e-?mail|מייל|דוא|بريد/],
-      ['car', /car|vehicle|רכב|דגם|سيارة|موديل/], ['brand', /brand|מותג|יצרן|manufacturer/],
-      ['source', /source|מקור|utm_?source|قناة/], ['city', /city|עיר|יישוב|ישוב|بلد|مدينة/],
-      ['marketing_company', /marketing|חברת ?שיווק|חברה/], ['utm_campaign', /campaign|קמפיין|utm_?campaign/],
-      ['id_num', /id|ת\.?ז|ח\.?פ|תעודת|هوية/], ['message', /message|note|הערה|תיאור|body|رسالة/]
+      ['email', /e-?mail|מייל|דוא|بريد/],
+      ['phone', /phone|tel|טלפון|נייד|מספר|هاتف|جوال/],
+      ['name', /name|שם|full|الاسم/],
+      ['created_at', /created|נוצר|תאריך|date|מועד/],
+      ['status', /status|סטטוס|מצב לקוח|מצב ליד/],
+      ['assigned_to', /assigned|מנהל ?מכירות|נציג|owner|agent|מטפל|אחראי/],
+      ['close_reason', /תוצא|סיבה|reason|result|disposition/],
+      ['utm_source', /utm_?source/],
+      ['utm_medium', /utm_?medium|^medium$/],
+      ['utm_campaign', /utm_?campaign|קמפיין|^campaign$/],
+      ['utm_content', /utm_?content|^content$/],
+      ['utm_term', /utm_?term|^term$/],
+      ['ad_group', /ad_?group|adgroup|קבוצת ?מודעות/],
+      ['external_id', /lead_?id|external|מזהה ?ליד|fireberry|מזהה חיצוני/],
+      ['car', /car|vehicle|רכב|דגם|מתעניין|سيارة|موديل/],
+      ['brand', /brand|מותג|יצרן|manufacturer/],
+      ['page_url', /url|קישור|עמוד|link|landing/],
+      ['source', /source|מקור|قناة/],
+      ['city', /city|עיר|יישוב|ישוב|بلد|مدينة/],
+      ['marketing_company', /marketing|חברת ?שיווק/],
+      ['id_num', /^id$|ת\.?ז|ח\.?פ|תעודת|هوية/],
+      ['message', /message|note|הערה|תיאור|body|رسالة/]
     ];
     for (var i = 0; i < R.length; i++) if (R[i][1].test(h)) return R[i][0];
     return '';
+  }
+  // מיפוי ערך-סטטוס מ-Fireberry/עברית למפתח ה-CRM (STATUSES הקנוני)
+  var STATUS_SYN = {
+    'לא רלוונטי': 'lost', 'לא רלוונטית': 'lost', 'הפסד': 'lost', 'נפסל': 'lost', 'סגור': 'lost', 'בוטל': 'lost', 'lost': 'lost',
+    'אין מענה': 'no_answer', 'לא ענה': 'no_answer', 'no answer': 'no_answer', 'no_answer': 'no_answer',
+    'חדש': 'new', 'ליד חדש': 'new', 'new': 'new',
+    'בטיפול': 'in_progress', 'בתהליך': 'in_progress', 'in progress': 'in_progress', 'in_progress': 'in_progress',
+    'פגישה נקבעה': 'meeting_set', 'נקבעה פגישה': 'meeting_set', 'פגישה': 'meeting_set', 'meeting_set': 'meeting_set',
+    'הצעת מחיר': 'quote_sent', 'הצעה נשלחה': 'quote_sent', 'נשלחה הצעה': 'quote_sent', 'הצעה': 'quote_sent', 'quote_sent': 'quote_sent',
+    'בתהליך חיתום': 'underwriting', 'חיתום': 'underwriting', 'underwriting': 'underwriting',
+    'עסקה נסגרה': 'won', 'זכייה': 'won', 'נסגר': 'won', 'עסקה': 'won', 'won': 'won'
+  };
+  var VALID_STATUS = {}; STATUSES.forEach(function (s) { VALID_STATUS[s.k] = true; });
+  function mapStatus(raw) {
+    var s = String(raw || '').trim(); if (!s) return null;
+    if (VALID_STATUS[s]) return s;
+    var clean = s.replace(/[^֐-׿a-zA-Z ]+/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
+    if (!clean) return null;
+    if (STATUS_SYN[clean]) return STATUS_SYN[clean];
+    for (var k in STATUS_SYN) if (clean.indexOf(k) >= 0) return STATUS_SYN[k];
+    return null;
+  }
+  // תאריך: DD/MM/YYYY [HH:MM] (Fireberry) / DD.MM.YYYY / ISO
+  function parseImpDate(raw) {
+    var s = String(raw || '').trim(); if (!s || s === '-') return null;
+    var m = /^(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{2,4})(?:[ T](\d{1,2}):(\d{2}))?/.exec(s);
+    if (m) {
+      var yy = +m[3]; if (yy < 100) yy += 2000;
+      var d = new Date(yy, +m[2] - 1, +m[1], +(m[4] || 0), +(m[5] || 0));
+      if (!isNaN(d.getTime())) return d.toISOString();
+    }
+    var d2 = new Date(s); return isNaN(d2.getTime()) ? null : d2.toISOString();
   }
   function parseDelimited(text) {
     text = String(text || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
@@ -841,13 +895,20 @@
     return rows.filter(function (r) { return r.some(function (x) { return String(x).trim() !== ''; }); });
   }
   function leadImportForm() {
-    var parsed = null, agents = {};
-    db.from('profiles').select('user_id,full_name,active').then(function (r) { (r.data || []).forEach(function (p) { if (p.active !== false) agents[p.user_id] = p.full_name; }); });
+    var parsed = null, agents = {}, agentByName = {};
+    function normName(s) { return String(s || '').replace(/\s+/g, ' ').trim().toLowerCase(); }
+    db.from('profiles').select('user_id,full_name,active').then(function (r) {
+      (r.data || []).forEach(function (p) {
+        if (p.active === false) return;
+        agents[p.user_id] = p.full_name;
+        if (p.full_name) agentByName[normName(p.full_name)] = p.user_id;
+      });
+    });
     view('<div class="lead-top"><button class="btn btn-ghost btn-sm" id="impBack">→ לרשימה</button><h3 style="margin:0">⬆️ ייבוא לידים בכמות</h3></div>' +
-      '<div class="card" style="max-width:820px">' +
-        '<p class="muted" style="font-size:13px;margin:0 0 10px">העלו קובץ <b>.csv</b> או הדביקו טבלה מ-Excel/Sheets (עם שורת כותרות). המערכת תזהה את השדות אוטומטית — תוכלו לתקן ידנית.</p>' +
+      '<div class="card" style="max-width:860px">' +
+        '<p class="muted" style="font-size:13px;margin:0 0 10px">העלו קובץ <b>.csv</b> או הדביקו טבלה מ-Excel/Sheets (עם שורת כותרות). המערכת תזהה את השדות אוטומטית — כולל ייצוא מ-Fireberry (תאריך, סטטוס, מנהל מכירות, תוצאת שיחה, UTM, מזהה ליד) — ותוכלו לתקן ידנית.</p>' +
         '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><input type="file" id="impFile" accept=".csv,.txt,text/csv"><span class="muted">או הדביקו למטה ↓</span></div>' +
-        '<textarea id="impText" placeholder="שם,טלפון,אימייל,רכב,מקור&#10;דנה כהן,0501234567,dana@x.com,מאזדה CX-5,פייסבוק" style="width:100%;height:130px;margin-top:10px;font-family:monospace;font-size:13px;direction:ltr"></textarea>' +
+        '<textarea id="impText" placeholder="נוצר בתאריך,סטטוס לקוח,שם לקוח,טלפון ראשי,מנהל מכירות,מקור הגעה,מותג,lead_id" style="width:100%;height:120px;margin-top:10px;font-family:monospace;font-size:13px;direction:ltr"></textarea>' +
         '<div style="margin-top:10px"><button class="btn btn-sm" id="impParse">🔍 נתח נתונים</button></div>' +
         '<div id="impResult" style="margin-top:14px"></div>' +
       '</div>');
@@ -868,46 +929,85 @@
           IMPORT_FIELDS.map(function (f) { return '<option value="' + f[0] + '"' + (g === f[0] ? ' selected' : '') + '>' + esc(f[1]) + '</option>'; }).join('') + '</select></td></tr>';
       }).join('');
       var agentOpts = Object.keys(agents).map(function (uid) { return '<option value="' + uid + '">' + esc(agents[uid]) + '</option>'; }).join('');
+      var statusOpts = STATUSES.map(function (s) { return '<option value="' + s.k + '"' + (s.k === 'new' ? ' selected' : '') + '>' + esc(s.icon + ' ' + s.label) + '</option>'; }).join('');
       C.$('impResult').innerHTML =
         '<div class="row-between" style="margin-bottom:8px"><b>מיפוי עמודות</b><span class="muted" style="font-size:12.5px">' + dataRows.length + ' שורות נתונים</span></div>' +
         '<div class="table-scroll"><table><thead><tr><th>עמודה בקובץ (דוגמה)</th><th>שדה ב-CRM</th></tr></thead><tbody>' + mapSel + '</tbody></table></div>' +
         '<div class="grid2" style="margin-top:14px">' +
           '<div class="field" style="margin:0"><label>מקור הגעה (ברירת מחדל אם ריק)</label><input class="inp" id="impSrc" list="impSrcL" value="ייבוא"><datalist id="impSrcL">' + (((C.lists && C.lists.source) || []).map(function (v) { return '<option value="' + esc(v) + '">'; }).join('')) + '</datalist></div>' +
-          '<div class="field" style="margin:0"><label>שיוך לסוכן (אופציונלי)</label><select class="inp" id="impAgent"><option value="">— לא משויך —</option>' + agentOpts + '</select></div>' +
+          '<div class="field" style="margin:0"><label>סטטוס ברירת מחדל (אם ריק/לא זוהה)</label><select class="inp" id="impStatus">' + statusOpts + '</select></div>' +
+          '<div class="field" style="margin:0"><label>שיוך לסוכן (גובר על "מנהל מכירות" מהקובץ)</label><select class="inp" id="impAgent"><option value="">— לפי הקובץ / לא משויך —</option>' + agentOpts + '</select></div>' +
         '</div>' +
-        '<div style="margin-top:14px"><button class="btn" id="impRun">✅ ייבא ' + dataRows.length + ' לידים</button> <span id="impMsg" class="muted" style="font-size:13px;margin-inline-start:10px"></span></div>';
+        '<label style="display:flex;gap:7px;align-items:center;font-size:13px;margin-top:12px"><input type="checkbox" id="impDedup" checked> מנע כפילויות וייבוא-חוזר בטוח (לפי "מזהה ליד")</label>' +
+        '<div class="muted" style="font-size:11.5px;margin-top:2px">כשממופה <b>מזהה ליד</b>: שורות עם אותו מזהה מתמזגות (האחרונה מנצחת), וייבוא חוזר של אותו קובץ מעדכן במקום לשכפל. בלי זה — כל שורה נכנסת כליד נפרד.</div>' +
+        '<div style="margin-top:14px"><button class="btn" id="impRun">✅ ייבא ' + dataRows.length + ' שורות</button> <span id="impMsg" class="muted" style="font-size:13px;margin-inline-start:10px"></span></div>';
       C.$('impRun').addEventListener('click', runImport);
     });
+    function impErr(t) { var m = C.$('impMsg'); if (m) { m.style.color = 'var(--danger)'; m.textContent = t; } }
     function runImport() {
-      var headers = parsed[0], dataRows = parsed.slice(1);
+      var dataRows = parsed.slice(1);
       var map = {}; C.$('impResult').querySelectorAll('.imp-map').forEach(function (s) { if (s.value) map[s.dataset.col] = s.value; });
-      if (!Object.keys(map).length) { C.$('impMsg').style.color = 'var(--danger)'; C.$('impMsg').textContent = 'מפו לפחות שדה אחד'; return; }
-      var hasContact = Object.keys(map).some(function (c) { return map[c] === 'phone' || map[c] === 'email' || map[c] === 'name'; });
-      if (!hasContact) { C.$('impMsg').style.color = 'var(--danger)'; C.$('impMsg').textContent = 'חובה למפות לפחות שם / טלפון / אימייל'; return; }
-      var defSrc = (C.$('impSrc').value || 'ייבוא').trim(), agent = C.$('impAgent').value || null;
+      if (!Object.keys(map).length) return impErr('מפו לפחות שדה אחד');
+      var fields = {}; Object.keys(map).forEach(function (c) { fields[map[c]] = c; });
+      if (fields.phone == null && fields.email == null && fields.name == null) return impErr('חובה למפות לפחות שם / טלפון / אימייל');
+      var defSrc = (C.$('impSrc').value || 'ייבוא').trim();
+      var defStatus = C.$('impStatus').value || 'new';
+      var forceAgent = C.$('impAgent').value || null;
+      //  מניעת-כפילות + ייבוא-חוזר בטוח — רק כשממופה external_id (מזהה הליד)
+      var dedup = C.$('impDedup').checked && fields.external_id != null;
+      var unmatchedAgents = {};
       var rows = dataRows.map(function (dr) {
-        var o = { source: defSrc, status: 'new', assigned_to: agent, meta: { imported: true } };   // meta.imported → אין מייל-פתיחה אוטומטי
-        Object.keys(map).forEach(function (c) { var v = String(dr[c] == null ? '' : dr[c]).trim(); if (v) o[map[c]] = v; });
-        if (!o.source) o.source = defSrc;
+        var o = { source: defSrc, status: defStatus, meta: { imported: true } };   // meta.imported → בלי חסימה/מייל-צוות/אוטומציות
+        if (forceAgent) o.assigned_to = forceAgent;
+        Object.keys(map).forEach(function (c) {
+          var field = map[c], v = String(dr[c] == null ? '' : dr[c]).trim();
+          if (!v || v === '-') return;   // Fireberry משתמש ב-"-" לערך ריק
+          if (field === 'status') { var st = mapStatus(v); if (st) o.status = st; else { o.status = defStatus; o.meta.src_status = v; } }
+          else if (field === 'created_at') { var dt = parseImpDate(v); if (dt) o.created_at = dt; }
+          else if (field === 'assigned_to') {
+            if (forceAgent) { o.meta.src_agent = v; return; }
+            var uid = agentByName[normName(v)];
+            if (uid) o.assigned_to = uid; else { o.meta.src_agent = v; unmatchedAgents[v] = 1; }
+          }
+          else if (field === 'external_id') { o.external_id = 'fb:' + v.replace(/^fb:/, ''); }
+          else o[field] = v;
+        });
         return o;
       }).filter(function (o) { return o.name || o.phone || o.email; });
-      if (!rows.length) { C.$('impMsg').style.color = 'var(--danger)'; C.$('impMsg').textContent = 'אין שורות תקינות לייבוא'; return; }
+      if (!rows.length) return impErr('אין שורות תקינות לייבוא');
+      if (dedup) {
+        //  מיזוג לפי external_id — האחרונה (created_at המאוחר) מנצחת
+        var byId = {}, order = [];
+        rows.forEach(function (o) {
+          var k = o.external_id; if (!k) { order.push(o); return; }
+          if (!(k in byId)) { byId[k] = o; order.push(k); }
+          else if ((o.created_at || '') >= (byId[k].created_at || '')) byId[k] = o;
+        });
+        rows = order.map(function (x) { return typeof x === 'string' ? byId[x] : x; });
+      } else {
+        //  בלי מניעת-כפילות: לא לשמור external_id (אחרת אילוץ-הייחוד יכשיל אצווה)
+        rows.forEach(function (o) { delete o.external_id; });
+      }
       var btn = C.$('impRun'); btn.disabled = true; var msg = C.$('impMsg'); msg.style.color = 'var(--muted)';
-      var CH = 400, done = 0, failed = 0, i = 0;
+      var CH = 300, done = 0, failed = 0, i = 0, total = rows.length;
+      var uaList = Object.keys(unmatchedAgents);
       function next() {
-        if (i >= rows.length) {
+        if (i >= total) {
           msg.style.color = failed ? 'var(--warn)' : 'var(--ok)';
-          msg.textContent = '✔ יובאו ' + done + ' לידים' + (failed ? ' · ' + failed + ' נכשלו' : '');
+          msg.textContent = '✔ יובאו ' + done + '/' + total + ' לידים' + (failed ? ' · ' + failed + ' נכשלו' : '') +
+            (uaList.length ? ' · ' + uaList.length + ' שמות-סוכן לא זוהו (נשמרו בהערה)' : '');
           C.refreshBadges && C.refreshBadges();
-          setTimeout(function () { window.C2B_renderLeads(curFilter); }, 1200);
+          setTimeout(function () { window.C2B_renderLeads(curFilter); }, 1600);
           return;
         }
         var batch = rows.slice(i, i + CH); i += CH;
-        msg.textContent = 'מייבא… ' + Math.min(i, rows.length) + '/' + rows.length;
-        db.from('leads').insert(batch).then(function (r) {
-          if (r.error) { failed += batch.length; } else { done += batch.length; }
+        msg.textContent = 'מייבא… ' + Math.min(i, total) + '/' + total;
+        var q = dedup ? db.from('leads').upsert(batch, { onConflict: 'external_id' }) : db.from('leads').insert(batch);
+        q.then(function (r) {
+          if (r.error) { failed += batch.length; try { console.warn('ייבוא אצווה נכשל:', r.error.message); } catch (e) {} }
+          else done += batch.length;
           next();
-        }, function () { failed += batch.length; next(); });
+        }, function (e) { failed += batch.length; next(); });
       }
       next();
     }
@@ -3568,7 +3668,7 @@
     // ---- remote signing: build link + send via email / WhatsApp / SMS ----
     if (deal.id) {
       // sign.html מוגש באתר הציבורי (לא ב-CRM) — חייב כתובת מלאה, כמו במייל (phase-signing.sql)
-      var signBase = 'https://crm.freedrive.co.il/sign.html';
+      var signBase = '__CRM_BASE_URL__/sign.html';
       var signUrl = null;
       function withUrl(cb) {
         if (signUrl) return cb(signUrl);
