@@ -1,5 +1,5 @@
 /* ============================================================
-   פרי דרייב CRM — modules that used to be "coming soon":
+   __BRAND_NAME__ CRM — modules that used to be "coming soon":
    Quotes · Documents & contracts · WhatsApp / Email / SMS ·
    Automations · Branches. All wired to the live Supabase data.
    Exposes window.C2B_render{Quotes,Documents,Comms,Automations,Branches}.
@@ -123,20 +123,20 @@
   /* =================== WhatsApp / Email / SMS =================== */
   var COMMS = {
     whatsapp: { icon: '💬', title: 'WhatsApp', tpls: [
-      ['פנייה ראשונה', 'היי {firstname}, כאן צוות פרי דרייב 🚗 קיבלנו את פנייתך לגבי {car}. מתי נוח לך לשוחח על הצעת מימון אישית?'],
+      ['פנייה ראשונה', 'היי {firstname}, כאן צוות __BRAND_NAME__ 🚗 קיבלנו את פנייתך לגבי {car}. מתי נוח לך לשוחח על הצעת מימון אישית?'],
       ['מעקב', 'היי {firstname}, רק מוודאים שקיבלת את ההצעה. יש שאלות? נשמח לעזור למצוא לך את ההחזר החודשי הכי משתלם.'],
-      ['תזכורת פגישה', 'היי {firstname}, תזכורת לפגישה שלנו. מחכים לך! צוות פרי דרייב.'],
+      ['תזכורת פגישה', 'היי {firstname}, תזכורת לפגישה שלנו. מחכים לך! צוות __BRAND_NAME__.'],
       ['הצעה נשלחה', 'היי {firstname}, שלחנו לך הצעת מחיר ל{car}. מוזמן/ת לעבור עליה ולחזור אלינו — ההצעה בתוקף מוגבל.']
     ]},
     emails: { icon: '📧', title: 'מיילים', tpls: [
-      ['פנייה ראשונה', 'שלום {name},\n\nתודה על פנייתך ל-פרי דרייב בנוגע ל{car}. נשמח לבנות עבורך מסלול מימון אישי עם ההחזר החודשי הטוב ביותר.\n\nמתי נוח לשוחח?\n\nבברכה,\nצוות פרי דרייב'],
-      ['הצעת מחיר', 'שלום {name},\n\nמצורפת הצעת המחיר עבור {car}. ההצעה כוללת מימון עד 100% ואפשרות טרייד-אין לרכב הישן.\n\nלכל שאלה אנחנו כאן.\n\nבברכה,\nצוות פרי דרייב'],
-      ['מעקב', 'שלום {name},\n\nרצינו לוודא שקיבלת את ההצעה שלנו ולראות אם יש שאלות. נשמח להתקדם יחד.\n\nבברכה,\nצוות פרי דרייב']
+      ['פנייה ראשונה', 'שלום {name},\n\nתודה על פנייתך ל-__BRAND_NAME__ בנוגע ל{car}. נשמח לבנות עבורך מסלול מימון אישי עם ההחזר החודשי הטוב ביותר.\n\nמתי נוח לשוחח?\n\nבברכה,\nצוות __BRAND_NAME__'],
+      ['הצעת מחיר', 'שלום {name},\n\nמצורפת הצעת המחיר עבור {car}. ההצעה כוללת מימון עד 100% ואפשרות טרייד-אין לרכב הישן.\n\nלכל שאלה אנחנו כאן.\n\nבברכה,\nצוות __BRAND_NAME__'],
+      ['מעקב', 'שלום {name},\n\nרצינו לוודא שקיבלת את ההצעה שלנו ולראות אם יש שאלות. נשמח להתקדם יחד.\n\nבברכה,\nצוות __BRAND_NAME__']
     ]},
     sms: { icon: '📱', title: 'SMS', tpls: [
-      ['פנייה ראשונה', 'פרי דרייב: היי {firstname}, קיבלנו את פנייתך. מתי נוח לשוחח על הצעת מימון? להסרה השב הסר'],
-      ['תזכורת', 'פרי דרייב: תזכורת לפגישה שלנו. מחכים לך!'],
-      ['הצעה', 'פרי דרייב: שלחנו לך הצעה ל{car}. נשמח לחזור אליך — צוות פרי דרייב']
+      ['פנייה ראשונה', '__BRAND_NAME__: היי {firstname}, קיבלנו את פנייתך. מתי נוח לשוחח על הצעת מימון? להסרה השב הסר'],
+      ['תזכורת', '__BRAND_NAME__: תזכורת לפגישה שלנו. מחכים לך!'],
+      ['הצעה', '__BRAND_NAME__: שלחנו לך הצעה ל{car}. נשמח לחזור אליך — צוות __BRAND_NAME__']
     ]}
   };
   window.C2B_renderComms = function (channel) {
@@ -150,7 +150,7 @@
         '<p class="muted" style="font-size:12.5px;margin:0 0 14px">בחרו תבנית, ערכו את ההודעה (משתנים: <code>{name}</code> <code>{firstname}</code> <code>{car}</code>) ושלחו לליד. ' + (channel === 'emails' ? 'המייל <b>נשלח ישירות מהמערכת</b> (דרך Resend) ומתועד בציר הזמן.' : 'השליחה נפתחת ב' + (channel === 'whatsapp' ? 'WhatsApp' : 'הודעות') + ' עם ההודעה מוכנה, ומתועדת בציר הזמן.') + '</p>' +
         '<div class="card"><div class="row-between" style="gap:10px;flex-wrap:wrap;align-items:end"><div class="field" style="flex:0 0 220px;margin:0"><label>תבנית</label><select class="inp" id="cmTpl" style="width:100%"><option value="">— חדש —</option>' + tplOpts + '</select></div></div>' +
         '<div class="field" style="margin:10px 0 0"><label>תוכן ההודעה</label><textarea class="inp" id="cmMsg" rows="' + (channel === 'emails' ? 7 : 4) + '" style="width:100%" placeholder="הקלד/י הודעה…">' + esc(cfg.tpls[0][1]) + '</textarea></div>' +
-        (channel === 'emails' ? '<div class="field" style="margin:10px 0 0"><label>נושא</label><input class="inp" id="cmSubj" style="width:100%" value="הצעה אישית מ-פרי דרייב"></div>' : '') + '</div>' +
+        (channel === 'emails' ? '<div class="field" style="margin:10px 0 0"><label>נושא</label><input class="inp" id="cmSubj" style="width:100%" value="הצעה אישית מ-__BRAND_NAME__"></div>' : '') + '</div>' +
         '<div class="card"><h3>לידים (' + leads.length + ')</h3><input class="inp" id="cmSearch" placeholder="חיפוש לפי שם/טלפון…" style="width:100%;margin-bottom:10px"><div class="table-scroll"><table><thead><tr><th>שם</th><th>' + (channel === 'emails' ? 'אימייל' : 'טלפון') + '</th><th>רכב</th><th></th></tr></thead><tbody id="cmRows">' + leadOpts + '</tbody></table></div></div>');
       var tplSel = $('cmTpl'), msg = $('cmMsg');
       if (tplSel) tplSel.addEventListener('change', function () { if (this.value !== '') msg.value = cfg.tpls[+this.value][1]; });
@@ -163,7 +163,7 @@
           if (channel === 'emails') {
             // real send from the system via the send-message Edge Function (Resend)
             b.textContent = 'שולח…'; b.disabled = true;
-            db.functions.invoke('send-message', { body: { channel: 'email', to: l.email, subject: ($('cmSubj') && $('cmSubj').value) || 'הצעה אישית מ-פרי דרייב', text: text, fromName: (l.marketing_company || l.brand || 'פרי דרייב') } }).then(function (r) {
+            db.functions.invoke('send-message', { body: { channel: 'email', to: l.email, subject: ($('cmSubj') && $('cmSubj').value) || 'הצעה אישית מ-__BRAND_NAME__', text: text, fromName: (l.marketing_company || l.brand || '__BRAND_NAME__') } }).then(function (r) {
               var d = r.data || {};
               if (r.error || d.error) {
                 b.textContent = cfg.icon + ' שלח'; b.disabled = false;
@@ -195,8 +195,8 @@
     // NOTE: the "new lead welcome" email is sent by a Database Webhook (on lead INSERT),
     // so it fires for public-form leads too — not only when a lead is touched in the CRM.
     var PACK = [
-      { name: 'הצעה נשלחה — מייל מעקב ללקוח', trigger_status: 'quote_sent', action: 'email', params: { subject: 'ההצעה שלך מ-פרי דרייב מחכה לך', text: 'שלום {name},\nשלחנו לך הצעת מחיר ל{car}. ההצעה כוללת מימון עד 100% ואפשרות טרייד-אין.\nיש שאלות? אנחנו כאן. ההצעה בתוקף מוגבל — נשמח להתקדם יחד.\n\nצוות פרי דרייב' } },
-      { name: 'נחתם! — מייל ברכות ושלבים הבאים', trigger_status: 'won', action: 'email', params: { subject: 'ברכות! העסקה שלך נסגרה 🎉 — פרי דרייב', text: 'שלום {name}, ברכות! 🎉\nהעסקה על {car} נסגרה. הנה השלבים הבאים:\n1. נתאם איתך מסירה בהקדם.\n2. נסגור את הביטוח והרישוי — הכל עלינו.\n3. תקבל את המפתח לרכב החדש!\n\nתודה שבחרת ב-פרי דרייב — אנחנו כאן לכל שאלה.\nצוות פרי דרייב' } }
+      { name: 'הצעה נשלחה — מייל מעקב ללקוח', trigger_status: 'quote_sent', action: 'email', params: { subject: 'ההצעה שלך מ-__BRAND_NAME__ מחכה לך', text: 'שלום {name},\nשלחנו לך הצעת מחיר ל{car}. ההצעה כוללת מימון עד 100% ואפשרות טרייד-אין.\nיש שאלות? אנחנו כאן. ההצעה בתוקף מוגבל — נשמח להתקדם יחד.\n\nצוות __BRAND_NAME__' } },
+      { name: 'נחתם! — מייל ברכות ושלבים הבאים', trigger_status: 'won', action: 'email', params: { subject: 'ברכות! העסקה שלך נסגרה 🎉 — __BRAND_NAME__', text: 'שלום {name}, ברכות! 🎉\nהעסקה על {car} נסגרה. הנה השלבים הבאים:\n1. נתאם איתך מסירה בהקדם.\n2. נסגור את הביטוח והרישוי — הכל עלינו.\n3. תקבל את המפתח לרכב החדש!\n\nתודה שבחרת ב-__BRAND_NAME__ — אנחנו כאן לכל שאלה.\nצוות __BRAND_NAME__' } }
     ];
     db.from('automations').select('*').order('created_at', { ascending: false }).then(function (r) {
       if (r.error) {
@@ -352,6 +352,13 @@
       $('view').querySelectorAll('[data-expcar]').forEach(function (tr) { tr.addEventListener('click', function () { db.from('inventory').select('*').eq('id', tr.dataset.expcar).single().then(function (r) { if (r.data) { window.C2B_renderInventory(); setTimeout(function () { openInvEdit(r.data); }, 120); } }); }); });
     }).catch(function (e) { view('<div class="card"><p class="muted">שגיאה: ' + esc(e.message || e) + '</p></div>'); });
   };
+  //  ימי-מלאי: מהכנסה למלאי (created_at) עד מכירה (sold_at) או עד היום.
+  function invDaysTxt(c) {
+    if (!c.created_at) return '—';
+    var end = c.sold_at ? new Date(c.sold_at) : new Date();
+    var d = Math.max(0, Math.floor((end.getTime() - new Date(c.created_at).getTime()) / 86400000));
+    return c.sold_at ? ('נמכר אחרי ' + d + ' ימים') : (d + ' ימים במלאי');
+  }
   window.C2B_renderInventory = function (statusFilter) {
     view('<div class="loading">טוען מלאי…</div>');
     db.from('inventory').select('*').order('created_at', { ascending: false }).then(function (r) {
@@ -372,6 +379,7 @@
           '<div style="padding:11px 13px"><div style="font-weight:800;font-size:15px">' + esc(invTitle(c)) + '</div>' +
             '<div class="muted" style="font-size:12.5px;margin-top:2px">' + [c.hand ? 'יד ' + esc(c.hand) : '', c.km != null ? Number(c.km).toLocaleString('en-US') + ' ק"מ' : '', c.plate ? esc(c.plate) : ''].filter(Boolean).join(' · ') + '</div>' +
             '<div style="font-weight:800;margin-top:6px">' + (c.price != null ? money(c.price) : '<span class="muted" style="font-weight:400">ללא מחיר</span>') + '</div>' +
+            '<div class="muted" style="font-size:11.5px;margin-top:4px">📅 ' + invDaysTxt(c) + '</div>' +
             (c.source === 'trade-in' ? '<div class="muted" style="font-size:11px;margin-top:4px">↩︎ טרייד-אין · ' + esc(c.source_org || '') + '</div>' : '') +
             //  שינוי סטטוס ישירות מהרשימה (בלי לפתוח את הרכב). onclick עוצר את פתיחת-הכרטיס.
             '<select class="inp" data-stsel="' + c.id + '" onclick="event.stopPropagation()" title="שינוי סטטוס מהיר" style="width:100%;margin-top:9px;font-size:12.5px;padding:5px 8px;cursor:pointer">' + ['intake', 'available', 'reserved', 'sold', 'hidden'].map(function (s) { return '<option value="' + s + '"' + (c.status === s ? ' selected' : '') + '>' + INV_ST[s][0] + '</option>'; }).join('') + '</select>' +
@@ -432,7 +440,9 @@
       ivPane('price', false,
         '<div style="font-size:12px;color:var(--muted);font-weight:600;margin:0 0 8px">💰 תמחור פנימי + יומן מסחר (לא מוצג באתרים)</div>' +
         '<div class="grid2">' + invF('מחיר מחירון (₪)', 'iv_listprice', '', 'number') + invF('מחיר מינימום (₪)', 'iv_minprice', '', 'number') + invF('מחיר מנהל (₪)', 'iv_mgrprice', '', 'number') + '</div>' +
-        '<div class="grid2" style="margin-top:4px">' + invF('עלות רכישה (₪)', 'iv_pcost', '', 'number') + invF('תאריך רכישה', 'iv_pdate', '', 'date') + invF('נרכש מ- (ספק)', 'iv_psup') + invF('נמכר ל- (קונה)', 'iv_buyer') + '</div>' +
+        '<div class="grid2" style="margin-top:4px">' + invF('עלות רכישה (₪)', 'iv_pcost', '', 'number') + invF('תאריך רכישה', 'iv_pdate', '', 'date') +
+          '<div class="field" style="margin:0"><label>נרכש מ־ (סוג)</label><select class="inp" id="iv_sellertype" style="width:100%"><option value="">— בחר —</option><option value="customer">לקוח פרטי</option><option value="dealer">סוחר</option></select></div>' +
+          invF('נרכש מ- (שם ספק/לקוח)', 'iv_psup') + invF('נמכר ל- (קונה)', 'iv_buyer') + '</div>' +
         '<div class="field" style="margin-top:10px"><label>תיאור</label><textarea class="inp" id="iv_desc" style="height:70px;width:100%">' + esc(car.description || '') + '</textarea></div>'
       ) +
       //  לשונית 3 — תמונות (ימין) ומסמכי-רכב (שמאל, דלי פרטי + signed URL)
@@ -459,8 +469,8 @@
       '<div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap;border-top:1px solid var(--line);padding-top:14px"><button class="btn btn-sm" id="iv_save">💾 שמור</button>' + (isNew ? '' : '<button class="btn btn-ghost btn-sm" id="iv_del" style="color:var(--danger)">🗑 מחק</button>') + '<span id="iv_msg" style="font-size:13px;margin-inline-start:8px"></span></div></div>';
     box.scrollIntoView({ behavior: 'smooth', block: 'start' });
     // טעינת תמחור פנימי קיים (טבלה נפרדת צוות-בלבד)
-    if (car.id) db.from('inventory_pricing').select('list_price,min_price,manager_price,purchase_cost,purchased_at,supplier_name,buyer_name').eq('inventory_id', car.id).maybeSingle().then(function (pr) {
-      if (pr && pr.data) { var st = function (id, v) { var e = $(id); if (e) e.value = (v == null ? '' : v); }; st('iv_listprice', pr.data.list_price); st('iv_minprice', pr.data.min_price); st('iv_mgrprice', pr.data.manager_price); st('iv_pcost', pr.data.purchase_cost); st('iv_pdate', pr.data.purchased_at); st('iv_psup', pr.data.supplier_name); st('iv_buyer', pr.data.buyer_name); }
+    if (car.id) db.from('inventory_pricing').select('list_price,min_price,manager_price,purchase_cost,purchased_at,supplier_name,buyer_name,seller_type').eq('inventory_id', car.id).maybeSingle().then(function (pr) {
+      if (pr && pr.data) { var st = function (id, v) { var e = $(id); if (e) e.value = (v == null ? '' : v); }; st('iv_listprice', pr.data.list_price); st('iv_minprice', pr.data.min_price); st('iv_mgrprice', pr.data.manager_price); st('iv_pcost', pr.data.purchase_cost); st('iv_pdate', pr.data.purchased_at); st('iv_psup', pr.data.supplier_name); st('iv_buyer', pr.data.buyer_name); st('iv_sellertype', pr.data.seller_type); }
     });
     var state = { images: invImgs(car).slice(), cover: car.cover_idx || 0 };
     function paintImgs() {
@@ -581,10 +591,10 @@
       }
       var patch = { make: val('iv_make'), model: val('iv_model'), trim: val('iv_trim'), year: numv('iv_year'), hand: val('iv_hand'), km: numv('iv_km'), color: val('iv_color'), fuel: val('iv_fuel'), plate: val('iv_plate'), price: numv('iv_price'), description: val('iv_desc'), images: state.images, cover_idx: state.cover, status: $('iv_status').value, published: $('iv_pub').checked };
       var btn = this; btn.disabled = true; $('iv_msg').style.color = 'var(--muted)'; $('iv_msg').textContent = 'שומר…';
-      var pricing = { list_price: numv('iv_listprice'), min_price: numv('iv_minprice'), manager_price: numv('iv_mgrprice'), purchase_cost: numv('iv_pcost'), purchased_at: val('iv_pdate'), supplier_name: val('iv_psup'), buyer_name: val('iv_buyer') };
+      var pricing = { list_price: numv('iv_listprice'), min_price: numv('iv_minprice'), manager_price: numv('iv_mgrprice'), purchase_cost: numv('iv_pcost'), purchased_at: val('iv_pdate'), supplier_name: val('iv_psup'), buyer_name: val('iv_buyer'), seller_type: val('iv_sellertype') };
       function savePricing(invId, done) {
         if (!invId) return done();
-        db.from('inventory_pricing').upsert({ inventory_id: invId, list_price: pricing.list_price, min_price: pricing.min_price, manager_price: pricing.manager_price, purchase_cost: pricing.purchase_cost, purchased_at: pricing.purchased_at, supplier_name: pricing.supplier_name, buyer_name: pricing.buyer_name, updated_at: new Date().toISOString() }, { onConflict: 'inventory_id' }).then(function () { done(); });
+        db.from('inventory_pricing').upsert({ inventory_id: invId, list_price: pricing.list_price, min_price: pricing.min_price, manager_price: pricing.manager_price, purchase_cost: pricing.purchase_cost, purchased_at: pricing.purchased_at, supplier_name: pricing.supplier_name, buyer_name: pricing.buyer_name, seller_type: pricing.seller_type, updated_at: new Date().toISOString() }, { onConflict: 'inventory_id' }).then(function () { done(); });
       }
       var p = car.id ? db.from('inventory').update(patch).eq('id', car.id).select('id').single() : db.from('inventory').insert(patch).select('id').single();
       p.then(function (u) { if (u.error) { btn.disabled = false; $('iv_msg').style.color = 'var(--danger)'; $('iv_msg').textContent = 'שגיאה: ' + u.error.message; return; } savePricing(u.data && u.data.id, function () { btn.disabled = false; $('iv_msg').style.color = 'var(--ok)'; $('iv_msg').textContent = '✔ נשמר'; window.C2B_renderInventory(); }); });
@@ -711,37 +721,66 @@
   /* ===================== בקשות הצעת מחיר (יד2) =====================
      שער-הכניסה המסודר לכל הבקשות הנכנסות (בעיקר מטרייד-אין של המותגים).
      אותה טבלת tenders; פתיחה → כרטיס-המכרז (שליחה לסוחרים/הצעות/זוכה). */
+  //  מצב-סינון נשמר בין רינדורים (צ'יפ-סטטוס + חיפוש-רכב + טווח-תאריכים)
+  var _qrStatus = '', _qrSearch = '', _qrFrom = '', _qrTo = '';
   window.C2B_renderQuoteRequests = function (statusFilter) {
+    if (statusFilter != null) _qrStatus = statusFilter || '';
     view('<div class="loading">טוען בקשות…</div>');
     db.from('tenders').select('*').order('created_at', { ascending: false }).then(function (r) {
       if (r.error) return view('<div class="card"><h3>בקשות הצעת מחיר</h3><p class="muted">שגיאה: ' + esc(r.error.message) + '</p></div>');
       var rows = r.data || [], counts = {};
       rows.forEach(function (t) { counts[t.status] = (counts[t.status] || 0) + 1; });
-      function chip(k, label) { return '<button class="btn btn-ghost btn-sm' + ((statusFilter || '') === k ? ' active' : '') + '" data-qf="' + k + '">' + label + ' (' + (k ? (counts[k] || 0) : rows.length) + ')</button>'; }
-      var shown = statusFilter ? rows.filter(function (t) { return t.status === statusFilter; }) : rows;
-      var cards = shown.map(function (t) {
+      function chip(k, label) { return '<button class="btn btn-ghost btn-sm' + (_qrStatus === k ? ' active' : '') + '" data-qf="' + k + '">' + label + ' (' + (k ? (counts[k] || 0) : rows.length) + ')</button>'; }
+      function matchRow(t) {
+        if (_qrStatus && t.status !== _qrStatus) return false;
+        var d = t.created_at ? t.created_at.slice(0, 10) : '';
+        if (_qrFrom && (!d || d < _qrFrom)) return false;
+        if (_qrTo && (!d || d > _qrTo)) return false;
+        if (_qrSearch) {
+          var hay = [t.car_plate, t.car_make, t.car_model, t.car_trim, t.customer_name, t.customer_phone, t.agent_name, t.car_vin].filter(Boolean).join(' ').toLowerCase();
+          if (hay.indexOf(_qrSearch.trim().toLowerCase()) < 0) return false;
+        }
+        return true;
+      }
+      function cardHtml(t) {
         var st = QR_ST(t.status), cov = (invImgs(t)[0]) || null;
         var src = t.source === 'trade-in' ? '↩︎ טרייד-אין · ' + esc(t.agent_org || '') : (t.agent_org ? esc(t.agent_org) : 'ידני');
         return '<div class="card" data-qopen="' + t.id + '" style="cursor:pointer;padding:0;overflow:hidden;display:flex;gap:0">' +
           '<div style="width:96px;flex:0 0 96px;background:#0b0f14;background-size:cover;background-position:center' + (cov ? ";background-image:url('" + esc(cov) + "')" : '') + '">' + (cov ? '' : '<div style="height:70px;display:flex;align-items:center;justify-content:center;color:#44505f;font-size:11px">אין תמונה</div>') + '</div>' +
           '<div style="padding:10px 12px;flex:1"><div class="row-between" style="align-items:flex-start"><div style="font-weight:800">' + esc(tndTitle(t)) + '</div><span style="background:' + st[1] + ';color:#fff;font-size:11px;font-weight:700;padding:1px 8px;border-radius:999px;white-space:nowrap">' + st[0] + '</span></div>' +
           '<div class="muted" style="font-size:12px;margin-top:3px">' + src + '</div>' +
-          '<div class="muted" style="font-size:11.5px;margin-top:2px">' + [t.agent_name ? '👤 ' + esc(t.agent_name) : '', t.car_plate ? esc(t.car_plate) : '', when(t.created_at)].filter(Boolean).join(' · ') + '</div></div></div>';
-      }).join('');
-      view('<div class="row-between" style="margin-bottom:12px;align-items:center;flex-wrap:wrap;gap:8px"><h2 style="margin:0">💸 בקשות הצעת מחיר</h2></div>' +
+          '<div class="muted" style="font-size:11.5px;margin-top:2px">' + [t.agent_name ? '👤 ' + esc(t.agent_name) : '', t.car_plate ? '🔖 ' + esc(t.car_plate) : '', when(t.created_at)].filter(Boolean).join(' · ') + '</div></div></div>';
+      }
+      function paint() {
+        var shown = rows.filter(matchRow);
+        var box = $('qrCards'); if (box) box.innerHTML = shown.length ? shown.map(cardHtml).join('') : '<div class="empty">אין בקשות תואמות</div>';
+        var cnt = $('qrCount'); if (cnt) cnt.textContent = shown.length + ' מתוך ' + rows.length;
+        $('view').querySelectorAll('[data-qopen]').forEach(function (b) { b.addEventListener('click', function () { openTnd(rows.filter(function (x) { return x.id === b.dataset.qopen; })[0]); }); });
+      }
+      view('<div class="row-between" style="margin-bottom:12px;align-items:center;flex-wrap:wrap;gap:8px"><h2 style="margin:0">💸 בקשות הצעת מחיר <span class="muted" id="qrCount" style="font-size:14px"></span></h2></div>' +
         '<div id="tndEdit"></div>' +
-        '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">' + chip('', 'הכל') + chip('draft', 'חדשות') + chip('open', 'נשלחו') + chip('awarded', 'הוכרזו') + chip('closed', 'נסגרו') + '</div>' +
-        '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px">' + (cards || '<div class="empty">אין בקשות בסטטוס זה</div>') + '</div>');
-      $('view').querySelectorAll('[data-qf]').forEach(function (b) { b.addEventListener('click', function () { window.C2B_renderQuoteRequests(b.dataset.qf || ''); }); });
-      $('view').querySelectorAll('[data-qopen]').forEach(function (b) { b.addEventListener('click', function () { openTnd(rows.filter(function (x) { return x.id === b.dataset.qopen; })[0]); }); });
+        '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px">' +
+          '<input class="inp" id="qrSearch" placeholder="🔍 חיפוש לפי מספר רכב / דגם / לקוח" value="' + esc(_qrSearch) + '" style="flex:1;min-width:200px">' +
+          '<label class="muted" style="font-size:12.5px">מ־ <input class="inp" id="qrFrom" type="date" value="' + esc(_qrFrom) + '" style="width:150px"></label>' +
+          '<label class="muted" style="font-size:12.5px">עד <input class="inp" id="qrTo" type="date" value="' + esc(_qrTo) + '" style="width:150px"></label>' +
+          '<button class="btn btn-ghost btn-sm" id="qrClear">נקה</button>' +
+        '</div>' +
+        '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">' + chip('', 'הכל') + chip('draft', 'חדשות') + chip('quoted', 'נשלח הצעה') + chip('open', 'נשלחו') + chip('awarded', 'הוכרזו') + chip('closed', 'נסגרו') + '</div>' +
+        '<div id="qrCards" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px"></div>');
+      $('view').querySelectorAll('[data-qf]').forEach(function (b) { b.addEventListener('click', function () { _qrStatus = b.dataset.qf || ''; $('view').querySelectorAll('[data-qf]').forEach(function (x) { x.classList.toggle('active', (x.dataset.qf || '') === _qrStatus); }); paint(); }); });
+      if ($('qrSearch')) $('qrSearch').addEventListener('input', function () { _qrSearch = this.value; paint(); });
+      if ($('qrFrom')) $('qrFrom').addEventListener('change', function () { _qrFrom = this.value; paint(); });
+      if ($('qrTo')) $('qrTo').addEventListener('change', function () { _qrTo = this.value; paint(); });
+      if ($('qrClear')) $('qrClear').addEventListener('click', function () { _qrSearch = ''; _qrFrom = ''; _qrTo = ''; if ($('qrSearch')) $('qrSearch').value = ''; if ($('qrFrom')) $('qrFrom').value = ''; if ($('qrTo')) $('qrTo').value = ''; paint(); });
+      paint();
     });
   };
-  function QR_ST(s) { return ({ draft: ['חדשה', '#8b6f2e'], open: ['נשלחה לסוחרים', '#1f8a4c'], awarded: ['הוכרז זוכה', '#2563eb'], closed: ['נסגרה', '#6b7280'], cancelled: ['בוטלה', '#c0392b'] })[s] || ['—', '#888']; }
+  function QR_ST(s) { return ({ draft: ['חדשה', '#8b6f2e'], quoted: ['נשלח הצעה', '#0ea5e9'], open: ['נשלחה לסוחרים', '#1f8a4c'], awarded: ['הוכרז זוכה', '#2563eb'], closed: ['נסגרה', '#6b7280'], cancelled: ['בוטלה', '#c0392b'] })[s] || ['—', '#888']; }
 
   /* ============================ מכרזי יד2 ============================ */
-  var TND_ST = { draft: ['טיוטה', '#8b6f2e'], open: ['פתוח', '#1f8a4c'], awarded: ['הוכרז זוכה', '#2563eb'], closed: ['נסגר', '#6b7280'], cancelled: ['בוטל', '#c0392b'] };
+  var TND_ST = { draft: ['טיוטה', '#8b6f2e'], quoted: ['נשלח הצעה', '#0ea5e9'], open: ['פתוח', '#1f8a4c'], awarded: ['הוכרז זוכה', '#2563eb'], closed: ['נסגר', '#6b7280'], cancelled: ['בוטל', '#c0392b'] };
   //  תיאור קצר לכל סטטוס — למקרא ול-tooltip על הצ'יפים (כדי שיובן מה כל שלב בחיי המכרז).
-  var TND_DESC = { draft: 'נוצר וטרם נשלח לסוחרים', open: 'נשלח לסוחרים — מקבל הצעות עד שעת הסגירה', awarded: 'נסגר ונבחר סוחר זוכה', closed: 'נסגר ללא הכרזת זוכה', cancelled: 'המכרז בוטל' };
+  var TND_DESC = { draft: 'נוצר וטרם נשלח לסוחרים', quoted: 'ניתנה הצעת-מחיר ללקוח (טרם נשלח לסוחרים)', open: 'נשלח לסוחרים — מקבל הצעות עד שעת הסגירה', awarded: 'נסגר ונבחר סוחר זוכה', closed: 'נסגר ללא הכרזת זוכה', cancelled: 'המכרז בוטל' };
   function tndTitle(t) { return [t.car_make, t.car_model, t.car_trim, t.car_year].filter(Boolean).join(' ') || 'רכב ללא שם'; }
   function remainTxt(t) {
     if (t.status !== 'open' || !t.closes_at) return '';
@@ -759,7 +798,7 @@
       //  (שלבי-פתיחה טבעיים) גם אם 0 כרגע, כדי שתמיד יהיה אפשר לסנן אליהם.
       var ALWAYS = { draft: 1, open: 1 };
       function chip(k, label) { return '<button class="btn btn-ghost btn-sm' + ((statusFilter || '') === k ? ' active' : '') + '" data-tf="' + k + '"' + (k && TND_DESC[k] ? ' title="' + esc(TND_DESC[k]) + '"' : '') + '>' + label + ' <span class="muted" style="font-size:11px">(' + (k ? (counts[k] || 0) : rows.length) + ')</span></button>'; }
-      var chipKeys = ['draft', 'open', 'awarded', 'closed', 'cancelled'].filter(function (k) { return ALWAYS[k] || counts[k]; });
+      var chipKeys = ['draft', 'quoted', 'open', 'awarded', 'closed', 'cancelled'].filter(function (k) { return ALWAYS[k] || counts[k]; });
       var chipsHtml = chip('', 'הכל') + chipKeys.map(function (k) { return chip(k, TND_ST[k][0]); }).join('');
       //  מקרא סטטוסים — כדי שיובן מה כל שלב (מוצגים רק סטטוסים קיימים + שלבי-פתיחה).
       var legend = '<div class="muted" style="font-size:11.5px;margin:-4px 0 12px;line-height:1.9;display:flex;gap:14px;flex-wrap:wrap">' +
@@ -871,9 +910,9 @@
       }).join('');
       var spec = [t.car_hand ? 'יד ' + esc(t.car_hand) : '', t.car_km != null ? Number(t.car_km).toLocaleString('en-US') + ' ק"מ' : '', t.car_color ? esc(t.car_color) : '', t.car_fuel ? '⛽ ' + esc(t.car_fuel) : '', t.car_plate ? '🔖 ' + esc(t.car_plate) : ''].filter(Boolean).join(' · ');
       var spec2 = [t.car_vin ? 'שלדה: ' + esc(t.car_vin) : '', t.list_price != null ? 'מחירון לוי יצחק: ' + money(t.list_price) : ''].filter(Boolean).join(' · ');
-      var canSend = (t.status === 'draft' || t.status === 'open'), canClose = (t.status === 'open' || t.status === 'draft');
+      var canSend = (t.status === 'draft' || t.status === 'quoted' || t.status === 'open'), canClose = (t.status === 'open' || t.status === 'draft' || t.status === 'quoted');
       box.innerHTML = '<div class="card" style="border:1px solid var(--line);background:var(--surface-2)">' +
-        '<div class="row-between" style="margin-bottom:8px"><b>🔨 ' + esc(tndTitle(t)) + ' <span style="background:' + st[1] + ';color:#fff;font-size:11px;padding:2px 9px;border-radius:999px;margin-inline-start:6px">' + st[0] + '</span></b><button class="btn btn-ghost btn-sm" id="tndClose">✕</button></div>' +
+        '<div class="row-between" style="margin-bottom:8px"><b>🔨 ' + esc(tndTitle(t)) + ' <span id="tndStBadge" style="background:' + st[1] + ';color:#fff;font-size:11px;padding:2px 9px;border-radius:999px;margin-inline-start:6px">' + st[0] + '</span></b><button class="btn btn-ghost btn-sm" id="tndClose">✕</button></div>' +
         '<div class="muted" style="font-size:13px">' + spec + '</div>' +
         (spec2 ? '<div class="muted" style="font-size:12.5px;margin-top:3px">' + spec2 + '</div>' : '') +
         (t.car_description ? '<div style="font-size:13px;margin-top:6px">' + esc(t.car_description) + '</div>' : '') +
@@ -930,11 +969,16 @@
         var v = ($('tnd_ourquote').value || '').trim(), q = v === '' ? null : Number(v);
         var lp = ($('tnd_listprice').value || '').trim(), lpv = lp === '' ? null : Number(lp);
         var prevQuote = t.our_quote;   // לזהות אם ההצעה חדשה/שונה → מייל למנהל
+        //  מתן הצעה מעביר אוטומטית "חדשה" → "נשלח הצעה" (בלי לדרוס שלב מתקדם יותר).
+        var patch = { our_quote: q, list_price: lpv };
+        if (q != null && t.status === 'draft') patch.status = 'quoted';
         var btn = this; btn.disabled = true; $('tnd_quoteMsg').style.color = 'var(--muted)'; $('tnd_quoteMsg').textContent = 'שומר…';
-        db.from('tenders').update({ our_quote: q, list_price: lpv }).eq('id', t.id).then(function (r) {
+        db.from('tenders').update(patch).eq('id', t.id).then(function (r) {
           btn.disabled = false;
           if (r.error) { $('tnd_quoteMsg').style.color = 'var(--danger)'; $('tnd_quoteMsg').textContent = 'שגיאה: ' + esc(r.error.message); return; }
-          t.our_quote = q; t.list_price = lpv; $('tnd_quoteMsg').style.color = 'var(--ok)'; $('tnd_quoteMsg').textContent = '✔ נשמר';
+          t.our_quote = q; t.list_price = lpv;
+          if (patch.status) { t.status = patch.status; var bdg = $('tndStBadge'), ns = TND_ST[patch.status]; if (bdg && ns) { bdg.textContent = ns[0]; bdg.style.background = ns[1]; } }
+          $('tnd_quoteMsg').style.color = 'var(--ok)'; $('tnd_quoteMsg').textContent = '✔ נשמר';
           //  שלב 1 — ברגע שניתנה/שונתה הצעת-מחיר, מנהל-הסניף מקבל מייל (לשליחה ידנית לסוכנים).
           if (q != null && Number(q) !== Number(prevQuote)) {
             $('tnd_quoteMsg').textContent = '✔ נשמר · שולח למנהל…';
