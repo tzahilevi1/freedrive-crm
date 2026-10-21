@@ -529,11 +529,26 @@
   window.C2B.CAR_CATEGORIES = CAR_CATEGORIES;
   var BULK_FIELD_LABEL = {}; BULK_FIELDS.forEach(function (f) { BULK_FIELD_LABEL[f.key] = f.label; });
   var leadCols = null;
+  //  PostgREST חוסם כל תשובה ב-1000 שורות (limit לא עוקף) — ולכן שליפה
+  //  בעימוד range() ואיחוד, כדי לטעון את *כל* הלידים (סינון/חיפוש בצד-לקוח).
+  var LEADS_SELECT = 'id,name,phone,email,car,car_category,city,source,status,brand,marketing_company,assigned_to,created_at,updated_at,status_changed_at,first_response_at,close_reason,id_num,ip,no_marketing,utm_source,utm_campaign,utm_medium,utm_content,utm_term,ad_group,adset_name,ad_name,campaign,ad_id,form_id,external_id,message,page_url';
+  function fetchAllLeads() {
+    var PAGE = 1000, MAXP = 12, all = [];
+    function page(p) {
+      return db.from('leads').select(LEADS_SELECT).is('deleted_at', null).order('created_at', { ascending: false }).range(p * PAGE, p * PAGE + PAGE - 1).then(function (r) {
+        if (r.error) return { data: all.length ? all : null, error: all.length ? null : r.error };
+        all = all.concat(r.data || []);
+        if ((r.data || []).length === PAGE && p + 1 < MAXP) return page(p + 1);
+        return { data: all, error: null };
+      });
+    }
+    return page(0);
+  }
   window.C2B_renderLeads = function (statusFilter) {
     curFilter = statusFilter || null; selectedLeads = {};
     loading();
     Promise.all([
-      db.from('leads').select('id,name,phone,email,car,car_category,city,source,status,brand,marketing_company,assigned_to,created_at,updated_at,status_changed_at,first_response_at,close_reason,id_num,ip,no_marketing,utm_source,utm_campaign,utm_medium,utm_content,utm_term,ad_group,adset_name,ad_name,campaign,ad_id,form_id,external_id,message,page_url').is('deleted_at', null).order('created_at', { ascending: false }).limit(3000),
+      fetchAllLeads(),
       db.from('profiles').select('user_id,full_name'),
       //  מי מקבל את הלידים החדשים לחלוקה. נשמר בתצורה ולא מקודד קשיח,
       //  כדי שהעברת התפקיד לאדם אחר לא תדרוש שינוי בקוד.
@@ -956,6 +971,8 @@
       //  מניעת-כפילות + ייבוא-חוזר בטוח — רק כשממופה external_id (מזהה הליד)
       var dedup = C.$('impDedup').checked && fields.external_id != null;
       var unmatchedAgents = {};
+      function clamp(v, n) { return v.length > n ? v.slice(0, n) : v; }
+      function phoneDigits(v) { return String(v || '').replace(/\D/g, ''); }
       var rows = dataRows.map(function (dr) {
         var o = { source: defSrc, status: defStatus, meta: { imported: true } };   // meta.imported → בלי חסימה/מייל-צוות/אוטומציות
         if (forceAgent) o.assigned_to = forceAgent;
@@ -970,8 +987,22 @@
             if (uid) o.assigned_to = uid; else { o.meta.src_agent = v; unmatchedAgents[v] = 1; }
           }
           else if (field === 'external_id') { o.external_id = 'fb:' + v.replace(/^fb:/, ''); }
+          //  ניקוי-ערכים נגד אילוצי-CHECK ב-DB (אחרת שורה פגומה מפילה אצווה):
+          else if (field === 'phone') { var pd = phoneDigits(v); if (pd.length >= 9 && pd.length <= 15) o.phone = v; else o.meta.bad_phone = v; }
+          else if (field === 'email') { if (/^[^@\s]+@[^@\s]+\.[^@\s]{2,}$/.test(v)) o.email = clamp(v, 160); else o.meta.bad_email = v; }
+          else if (field === 'name') o.name = clamp(v, 120);
+          else if (field === 'car') o.car = clamp(v, 160);
+          else if (field === 'city') o.city = clamp(v, 80);
+          else if (field === 'id_num') o.id_num = clamp(v, 20);
+          else if (field === 'message') o.message = clamp(v, 4000);
           else o[field] = v;
         });
+        //  שורה בלי מזהה-ליד → מזהה סינתטי לפי טלפון+שם, כדי שגם היא תמוזג
+        //  ושייבוא חוזר יעדכן במקום לשכפל (אידמפוטנטי לכל השורות).
+        if (dedup && !o.external_id) {
+          var pk = phoneDigits(o.phone) + ':' + String(o.name || '').slice(0, 60);
+          if (pk !== ':') o.external_id = 'fbk:' + pk;
+        }
         return o;
       }).filter(function (o) { return o.name || o.phone || o.email; });
       if (!rows.length) return impErr('אין שורות תקינות לייבוא');
@@ -990,11 +1021,21 @@
       }
       var btn = C.$('impRun'); btn.disabled = true; var msg = C.$('impMsg'); msg.style.color = 'var(--muted)';
       var CH = 300, done = 0, failed = 0, i = 0, total = rows.length;
-      var uaList = Object.keys(unmatchedAgents);
+      var uaList = Object.keys(unmatchedAgents), lastErr = '';
+      //  אצווה שנכשלת (אילוץ-DB בשורה בודדת) מתפצלת לשורות בודדות — כך
+      //  שורה פגומה אחת לא מפילה 299 תקינות איתה.
+      function sendChunk(chunk, cb) {
+        var q = dedup ? db.from('leads').upsert(chunk, { onConflict: 'external_id' }) : db.from('leads').insert(chunk);
+        function onFail(e) {
+          if (chunk.length === 1) { failed += 1; lastErr = (e && e.message) || lastErr; try { console.warn('שורה נכשלה:', lastErr, JSON.stringify(chunk[0]).slice(0, 220)); } catch (x) {} return cb(); }
+          var j = 0; (function one() { if (j >= chunk.length) return cb(); sendChunk(chunk.slice(j, j + 1), function () { j++; one(); }); })();
+        }
+        q.then(function (r) { if (r && r.error) return onFail(r.error); done += chunk.length; cb(); }, onFail);
+      }
       function next() {
         if (i >= total) {
           msg.style.color = failed ? 'var(--warn)' : 'var(--ok)';
-          msg.textContent = '✔ יובאו ' + done + '/' + total + ' לידים' + (failed ? ' · ' + failed + ' נכשלו' : '') +
+          msg.textContent = '✔ יובאו ' + done + '/' + total + ' לידים' + (failed ? ' · ' + failed + ' נכשלו' + (lastErr ? ' (' + lastErr.slice(0, 60) + ')' : '') : '') +
             (uaList.length ? ' · ' + uaList.length + ' שמות-סוכן לא זוהו (נשמרו בהערה)' : '');
           C.refreshBadges && C.refreshBadges();
           setTimeout(function () { window.C2B_renderLeads(curFilter); }, 1600);
@@ -1002,12 +1043,7 @@
         }
         var batch = rows.slice(i, i + CH); i += CH;
         msg.textContent = 'מייבא… ' + Math.min(i, total) + '/' + total;
-        var q = dedup ? db.from('leads').upsert(batch, { onConflict: 'external_id' }) : db.from('leads').insert(batch);
-        q.then(function (r) {
-          if (r.error) { failed += batch.length; try { console.warn('ייבוא אצווה נכשל:', r.error.message); } catch (e) {} }
-          else done += batch.length;
-          next();
-        }, function (e) { failed += batch.length; next(); });
+        sendChunk(batch, next);
       }
       next();
     }
