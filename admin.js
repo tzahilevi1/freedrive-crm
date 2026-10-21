@@ -7004,9 +7004,13 @@
 
       // תצוגות נקבעות אוטומטית לפי התפקיד (admin_config.role_views) — אין בחירה פר-משתמש.
       // שדות פר-תפקיד: מנהל-מותג → ריבוי-מותגים; סוכן → מנהל-אחראי; מתאמת → בלי מותג.
+      //  שיוך-מותג יחיד רק לתפקידים המוגבלים-למותג (מכירות/תיקים/הנה״ח).
+      //  admin + מנהל-סניף = גישה לכל המותגים אוטומטית (בלי בחירה);
+      //  מנהל-מותג = בחירה-מרובה; מתאמת = כל הפגישות.
+      var NU_BRAND_ROLES = { sales: 1, files: 1, accounting: 1 };
       function nuRoleSync() {
         var r = $('nuRole').value;
-        if ($('nuBrandWrap')) $('nuBrandWrap').style.display = (r === 'brand_manager' || r === 'coordinator') ? 'none' : '';
+        if ($('nuBrandWrap')) $('nuBrandWrap').style.display = NU_BRAND_ROLES[r] ? '' : 'none';
         if ($('nuBrandsWrap')) $('nuBrandsWrap').style.display = (r === 'brand_manager') ? '' : 'none';
         if ($('nuManagerWrap')) $('nuManagerWrap').style.display = (r === 'sales') ? '' : 'none';
       }
@@ -7019,7 +7023,8 @@
         var msg = $('nuMsg');
         if (!email || email.indexOf('@') < 0) { msg.style.color = 'var(--danger)'; msg.textContent = 'הזינו אימייל תקין'; return; }
         if (role === 'brand_manager') { if (!nuBrands.length) { msg.style.color = 'var(--danger)'; msg.textContent = 'בחרו לפחות מותג אחד למנהל-המותג'; return; } brand = nuBrands[0]; }
-        else if (role !== 'coordinator') { if (!brand) { msg.style.color = 'var(--danger)'; msg.textContent = 'בחרו מותג — שיוך המותג חובה'; return; } }
+        else if (NU_BRAND_ROLES[role]) { if (!brand) { msg.style.color = 'var(--danger)'; msg.textContent = 'בחרו מותג — שיוך המותג חובה'; return; } }
+        else { brand = ''; }   // admin / מנהל-סניף / מתאמת — גישה לכל המותגים, בלי שיוך
         msg.style.color = 'var(--muted)'; msg.textContent = 'יוצר…'; this.disabled = true;
         var btn = this;
         db.rpc('admin_create_user', { p_email: email, p_name: name || email, p_role: role, p_views: views, p_phone: phone || null, p_brand: brand }).then(function (res) {
