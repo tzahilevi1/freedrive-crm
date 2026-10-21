@@ -6973,7 +6973,7 @@
         '<div class="field" style="margin:0"><label>טלפון</label><input class="inp" id="nuPhone" type="tel" placeholder="050-0000000"></div>' +
         '<div class="field" style="margin:0"><label>תפקיד</label><select class="inp" id="nuRole">' + roleOpts.map(function (x) { return '<option value="' + x[0] + '">' + x[1] + '</option>'; }).join('') + '</select></div>' +
         '<div class="field" id="nuBrandWrap" style="margin:0"><label>מותג <span style="color:var(--danger)">*</span> <span class="muted" style="font-weight:400">— לאיזה מותג משויך</span></label><select class="inp" id="nuBrand">' + window.C2B.selOpts((window.C2B.marketingBrands || []), '', '— בחר מותג —') + '</select></div>' +
-        '<div class="field" id="nuBrandsWrap" style="margin:0;display:none;grid-column:1/-1"><label>מותגים שהמנהל אחראי עליהם <span style="color:var(--danger)">*</span></label><div id="nuBrandsBox" style="border:1px solid var(--line);border-radius:8px;padding:8px;max-height:120px;overflow:auto;line-height:2.1">' + ((window.C2B.marketingBrands || []).map(function (b) { return '<label style="display:inline-flex;gap:4px;margin:2px 10px 2px 0;font-size:12.5px;white-space:nowrap"><input type="checkbox" data-nbrand="' + esc(b) + '"> ' + esc(b) + '</label>'; }).join('') || '<span class="muted" style="font-size:12px">אין מותגים</span>') + '</div></div>' +
+        '<div class="field" id="nuBrandsWrap" style="margin:0;display:none;grid-column:1/-1"><label id="nuBrandsLbl">מותגים שהמנהל אחראי עליהם <span style="color:var(--danger)">*</span></label><div id="nuBrandsBox" style="border:1px solid var(--line);border-radius:8px;padding:8px;max-height:120px;overflow:auto;line-height:2.1">' + ((window.C2B.marketingBrands || []).map(function (b) { return '<label style="display:inline-flex;gap:4px;margin:2px 10px 2px 0;font-size:12.5px;white-space:nowrap"><input type="checkbox" data-nbrand="' + esc(b) + '"> ' + esc(b) + '</label>'; }).join('') || '<span class="muted" style="font-size:12px">אין מותגים</span>') + '</div></div>' +
         '<div class="field" id="nuManagerWrap" style="margin:0;display:none"><label>מנהל מותג אחראי</label><select class="inp" id="nuManager"><option value="">— ללא —</option>' + ps.filter(function (x) { return x.role === 'brand_manager'; }).map(function (x) { return '<option value="' + esc(x.user_id) + '">' + esc(x.full_name || x.email) + '</option>'; }).join('') + '</select></div>' +
         '</div>' +
         '<p class="muted" style="font-size:12.5px;margin-top:12px">התצוגות נקבעות אוטומטית לפי התפקיד. לשינוי — הגדרות ← הרשאות.</p>' +
@@ -7004,25 +7004,31 @@
 
       // תצוגות נקבעות אוטומטית לפי התפקיד (admin_config.role_views) — אין בחירה פר-משתמש.
       // שדות פר-תפקיד: מנהל-מותג → ריבוי-מותגים; סוכן → מנהל-אחראי; מתאמת → בלי מותג.
-      //  שיוך-מותג יחיד רק לתפקידים המוגבלים-למותג (מכירות/תיקים/הנה״ח).
-      //  admin + מנהל-סניף = גישה לכל המותגים אוטומטית (בלי בחירה);
-      //  מנהל-מותג = בחירה-מרובה; מתאמת = כל הפגישות.
-      var NU_BRAND_ROLES = { sales: 1, files: 1, accounting: 1 };
+      //  שיוך-מותג לפי תפקיד: admin + מנהל-סניף = כל המותגים (בלי בחירה).
+      //  מכירות = מותג יחיד. מנהל-מותג/תיקי-לקוחות/הנה״ח = בחירה-מרובה
+      //  (מנהל-מותג חובה ≥1; תיקים/הנה״ח רשות — ריק = כל המותגים/הארגון).
+      //  מתאמת = כל הפגישות (בלי מותג).
+      var NU_BRAND_ROLES = { sales: 1 };                                   // מותג יחיד
+      var NU_MULTI_ROLES = { brand_manager: 1, files: 1, accounting: 1 };  // רב-מותג
       function nuRoleSync() {
         var r = $('nuRole').value;
         if ($('nuBrandWrap')) $('nuBrandWrap').style.display = NU_BRAND_ROLES[r] ? '' : 'none';
-        if ($('nuBrandsWrap')) $('nuBrandsWrap').style.display = (r === 'brand_manager') ? '' : 'none';
+        if ($('nuBrandsWrap')) $('nuBrandsWrap').style.display = NU_MULTI_ROLES[r] ? '' : 'none';
+        if ($('nuBrandsLbl')) $('nuBrandsLbl').innerHTML = (r === 'brand_manager')
+          ? 'מותגים שהמנהל אחראי עליהם <span style="color:var(--danger)">*</span>'
+          : 'מותגים שהיא מנהלת <span class="muted" style="font-weight:400">— ריק = ' + (r === 'accounting' ? 'כל הארגון' : 'כל המותגים') + '</span>';
         if ($('nuManagerWrap')) $('nuManagerWrap').style.display = (r === 'sales') ? '' : 'none';
       }
       $('nuRole').addEventListener('change', nuRoleSync); nuRoleSync();
       $('nuCreate').addEventListener('click', function () {
         var name = $('nuName').value.trim(), email = $('nuEmail').value.trim(), role = $('nuRole').value, phone = ($('nuPhone') ? $('nuPhone').value.trim() : ''), brand = ($('nuBrand') ? $('nuBrand').value : '');
         var views = DEFAULT_VIEWS[role] || [];   // נגזר מהתפקיד; נשמר כגיבוי אך לא נקרא בבוט (role_views קובע)
-        var nuBrands = []; if (role === 'brand_manager') { Array.prototype.forEach.call(document.querySelectorAll('#nuBrandsBox input[data-nbrand]:checked'), function (c) { nuBrands.push(c.dataset.nbrand); }); }
+        var nuBrands = []; if (NU_MULTI_ROLES[role]) { Array.prototype.forEach.call(document.querySelectorAll('#nuBrandsBox input[data-nbrand]:checked'), function (c) { nuBrands.push(c.dataset.nbrand); }); }
         var nuMgr = (role === 'sales' && $('nuManager')) ? ($('nuManager').value || '') : '';
         var msg = $('nuMsg');
         if (!email || email.indexOf('@') < 0) { msg.style.color = 'var(--danger)'; msg.textContent = 'הזינו אימייל תקין'; return; }
         if (role === 'brand_manager') { if (!nuBrands.length) { msg.style.color = 'var(--danger)'; msg.textContent = 'בחרו לפחות מותג אחד למנהל-המותג'; return; } brand = nuBrands[0]; }
+        else if (NU_MULTI_ROLES[role]) { brand = nuBrands.length ? nuBrands[0] : ''; }   // תיקים/הנה״ח — רשות (ריק = כל המותגים/הארגון)
         else if (NU_BRAND_ROLES[role]) { if (!brand) { msg.style.color = 'var(--danger)'; msg.textContent = 'בחרו מותג — שיוך המותג חובה'; return; } }
         else { brand = ''; }   // admin / מנהל-סניף / מתאמת — גישה לכל המותגים, בלי שיוך
         msg.style.color = 'var(--muted)'; msg.textContent = 'יוצר…'; this.disabled = true;
@@ -7034,7 +7040,7 @@
           //  אחרי יצירה: קובעים brands (מנהל-מותג) / manager_id (סוכן) על הפרופיל החדש.
           var newUid = d.user_id || d.id || d.uid || null;
           function _applyExtra(uid) {
-            if (role === 'brand_manager' && nuBrands.length) db.from('profiles').update({ brands: nuBrands }).eq('user_id', uid).then(function () {}, function () {});
+            if (NU_MULTI_ROLES[role] && nuBrands.length) db.from('profiles').update({ brands: nuBrands }).eq('user_id', uid).then(function () {}, function () {});
             if (nuMgr) db.from('profiles').update({ manager_id: nuMgr }).eq('user_id', uid).then(function () {}, function () {});
           }
           if (newUid) _applyExtra(newUid);
