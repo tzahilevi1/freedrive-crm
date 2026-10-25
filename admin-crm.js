@@ -3295,9 +3295,13 @@
   //  מתויגות בתיאורן ב-"ctype:click" / "ctype:dynamic". מחזיר null אם אין תבנית
   //  פעילה מתאימה — ואז המנוע נופל חזרה לנוסח ברירת-המחדל, כך שההסכם לא נשבר
   //  כשהתבניות עדיין כבויות (לסקירה) או נמחקו.
+  //  דינמיק מוטורס: סוג-ההסכם נגזר אוטומטית מ*מותג העסקה* (נבחר ביצירת העסקה) ולא
+  //  מבורר נפרד — מותג "קליק אנד דרייב" → הסכם קליק (גלובל דרייב), כל שאר המותגים
+  //  (דינמיק מוטורס / פרי ליס / ילו דרייב…) → הסכם דינמיק מוטורס.
+  function dmIsClick(d) { return /קליק|click/i.test(((d && d.brand) || '') + ''); }
   function dmBodyFor(d) {
     if (!CT_CACHE) return null;
-    var tag = 'ctype:' + (d && d.contract_type === 'click' ? 'click' : 'dynamic');
+    var tag = 'ctype:' + (dmIsClick(d) ? 'click' : 'dynamic');
     var t = CT_CACHE.filter(function (x) { return x.active && String(x.description || '').indexOf(tag) >= 0; })[0];
     return t ? (t.body || '') : null;
   }
@@ -3474,7 +3478,8 @@
     var brandName = bname();
     //  דינמיק מוטורס: 2 הסכמים (דינמיק מוטורס / קליק אנד דרייב) — לוגו + ישות-משפטית לכל אחד.
     //  (_dmSlug כבר הוגדר למעלה לצורך בחירת גוף-הסעיפים לפי סוג-ההסכם.)
-    var _dmClick = _dmSlug && d.contract_type === 'click';
+    //  קליק/דינמיק נגזר ממותג-העסקה (dmIsClick) — לא מבורר נפרד.
+    var _dmClick = _dmSlug && dmIsClick(d);
     var _dmLogo = _dmSlug ? (_dmClick ? 'https://olxhekrmlzrgasmqbooc.supabase.co/storage/v1/object/public/org-branding/1/click-drive-logo.jpg' : 'https://olxhekrmlzrgasmqbooc.supabase.co/storage/v1/object/public/org-branding/1/dynamic-logo.jpg') : null;
     var _dmLegal = _dmSlug ? (_dmClick ? 'קליק אנד דרייב באמצעות חברת גלובל דרייב בע"מ · ח.פ 516685898' : 'דיינאמיק מוטורס בע"מ · ח.פ 517283057') : null;
     // סעיפי הסכם "Car 2 Buy" — מבנה מפורט (1–7) לפי התבנית של גלובל דרייב
@@ -3657,11 +3662,11 @@
     var cv_ctKind = (['מכר', 'רכש', 'טרייד-אין'].indexOf(deal.contract_type) >= 0) ? deal.contract_type : 'מכר';
     var cv_kindSel = '<label style="font-size:12.5px;color:var(--muted)">סוג הסכם:</label><select class="inp" id="cContractKind" style="width:auto;padding:5px 8px;font-size:12.5px">' +
       [['טרייד-אין', '📄 טרייד-אין'], ['רכש', '📄 רכש (קנייה)'], ['מכר', '📄 מכר (מכירה)']].map(function (o) { return '<option value="' + o[0] + '"' + (cv_ctKind === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select>';
-    //  דינמיק מוטורס — בורר 2 הסכמים (דינמיק מוטורס / קליק אנד דרייב), כל אחד עם הלוגו והישות שלו.
+    //  דינמיק מוטורס — ההסכם (דינמיק/קליק) נגזר אוטומטית ממותג-העסקה; אין בורר נפרד
+    //  בתצוגת-ההסכם. מסנכרנים את contract_type למותג כדי שעמודת "סוג הסכם" בהנה״ח תהיה עקבית.
     var cv_isDm = (window.__fleetCfg && window.__fleetCfg.slug) === 'dynamic-motors';
-    var cv_dmSel = '<label style="font-size:12.5px;color:var(--muted)">סוג הסכם:</label><select class="inp" id="cDmKind" style="width:auto;padding:5px 8px;font-size:12.5px"><option value="dynamic"' + (deal.contract_type !== 'click' ? ' selected' : '') + '>📄 דינמיק מוטורס</option><option value="click"' + (deal.contract_type === 'click' ? ' selected' : '') + '>📄 קליק אנד דרייב</option></select>';
-    //  בורר בעלות 00/01 — נוסח הצהרת-הבעלות ({{ownership_statement}}) מתחלף לפיו. בדינמיק מוצג
-    //  לצד בורר סוג-ההסכם, כך שלכל אחד מ-2 ההסכמים יש גרסת 00 וגרסת 01.
+    if (cv_isDm) deal.contract_type = dmIsClick(deal) ? 'click' : 'dynamic';
+    //  בורר בעלות 00/01 — נוסח הצהרת-הבעלות ({{ownership_statement}}) מתחלף לפיו.
     var cv_ownSel = '<label style="font-size:12.5px;color:var(--muted)">בעלות:</label><select class="inp" id="cOwnership" style="width:auto;padding:5px 8px"><option value="01"' + (curOwn === '01' ? ' selected' : '') + '>בעלים 01</option><option value="00"' + (curOwn === '00' ? ' selected' : '') + '>בעלים 00</option></select>';
     view(
       '<div class="lead-top"><button class="btn btn-ghost btn-sm" id="cBack">→ לעסקה</button><h3 style="margin:0">הסכם' + (deal.brand ? ' · ' + esc(deal.brand) : '') + ' — ' + esc(deal.client_name || '') + (signed ? ' <span class="tag" style="border-color:var(--ok);color:var(--ok);background:rgba(22,163,74,.1)">✅ נחתם</span>' : '') + '</h3>' +
@@ -3676,7 +3681,7 @@
               tplList.map(function (t) {
                 return '<option value="' + esc(t.id) + '"' + (chosenTpl && t.id === chosenTpl.id ? ' selected' : '') + '>' + esc(t.name) + '</option>';
               }).join('') + '</select>' : '') +
-          (signed ? '' : (cv_isYad2 ? cv_kindSel : (cv_isDm ? (cv_dmSel + cv_ownSel) : cv_ownSel))) +
+          (signed ? '' : (cv_isYad2 ? cv_kindSel : cv_ownSel)) +
           '<button class="btn btn-sm" id="cPdf">⬇ הורד PDF</button>' +
           '<button class="btn btn-ghost btn-sm" id="cPrint" title="פותח את חלון ההדפסה של הדפדפן — איכות טקסט מיטבית">🖨 הדפסה</button>' + '</div></div>' +
       (justSaved && !signed ? '<div class="card" style="border:2px solid var(--ok);background:rgba(22,163,74,.07);text-align:center;padding:22px">' +'<div style="font-size:40px;line-height:1">✅</div>' +'<h2 style="margin:10px 0 4px;font-size:22px">ההסכם נוצר בהצלחה' + (deal.order_no ? ' #' + esc(deal.order_no) : '') + '</h2>' +'<p class="muted" style="margin:0;font-size:14px">השלב הבא: שלחו אותו ללקוח לחתימה באחת הדרכים שלמטה.</p></div>' : '') +
@@ -3720,12 +3725,7 @@
       $('cDoc').innerHTML = contractHTML(deal, deal.signature || null);
       if (deal.id) db.from('deals').update({ contract_type: this.value, contract_html: contractHTML(deal, null) }).eq('id', deal.id).then(function () {});
     });
-    //  דינמיק מוטורס — החלפה בין "דינמיק מוטורס" ל"קליק אנד דרייב" מחליפה לוגו+ישות ומרעננת.
-    if ($('cDmKind')) $('cDmKind').addEventListener('change', function () {
-      deal.contract_type = this.value;
-      $('cDoc').innerHTML = contractHTML(deal, deal.signature || null);
-      if (deal.id) db.from('deals').update({ contract_type: this.value, contract_html: contractHTML(deal, null) }).eq('id', deal.id).then(function () {});
-    });
+    //  דינמיק מוטורס — אין בורר סוג-הסכם; ההסכם נגזר ממותג-העסקה (dmIsClick).
     // PDF מושלם דרך מנוע ההדפסה של הדפדפן (בדיאלוג בוחרים "שמירה כ-PDF") — bidi עברית ללא פגם
     if ($('cTpl')) $('cTpl').addEventListener('change', function () {
       var id = this.value;
