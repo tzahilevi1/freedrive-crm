@@ -7148,9 +7148,9 @@
       // לא — opt-in). סוכן/תיקים/חשבונות אינם נמענים ולכן אין להם מתג.
       ((p.role === 'admin' || p.role === 'branch') ?
         '<label style="display:flex;gap:8px;align-items:center;margin-top:12px;font-size:13px">' +
-          '<input type="checkbox" id="ue_notifyLeads"' + (((p.role === 'admin') ? (p.notify_leads !== false) : (p.notify_leads === true)) ? ' checked' : '') + '> 📧 מקבל מייל על כל ליד חדש שנכנס' +
+          '<input type="checkbox" id="ue_notifyLeads"' + (p.notify_leads === true ? ' checked' : '') + '> 📧 מקבל מייל על כל ליד חדש שנכנס' +
         '</label>' +
-        '<span class="muted" style="font-size:11px;display:block;margin-top:2px">' + (p.role === 'branch' ? 'מנהל סניף אינו מקבל מיילי-לידים כברירת-מחדל — סמן כדי שיקבל. ' : 'כבה כדי להפסיק לקבל. ') + 'לא משפיע על מסך הלידים — הם ממשיכים להיכנס כרגיל.</span>'
+        '<span class="muted" style="font-size:11px;display:block;margin-top:2px">כברירת-מחדל <b>כבוי</b> — אף אחד לא מקבל מיילי-לידים אלא אם מסמנים כאן במפורש. לא משפיע על מסך הלידים — הם ממשיכים להיכנס כרגיל.</span>'
         : '') +
       // בעל-הלידים: כל ליד שנכנס בלי שיוך מפורש מוקצה אוטומטית למשתמש המסומן כאן
       // (admin_config.default_owner + טריגר leads_default_owner). ערך יחיד = בחירת-יחיד:
@@ -8561,29 +8561,44 @@
   }
 
   // ---- visual editor for the lead-card action bar (order / rename / show-hide) ----
-  function actionEditorCard() {
+  function actionEditorInner() {
     var cfg = (window.C2B.getActionCfg && window.C2B.getActionCfg()) || [], meta = {};
     (window.C2B.leadActionsMeta || []).forEach(function (m) { meta[m.k] = m; });
     var rows = cfg.map(function (c, i) {
       var m = meta[c.k] || { icon: '', label: c.k };
-      return '<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--line)">' +
+      return '<div class="ae-row" draggable="true" data-i="' + i + '" style="display:flex;align-items:center;gap:8px;padding:8px 6px;border-bottom:1px solid var(--line);background:#fff;border-radius:8px">' +
+        '<span class="ae-grip" title="גרור לסידור" style="cursor:grab;color:var(--muted);font-size:17px;user-select:none">⠿</span>' +
         '<span style="font-size:18px;width:24px;text-align:center">' + m.icon + '</span>' +
         '<input class="inp ae-label" data-i="' + i + '" value="' + esc(c.label || m.label) + '" style="flex:1">' +
         '<label style="display:flex;gap:5px;align-items:center;font-size:12.5px;white-space:nowrap"><input type="checkbox" class="ae-on" data-i="' + i + '"' + (c.on !== false ? ' checked' : '') + '> מוצג</label>' +
-        '<button class="btn btn-ghost btn-sm ae-up" data-i="' + i + '"' + (i === 0 ? ' disabled' : '') + '>↑</button>' +
-        '<button class="btn btn-ghost btn-sm ae-down" data-i="' + i + '"' + (i === cfg.length - 1 ? ' disabled' : '') + '>↓</button></div>';
+        '<button type="button" class="btn btn-ghost btn-sm ae-up" data-i="' + i + '"' + (i === 0 ? ' disabled' : '') + '>↑</button>' +
+        '<button type="button" class="btn btn-ghost btn-sm ae-down" data-i="' + i + '"' + (i === cfg.length - 1 ? ' disabled' : '') + '>↓</button></div>';
     }).join('');
-    return '<div class="card"><div class="row-between"><h3 style="margin:0">🎛️ עריכת סרגל הפעולות בכרטיס ליד</h3><button class="btn btn-ghost btn-sm" id="aeReset">↺ שחזר ברירת מחדל</button></div>' +
-      '<p class="muted" style="font-size:12.5px;margin:4px 0 10px">סדר מחדש (↑↓), שנה שמות, והצג/הסתר את הכפתורים. השינוי נשמר לדפדפן זה ומשפיע על כרטיס הליד.</p>' + rows + '</div>';
+    return '<div class="card"><div class="row-between"><h3 style="margin:0">🎛️ עריכת סרגל הפעולות בכרטיס ליד</h3><button type="button" class="btn btn-ghost btn-sm" id="aeReset">↺ שחזר ברירת מחדל</button></div>' +
+      '<p class="muted" style="font-size:12.5px;margin:4px 0 10px">גררו ⠿ כדי לסדר מחדש (או ↑↓), שנו שמות, והציגו/הסתירו. השינוי נשמר לדפדפן זה ומשפיע על כרטיס הליד.</p>' +
+      '<div id="aeList">' + rows + '</div></div>';
   }
+  function actionEditorCard() { return '<div id="aeHost">' + actionEditorInner() + '</div>'; }
   function bindActionEditor() {
     var cfg = (window.C2B.getActionCfg && window.C2B.getActionCfg()) || [];
     function save() { window.C2B.saveActionCfg && window.C2B.saveActionCfg(cfg); }
+    //  רינדור *במקום* (בלי renderSettings) — מונע את הקפיצה-לראש שהייתה בכל שינוי.
+    function redraw() { var h = $('aeHost'); if (h) { h.innerHTML = actionEditorInner(); bindActionEditor(); } }
+    function move(from, to) { if (from === to || from < 0 || to < 0 || from >= cfg.length || to >= cfg.length) return; var it = cfg.splice(from, 1)[0]; cfg.splice(to, 0, it); save(); redraw(); }
     $('view').querySelectorAll('.ae-label').forEach(function (inp) { inp.addEventListener('change', function () { cfg[+inp.dataset.i].label = inp.value.trim(); save(); }); });
     $('view').querySelectorAll('.ae-on').forEach(function (cb) { cb.addEventListener('change', function () { cfg[+cb.dataset.i].on = cb.checked; save(); }); });
-    $('view').querySelectorAll('.ae-up').forEach(function (b) { b.addEventListener('click', function () { var i = +b.dataset.i; if (i <= 0) return; var t = cfg[i - 1]; cfg[i - 1] = cfg[i]; cfg[i] = t; save(); renderSettings(); }); });
-    $('view').querySelectorAll('.ae-down').forEach(function (b) { b.addEventListener('click', function () { var i = +b.dataset.i; if (i >= cfg.length - 1) return; var t = cfg[i + 1]; cfg[i + 1] = cfg[i]; cfg[i] = t; save(); renderSettings(); }); });
-    if ($('aeReset')) $('aeReset').addEventListener('click', function () { if (!confirm('לשחזר את סדר ושמות הכפתורים לברירת מחדל?')) return; window.C2B.resetActionCfg && window.C2B.resetActionCfg(); renderSettings(); });
+    $('view').querySelectorAll('.ae-up').forEach(function (b) { b.addEventListener('click', function () { var i = +b.dataset.i; move(i, i - 1); }); });
+    $('view').querySelectorAll('.ae-down').forEach(function (b) { b.addEventListener('click', function () { var i = +b.dataset.i; move(i, i + 1); }); });
+    if ($('aeReset')) $('aeReset').addEventListener('click', function () { if (!confirm('לשחזר את סדר ושמות הכפתורים לברירת מחדל?')) return; window.C2B.resetActionCfg && window.C2B.resetActionCfg(); redraw(); });
+    //  גרירה-ושחרור לסידור מחדש (דסקטופ; הכפתורים ↑↓ נשארים כגיבוי למובייל).
+    var dragFrom = -1;
+    $('view').querySelectorAll('.ae-row').forEach(function (row) {
+      row.addEventListener('dragstart', function (e) { dragFrom = +row.dataset.i; row.style.opacity = '.5'; try { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', String(dragFrom)); } catch (x) {} });
+      row.addEventListener('dragend', function () { row.style.opacity = ''; });
+      row.addEventListener('dragover', function (e) { e.preventDefault(); row.style.boxShadow = 'inset 0 2px 0 var(--brand)'; });
+      row.addEventListener('dragleave', function () { row.style.boxShadow = ''; });
+      row.addEventListener('drop', function (e) { e.preventDefault(); row.style.boxShadow = ''; var to = +row.dataset.i; if (dragFrom >= 0 && dragFrom !== to) move(dragFrom, to); dragFrom = -1; });
+    });
   }
 
   // ---------- SOON placeholders ----------
