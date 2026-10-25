@@ -7129,6 +7129,12 @@
     var p = ps.filter(function (x) { return x.user_id === uid; })[0] || {};
     //  מנהל שמוריד לעצמו את התפקיד ננעל מחוץ למערכת ואין מי שיחזיר אותו.
     var isSelf = (uid === window.C2B.userId);
+    //  שיוך-מותג נגזר מהתפקיד (זהה לטופס-היצירה): מכירות=מותג יחיד; מנהל-מותג/תיקים/הנה״ח=רב-מותג.
+    //  מנהל-סניף/אדמין רואים את כל המותגים ולכן אין להם שדה. מוצג גם בעריכה — לא רק ביצירה.
+    var UE_SINGLE = { sales: 1 }, UE_MULTI = { brand_manager: 1, files: 1, accounting: 1 };
+    var ueBrands0 = Array.isArray(p.brands) ? p.brands : (p.brands ? [p.brands] : []);
+    var ueBrandList = (window.C2B && window.C2B.marketingBrands) || [];
+    function ueBrandsLblHtml(r) { return (r === 'brand_manager') ? 'מותגים שהמנהל אחראי עליהם <span style="color:var(--danger)">*</span>' : 'מותגים שהוא מנהל <span class="muted" style="font-weight:400">(ריק = כל הארגון)</span>'; }
     function fld(label, id, val, type) { return '<div class="field" style="margin:0"><label>' + label + '</label><input class="inp" id="' + id + '" type="' + (type || 'text') + '" value="' + esc(val == null ? '' : val) + '" style="width:100%"></div>'; }
     td.innerHTML = '<div class="card" style="box-shadow:none;border:1px solid var(--line);background:var(--surface-2);margin:8px 0">' +
       '<div class="row-between" style="margin-bottom:10px"><b>✏️ עריכת פרטי משתמש</b><span class="muted" style="font-size:11.5px">' + roleLabel(p.role) + '</span></div>' +
@@ -7155,6 +7161,13 @@
           '<input class="inp" id="ue_agent_phone2" type="tel" value="' + esc(((p.agent_phone || '').split(',')[1] || '').trim()) + '" placeholder="למשל 0534495197" style="width:100%">' +
           '<span class="muted" style="font-size:11px">לנציג עם שני מספרים (כמו ליאור).</span></div>' +
       '</div>' +
+      //  שיוך-מותג (מוצג לפי התפקיד; מנהל-סניף/אדמין רואים הכול ולכן מוסתר):
+      '<div class="field" id="ue_brandSingleWrap" style="margin-top:10px;display:' + (UE_SINGLE[p.role] ? '' : 'none') + '"><label>מותג משויך <span style="color:var(--danger)">*</span></label>' +
+        '<select class="inp" id="ue_brandSingle" style="width:100%">' + window.C2B.selOpts(ueBrandList, ueBrands0[0] || '', '— בחר מותג —') + '</select></div>' +
+      '<div class="field" id="ue_brandsWrap" style="margin-top:10px;display:' + (UE_MULTI[p.role] ? '' : 'none') + '"><label id="ue_brandsLbl">' + ueBrandsLblHtml(p.role) + '</label>' +
+        '<div id="ue_brandsBox" style="border:1px solid var(--line);border-radius:8px;padding:8px;max-height:130px;overflow:auto;line-height:2.1">' +
+          (ueBrandList.map(function (b) { return '<label style="display:inline-flex;gap:4px;margin:2px 10px 2px 0;font-size:12.5px;white-space:nowrap"><input type="checkbox" data-uebrand="' + esc(b) + '"' + (ueBrands0.indexOf(b) >= 0 ? ' checked' : '') + '> ' + esc(b) + '</label>'; }).join('') || '<span class="muted" style="font-size:12px">אין מותגים להצגה</span>') +
+        '</div><span class="muted" style="font-size:11px;display:block;margin-top:2px">מנהל-מותג חייב מותג אחד לפחות — בלי מותג הוא רואה 0 לידים.</span></div>' +
       '' +
       // התראות-מייל על ליד חדש (notify_staff). המתג מאפשר לבחור אם לקבל, בלי לגעת
       // בהרשאות. נמענים בפועל: מנהל-מערכת (ברירת-מחדל מקבל) ומנהל-סניף (ברירת-מחדל
@@ -7179,10 +7192,19 @@
       '<p class="muted" style="font-size:11px;margin-top:8px">שדות אלו (שלוחת SIP, טלפון, סניף…) זמינים לחיבור אוטומציות, חיוג וניתוב בהמשך.</p>' +
     '</div>';
     $('ue_close').addEventListener('click', function () { tr.classList.add('hidden'); td.innerHTML = ''; });
+    function newRoleValue() { return ($('ue_role') && !isSelf) ? $('ue_role').value : p.role; }
+    //  סנכרון שדה-המותג לתפקיד הנבחר: מכירות=יחיד, מנהל-מותג/תיקים/הנה״ח=רב, אדמין/סניף=מוסתר.
+    function ueBrandSync() {
+      var r = newRoleValue();
+      if ($('ue_brandSingleWrap')) $('ue_brandSingleWrap').style.display = UE_SINGLE[r] ? '' : 'none';
+      if ($('ue_brandsWrap')) $('ue_brandsWrap').style.display = UE_MULTI[r] ? '' : 'none';
+      if ($('ue_brandsLbl')) $('ue_brandsLbl').innerHTML = ueBrandsLblHtml(r);
+    }
     if ($('ue_role')) $('ue_role').addEventListener('change', function () {
       var w = $('ue_viewsWrap'); if (w) w.classList.toggle('hidden', this.value === p.role);
+      ueBrandSync();
     });
-    function newRoleValue() { return ($('ue_role') && !isSelf) ? $('ue_role').value : p.role; }
+    ueBrandSync();
     $('ue_save').addEventListener('click', function () {
       var patch = {
         full_name: ($('ue_name').value || '').trim() || null,
@@ -7205,6 +7227,20 @@
         if (!confirm('לשנות את התפקיד של ' + (p.full_name || '') + '\nמ־' + roleLabel(p.role) + ' ל־' + roleLabel(newRole) + '?')) return;
       }
       if (!patch.full_name) { $('ue_msg').style.color = 'var(--danger)'; $('ue_msg').textContent = 'שם חובה'; return; }
+      //  שיוך-מותג לפי התפקיד → profiles.brands (עליו מבוססת RLS, my_brands()):
+      //  מנהל-מותג חייב ≥1 (אחרת רואה 0); תיקים/הנה״ח רשות (ריק=כל הארגון); מכירות=יחיד חובה;
+      //  אדמין/מנהל-סניף → בלי שיוך (רואים הכול).
+      if (UE_MULTI[newRole]) {
+        var ubs = []; Array.prototype.forEach.call(document.querySelectorAll('#ue_brandsBox input[data-uebrand]:checked'), function (c) { ubs.push(c.dataset.uebrand); });
+        if (newRole === 'brand_manager' && !ubs.length) { $('ue_msg').style.color = 'var(--danger)'; $('ue_msg').textContent = 'בחרו לפחות מותג אחד למנהל-המותג (אחרת יראה 0 לידים)'; return; }
+        patch.brands = ubs.length ? ubs : null;
+      } else if (UE_SINGLE[newRole]) {
+        var usb = ($('ue_brandSingle') && $('ue_brandSingle').value) || '';
+        if (!usb) { $('ue_msg').style.color = 'var(--danger)'; $('ue_msg').textContent = 'בחרו מותג — שיוך המותג חובה למכירות'; return; }
+        patch.brands = [usb];
+      } else {
+        patch.brands = null;   // אדמין/מנהל-סניף — בלי שיוך-מותג (רואים את כל הארגון)
+      }
       var btn = this; btn.disabled = true; $('ue_msg').style.color = 'var(--muted)'; $('ue_msg').textContent = 'שומר…';
       db.from('profiles').update(patch).eq('user_id', uid).select().then(function (u) {
         btn.disabled = false;
