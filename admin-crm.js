@@ -3291,6 +3291,17 @@
   }
   function ctInvalidate() { CT_CACHE = null; }
 
+  //  דינמיק מוטורס: בחירת גוף-ההסכם לפי סוג-ההסכם (contract_type). שתי התבניות
+  //  מתויגות בתיאורן ב-"ctype:click" / "ctype:dynamic". מחזיר null אם אין תבנית
+  //  פעילה מתאימה — ואז המנוע נופל חזרה לנוסח ברירת-המחדל, כך שההסכם לא נשבר
+  //  כשהתבניות עדיין כבויות (לסקירה) או נמחקו.
+  function dmBodyFor(d) {
+    if (!CT_CACHE) return null;
+    var tag = 'ctype:' + (d && d.contract_type === 'click' ? 'click' : 'dynamic');
+    var t = CT_CACHE.filter(function (x) { return x.active && String(x.description || '').indexOf(tag) >= 0; })[0];
+    return t ? (t.body || '') : null;
+  }
+
   // השדות שאפשר לשתול בגוף התבנית. הרשימה מוצגת גם בעורך ככפתורים.
   var CT_FIELDS = [
     { k: 'client_name', l: 'שם הלקוח' }, { k: 'client_id', l: 'ת.ז / ח.פ' },
@@ -3444,7 +3455,14 @@
     if ((window.__fleetCfg && window.__fleetCfg.slug) === 'yad2') {
       return yad2ContractHTML(d, (['רכש', 'מכר', 'טרייד-אין'].indexOf(d.contract_type) >= 0 ? d.contract_type : 'מכר'), sig);
     }
-    if (tplBody == null) tplBody = CT_ACTIVE_BODY;
+    var _dmSlug = (window.__fleetCfg && window.__fleetCfg.slug) === 'dynamic-motors';
+    if (tplBody == null) {
+      //  דינמיק מוטורס — 2 הסכמים: גוף-הסעיפים נבחר לפי contract_type (קליק/דינמיק).
+      //  נבחר כאן ולא דרך CT_ACTIVE_BODY, כי החלפת הבורר בתצוגת-ההסכם קוראת ל-contractHTML
+      //  ישירות (בלי טעינת-תבניות מחדש) — וכך הגוף מתחלף נכון עם הלוגו והישות.
+      var _dmBody = _dmSlug ? dmBodyFor(d) : null;
+      tplBody = (_dmBody != null) ? _dmBody : CT_ACTIVE_BODY;
+    }
     var today = new Date().toLocaleDateString('he-IL');
     var own = ownership || (d.checklist && d.checklist._ownership) || '01';
     var ad = d.addons || {};
@@ -3455,7 +3473,7 @@
     var ctype = 'car2buy';
     var brandName = bname();
     //  דינמיק מוטורס: 2 הסכמים (דינמיק מוטורס / קליק אנד דרייב) — לוגו + ישות-משפטית לכל אחד.
-    var _dmSlug = (window.__fleetCfg && window.__fleetCfg.slug) === 'dynamic-motors';
+    //  (_dmSlug כבר הוגדר למעלה לצורך בחירת גוף-הסעיפים לפי סוג-ההסכם.)
     var _dmClick = _dmSlug && d.contract_type === 'click';
     var _dmLogo = _dmSlug ? (_dmClick ? 'https://olxhekrmlzrgasmqbooc.supabase.co/storage/v1/object/public/org-branding/1/click-drive-logo.jpg' : 'https://olxhekrmlzrgasmqbooc.supabase.co/storage/v1/object/public/org-branding/1/dynamic-logo.jpg') : null;
     var _dmLegal = _dmSlug ? (_dmClick ? 'קליק אנד דרייב באמצעות חברת גלובל דרייב בע"מ · ח.פ 516685898' : 'דיינאמיק מוטורס בע"מ · ח.פ 517283057') : null;
@@ -3642,18 +3660,23 @@
     //  דינמיק מוטורס — בורר 2 הסכמים (דינמיק מוטורס / קליק אנד דרייב), כל אחד עם הלוגו והישות שלו.
     var cv_isDm = (window.__fleetCfg && window.__fleetCfg.slug) === 'dynamic-motors';
     var cv_dmSel = '<label style="font-size:12.5px;color:var(--muted)">סוג הסכם:</label><select class="inp" id="cDmKind" style="width:auto;padding:5px 8px;font-size:12.5px"><option value="dynamic"' + (deal.contract_type !== 'click' ? ' selected' : '') + '>📄 דינמיק מוטורס</option><option value="click"' + (deal.contract_type === 'click' ? ' selected' : '') + '>📄 קליק אנד דרייב</option></select>';
+    //  בורר בעלות 00/01 — נוסח הצהרת-הבעלות ({{ownership_statement}}) מתחלף לפיו. בדינמיק מוצג
+    //  לצד בורר סוג-ההסכם, כך שלכל אחד מ-2 ההסכמים יש גרסת 00 וגרסת 01.
+    var cv_ownSel = '<label style="font-size:12.5px;color:var(--muted)">בעלות:</label><select class="inp" id="cOwnership" style="width:auto;padding:5px 8px"><option value="01"' + (curOwn === '01' ? ' selected' : '') + '>בעלים 01</option><option value="00"' + (curOwn === '00' ? ' selected' : '') + '>בעלים 00</option></select>';
     view(
       '<div class="lead-top"><button class="btn btn-ghost btn-sm" id="cBack">→ לעסקה</button><h3 style="margin:0">הסכם' + (deal.brand ? ' · ' + esc(deal.brand) : '') + ' — ' + esc(deal.client_name || '') + (signed ? ' <span class="tag" style="border-color:var(--ok);color:var(--ok);background:rgba(22,163,74,.1)">✅ נחתם</span>' : '') + '</h3>' +
         '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">' +
           // בורר מוצג רק כשבאמת יש ממה לבחור — כפתור עם אפשרות אחת
           // הוא רעש שמסיח מהחתימה
-          ((!signed && tplList && tplList.length > 1) ?
+          // בדינמיק סוג-ההסכם נבחר דרך בורר "דינמיק/קליק" (שגם קובע את גוף-הסעיפים) —
+          // ובורר התבנית הגנרי מיותר שם ומבלבל, לכן מוסתר.
+          ((!signed && !cv_isDm && tplList && tplList.length > 1) ?
             '<label style="font-size:12.5px;color:var(--muted)">תבנית:</label>' +
             '<select class="inp" id="cTpl" style="width:auto;padding:5px 8px;font-size:12.5px">' +
               tplList.map(function (t) {
                 return '<option value="' + esc(t.id) + '"' + (chosenTpl && t.id === chosenTpl.id ? ' selected' : '') + '>' + esc(t.name) + '</option>';
               }).join('') + '</select>' : '') +
-          (signed ? '' : (cv_isYad2 ? cv_kindSel : (cv_isDm ? cv_dmSel : '<label style="font-size:12.5px;color:var(--muted)">בעלות:</label><select class="inp" id="cOwnership" style="width:auto;padding:5px 8px"><option value="01"' + (curOwn === '01' ? ' selected' : '') + '>בעלים 01</option><option value="00"' + (curOwn === '00' ? ' selected' : '') + '>בעלים 00</option></select>'))) +
+          (signed ? '' : (cv_isYad2 ? cv_kindSel : (cv_isDm ? (cv_dmSel + cv_ownSel) : cv_ownSel))) +
           '<button class="btn btn-sm" id="cPdf">⬇ הורד PDF</button>' +
           '<button class="btn btn-ghost btn-sm" id="cPrint" title="פותח את חלון ההדפסה של הדפדפן — איכות טקסט מיטבית">🖨 הדפסה</button>' + '</div></div>' +
       (justSaved && !signed ? '<div class="card" style="border:2px solid var(--ok);background:rgba(22,163,74,.07);text-align:center;padding:22px">' +'<div style="font-size:40px;line-height:1">✅</div>' +'<h2 style="margin:10px 0 4px;font-size:22px">ההסכם נוצר בהצלחה' + (deal.order_no ? ' #' + esc(deal.order_no) : '') + '</h2>' +'<p class="muted" style="margin:0;font-size:14px">השלב הבא: שלחו אותו ללקוח לחתימה באחת הדרכים שלמטה.</p></div>' : '') +
@@ -3719,8 +3742,11 @@
     if (signed) { ensureSignedDoc(lead, deal); return; }   // חתום → שומר עותק HTML לתיק + ציר זמן, ואז צפייה/הדפסה בלבד
     // ---- remote signing: build link + send via email / WhatsApp / SMS ----
     if (deal.id) {
-      // sign.html מוגש באתר הציבורי (לא ב-CRM) — חייב כתובת מלאה, כמו במייל (phase-signing.sql)
-      var signBase = '__CRM_BASE_URL__/sign.html';
+      // sign.html מוגש מאותו origin כמו ה-CRM (ברשימת RESERVED ב-fleet-boot, בשורש),
+      // עם ‎?o=slug לבחירת הארגון. בצי הפרונטאנד מוגש גולמי, לכן גוזרים את הבסיס
+      // בזמן-ריצה מ-location.origin ולא מטוקן-בנייה (__CRM_BASE_URL__ לא הוחלף שם →
+      // קישור-החתימה בהעתקה-ידנית/וואטסאפ/SMS יצא שבור). נפילה לטוקן אם origin ריק.
+      var signBase = (window.location && window.location.origin ? window.location.origin : '__CRM_BASE_URL__') + '/sign.html';
       var signUrl = null;
       function withUrl(cb) {
         if (signUrl) return cb(signUrl);
