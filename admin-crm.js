@@ -532,20 +532,25 @@
   //  PostgREST חוסם כל תשובה ב-1000 שורות (limit לא עוקף) — ולכן שליפה
   //  בעימוד range() ואיחוד, כדי לטעון את *כל* הלידים (סינון/חיפוש בצד-לקוח).
   var LEADS_SELECT = 'id,name,phone,email,car,car_category,city,source,status,brand,marketing_company,assigned_to,created_at,updated_at,status_changed_at,first_response_at,close_reason,id_num,ip,no_marketing,utm_source,utm_campaign,utm_medium,utm_content,utm_term,ad_group,adset_name,ad_name,campaign,ad_id,form_id,external_id,message,page_url';
+  //  עמוד ראשון עם ספירה מדויקת → שאר העמודים *במקביל* (לא רצוף) — חוסך
+  //  סבבי-רשת (3,000 לידים: קריאה אחת + 3 מקבילות במקום 4 רצופות).
   function fetchAllLeads() {
-    var PAGE = 1000, MAXP = 12, all = [];
-    function page(p) {
-      return db.from('leads').select(LEADS_SELECT).is('deleted_at', null).order('created_at', { ascending: false }).range(p * PAGE, p * PAGE + PAGE - 1).then(function (r) {
-        if (r.error) return { data: all.length ? all : null, error: all.length ? null : r.error };
-        all = all.concat(r.data || []);
-        if ((r.data || []).length === PAGE && p + 1 < MAXP) return page(p + 1);
+    var PAGE = 1000, MAXP = 12;
+    function pg(p) { return db.from('leads').select(LEADS_SELECT).is('deleted_at', null).order('created_at', { ascending: false }).range(p * PAGE, p * PAGE + PAGE - 1); }
+    return db.from('leads').select(LEADS_SELECT, { count: 'exact' }).is('deleted_at', null).order('created_at', { ascending: false }).range(0, PAGE - 1).then(function (first) {
+      if (first.error) return { data: null, error: first.error };
+      var all = first.data || [], total = first.count || all.length;
+      var pages = Math.min(MAXP, Math.ceil(total / PAGE));
+      if (pages <= 1) return { data: all, error: null };
+      var reqs = []; for (var p = 1; p < pages; p++) reqs.push(pg(p));
+      return Promise.all(reqs).then(function (res) {
+        res.forEach(function (r) { if (!r.error && r.data) all = all.concat(r.data); });
         return { data: all, error: null };
       });
-    }
-    return page(0);
+    });
   }
   window.C2B_renderLeads = function (statusFilter) {
-    curFilter = statusFilter || null; selectedLeads = {};
+    curFilter = statusFilter || null; selectedLeads = {}; leadsShowAll = false;
     loading();
     Promise.all([
       fetchAllLeads(),
@@ -673,10 +678,15 @@
       });
     });
   }
+  //  רינדור ראשוני מוגבל (ביצועים): מציירים עד RENDER_CAP שורות, אבל הספירה
+  //  והחיפוש/סינון פועלים על *כל* הלידים (listRows). "הצג הכל" מצייר את השאר.
+  var RENDER_CAP = 500, leadsShowAll = false;
   function draw() {
-    var rows = leadCols ? leadCols.sortRows(listRows()) : listRows();
-    orderIds = rows.map(function (l) { return l.id; });
-    if (C.$('lcount')) C.$('lcount').textContent = '(' + rows.length + ')';
+    var allRows = leadCols ? leadCols.sortRows(listRows()) : listRows();
+    orderIds = allRows.map(function (l) { return l.id; });
+    if (C.$('lcount')) C.$('lcount').textContent = '(' + allRows.length + ')';
+    var rows = (!leadsShowAll && allRows.length > RENDER_CAP) ? allRows.slice(0, RENDER_CAP) : allRows;
+    var hiddenN = allRows.length - rows.length;
     var body = rows.map(function (l) {
       return '<tr data-lead="' + l.id + '"><td style="width:30px;text-align:center"><input type="checkbox" data-sel="' + l.id + '"' + (selectedLeads[l.id] ? ' checked' : '') + '></td>' +
         leadCols.cells(l) + '</tr>';
@@ -694,8 +704,9 @@
       '<select id="bulkField"><option value="">➕ שדה נוסף…</option>' + BULK_FIELDS.map(function (f) { return '<option value="' + f.key + '">' + esc(f.label) + '</option>'; }).join('') + '</select>' +
       '<input id="bulkFieldVal" list="bulkFieldValL" placeholder="ערך…" style="width:130px"><datalist id="bulkFieldValL"></datalist>' +
       '<button class="btn btn-sm" id="bulkApply">החל</button><button class="btn btn-ghost btn-sm" id="bulkDel" style="color:var(--danger);border-color:var(--danger)">🗑️ מחק</button><button class="btn btn-ghost btn-sm" id="bulkClear">בטל בחירה</button></div>';
+    var moreBar = hiddenN > 0 ? '<div style="text-align:center;padding:12px 0;border-top:1px solid var(--line)"><span class="muted" style="font-size:12.5px">מוצגים ' + rows.length + ' מתוך ' + allRows.length + ' · 🔍 חיפוש/סינון פועלים על כל הלידים</span> <button class="btn btn-ghost btn-sm" id="lShowAll">הצג את כולם (' + allRows.length + ')</button></div>' : '';
     C.$('leadsBody').innerHTML = (leadFilter ? leadFilter.render() : '') + bulkBar +
-      '<div class="table-scroll"><table class="rz"><thead><tr><th style="width:30px;text-align:center"><input type="checkbox" id="selAll" title="בחר הכל"></th>' + leadCols.thead() + '</tr></thead><tbody id="ltbl">' + body + '</tbody></table></div>';
+      '<div class="table-scroll"><table class="rz"><thead><tr><th style="width:30px;text-align:center"><input type="checkbox" id="selAll" title="בחר הכל"></th>' + leadCols.thead() + '</tr></thead><tbody id="ltbl">' + body + '</tbody></table></div>' + moreBar;
     if (leadCols.resize) leadCols.resize();
     if (leadFilter) leadFilter.bind();
     bindBulk();
@@ -706,6 +717,7 @@
     C.$('ltbl').querySelectorAll('.assign-chip').forEach(function (el) {
       el.addEventListener('click', function (e) { e.stopPropagation(); openAssignMenu(el, el.dataset.assign, el.dataset.cur, function (uid) { assignLead(el.dataset.assign, uid); }); });
     });
+    if (C.$('lShowAll')) C.$('lShowAll').addEventListener('click', function () { leadsShowAll = true; draw(); });
   }
   // ---- bulk selection + actions (assign / status / source / brand) ----
   function bindBulk() {
