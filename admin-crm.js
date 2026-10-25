@@ -532,28 +532,32 @@
   //  PostgREST חוסם כל תשובה ב-1000 שורות (limit לא עוקף) — ולכן שליפה
   //  בעימוד range() ואיחוד, כדי לטעון את *כל* הלידים (סינון/חיפוש בצד-לקוח).
   var LEADS_SELECT = 'id,name,phone,email,car,car_category,city,source,status,brand,marketing_company,assigned_to,created_at,updated_at,status_changed_at,first_response_at,close_reason,id_num,ip,no_marketing,utm_source,utm_campaign,utm_medium,utm_content,utm_term,ad_group,adset_name,ad_name,campaign,ad_id,form_id,external_id,message,page_url';
-  //  עמוד ראשון עם ספירה מדויקת → שאר העמודים *במקביל* (לא רצוף) — חוסך
-  //  סבבי-רשת (3,000 לידים: קריאה אחת + 3 מקבילות במקום 4 רצופות).
-  function fetchAllLeads() {
-    var PAGE = 1000, MAXP = 12;
-    function pg(p) { return db.from('leads').select(LEADS_SELECT).is('deleted_at', null).order('created_at', { ascending: false }).range(p * PAGE, p * PAGE + PAGE - 1); }
-    return db.from('leads').select(LEADS_SELECT, { count: 'exact' }).is('deleted_at', null).order('created_at', { ascending: false }).range(0, PAGE - 1).then(function (first) {
+  //  טעינה הדרגתית: מחזיר מיד את 500 הלידים הראשונים (המסך נפתח מהר), ושאר
+  //  הלידים נטענים *ברקע במקביל* ומצטרפים דרך onMore — כך לא ממתינים להורדת
+  //  כל האלפים לפני שרואים משהו. הספירה/חיפוש/סינון עובדים על הכל בסיום.
+  function fetchAllLeads(onMore) {
+    var FIRST = 500, PAGE = 1000, MAXBG = 14;
+    return db.from('leads').select(LEADS_SELECT, { count: 'exact' }).is('deleted_at', null).order('created_at', { ascending: false }).range(0, FIRST - 1).then(function (first) {
       if (first.error) return { data: null, error: first.error };
-      var all = first.data || [], total = first.count || all.length;
-      var pages = Math.min(MAXP, Math.ceil(total / PAGE));
-      if (pages <= 1) return { data: all, error: null };
-      var reqs = []; for (var p = 1; p < pages; p++) reqs.push(pg(p));
-      return Promise.all(reqs).then(function (res) {
-        res.forEach(function (r) { if (!r.error && r.data) all = all.concat(r.data); });
-        return { data: all, error: null };
-      });
+      var fp = first.data || [], total = first.count || fp.length;
+      if (total > FIRST && typeof onMore === 'function') {
+        var bg = Math.min(MAXBG, Math.ceil((total - FIRST) / PAGE)), reqs = [];
+        for (var i = 0; i < bg; i++) { var st = FIRST + i * PAGE; reqs.push(db.from('leads').select(LEADS_SELECT).is('deleted_at', null).order('created_at', { ascending: false }).range(st, st + PAGE - 1)); }
+        Promise.all(reqs).then(function (res) { var more = []; res.forEach(function (r) { if (!r.error && r.data) more = more.concat(r.data); }); if (more.length) onMore(more); });
+      }
+      return { data: fp, error: null };
     });
   }
   window.C2B_renderLeads = function (statusFilter) {
     curFilter = statusFilter || null; selectedLeads = {}; leadsShowAll = false;
+    var myLoad = ++leadsLoadId;
     loading();
     Promise.all([
-      fetchAllLeads(),
+      fetchAllLeads(function (more) {
+        //  עמודים נוספים הגיעו ברקע — מצרפים ומציירים מחדש (אם עדיין באותה טעינה)
+        if (myLoad !== leadsLoadId || !C.$('leadsBody')) return;
+        cache = cache.concat(more); draw();
+      }),
       db.from('profiles').select('user_id,full_name'),
       //  מי מקבל את הלידים החדשים לחלוקה. נשמר בתצורה ולא מקודד קשיח,
       //  כדי שהעברת התפקיד לאדם אחר לא תדרוש שינוי בקוד.
@@ -680,7 +684,7 @@
   }
   //  רינדור ראשוני מוגבל (ביצועים): מציירים עד RENDER_CAP שורות, אבל הספירה
   //  והחיפוש/סינון פועלים על *כל* הלידים (listRows). "הצג הכל" מצייר את השאר.
-  var RENDER_CAP = 500, leadsShowAll = false;
+  var RENDER_CAP = 500, leadsShowAll = false, leadsLoadId = 0;
   function draw() {
     var allRows = leadCols ? leadCols.sortRows(listRows()) : listRows();
     orderIds = allRows.map(function (l) { return l.id; });
