@@ -3831,15 +3831,17 @@
   //  עימוד מלא (fetchAll) כדי לכלול את כל הלידים, לא רק 1000 הראשונים.
   //  מקורות לידים — רשימת כל המקורות (מקור-הגעה / מותג / פלטפורמה). לחיצה על מקור
   //  פותחת את *מסך-הלידים המלא* מסונן לאותו מקור, בדיוק כמו לחיצה על סטטוס בסרגל.
-  var LS_DIMS = [['source', 'מקור הגעה', 'source'], ['brand', 'מותג', 'brand'], ['platform', 'פלטפורמה', 'utm_source']];
+  var LS_DIMS = [['source', 'מקור הגעה', 'source'], ['brand', 'מותג', 'brand'], ['platform', 'פלטפורמה', 'utm_source'], ['sector', 'מגזר', '__sector__']];
   function renderLeadSources(dim) {
     dim = (LS_DIMS.some(function (d) { return d[0] === dim; })) ? dim : 'source';
     loading();
-    fetchAll(function () { return db.from('leads').select('id,brand,source,utm_source').is('deleted_at', null).order('id', { ascending: true }); })
+    //  מגזר נגזר מתיוג-הקמפיין/שם (C2B.sectorOf) → צריך גם name/campaign/adset/utm_campaign.
+    fetchAll(function () { return db.from('leads').select('id,name,brand,source,utm_source,campaign,adset_name,utm_campaign').is('deleted_at', null).order('id', { ascending: true }); })
       .then(function (leads) {
         var d = LS_DIMS.filter(function (x) { return x[0] === dim; })[0], field = d[2];
+        var isSector = field === '__sector__', sectorOf = (window.C2B && window.C2B.sectorOf) || function () { return ''; };
         var groups = {};
-        leads.forEach(function (l) { var raw = String(l[field] == null ? '' : l[field]).trim(); groups[raw] = (groups[raw] || 0) + 1; });
+        leads.forEach(function (l) { var raw = isSector ? sectorOf(l) : String(l[field] == null ? '' : l[field]).trim(); groups[raw] = (groups[raw] || 0) + 1; });
         var keys = Object.keys(groups).sort(function (a, b) { return groups[b] - groups[a]; });
         var total = leads.length;
         var tabs = '<nav class="tabs" style="margin-bottom:14px;flex-wrap:wrap">' + LS_DIMS.map(function (x) { return '<button data-lsdim="' + x[0] + '"' + (x[0] === dim ? ' class="active"' : '') + '>' + x[1] + '</button>'; }).join('') + '</nav>';

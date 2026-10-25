@@ -619,13 +619,28 @@
       draw();
     });
   };
-  //  סינון לפי שדה (מקור-הגעה / מותג / פלטפורמה) — מופעל ממסך "מקורות לידים":
+  //  סיווג מגזר (אומדן): לפי תיוג-הקמפיין (עיקרי) + כתב-השם (גיבוי). משותף למסך
+  //  "מקורות לידים" ולסינון-הלידים. "מגזר" בעגה השיווקית = ערבי; "עברית"/"רוסי" מפורשים.
+  function sectorOf(l) {
+    var t = (((l && l.campaign) || '') + ' ' + ((l && l.adset_name) || '') + ' ' + ((l && l.utm_campaign) || '')).toLowerCase();
+    var n = (l && l.name) || '';
+    if (/רוס|\bru\b|russ/.test(t) || /[Ѐ-ӿ]/.test(n)) return 'רוסי';
+    if (/מגזר|ערב|\bar\b|arab/.test(t) || /[؀-ۿ]/.test(n)) return 'ערבי';
+    if (/עבר|\bhe\b|heb/.test(t)) return 'עברית';
+    return 'עברית / לא מסומן';
+  }
+  C.sectorOf = sectorOf;   // חשוף ל-admin.js (מסך מקורות לידים)
+  //  סינון לפי שדה (מקור-הגעה / מותג / פלטפורמה / מגזר) — מופעל ממסך "מקורות לידים":
   //  לחיצה על מקור פותחת את מסך-הלידים המלא מסונן לערך, בדיוק כמו סינון לפי סטטוס.
+  //  field='__sector__' = סינון לפי המסווג הנגזר (ולא עמודה גולמית).
   var fieldFilter = null;   // { field, value, label } או null
   function listRows() {
     var q = (C.$('lq') && C.$('lq').value || '').trim().toLowerCase();
     return cache.filter(function (l) {
-      if (fieldFilter && String(l[fieldFilter.field] == null ? '' : l[fieldFilter.field]).trim() !== fieldFilter.value) return false;
+      if (fieldFilter) {
+        var _lv = (fieldFilter.field === '__sector__') ? sectorOf(l) : String(l[fieldFilter.field] == null ? '' : l[fieldFilter.field]).trim();
+        if (_lv !== fieldFilter.value) return false;
+      }
       //  תור החלוקה: סטטוס "חדש" ומשויך למנהל המכירות. העברה לסוכן או
       //  שינוי סטטוס מוציאים את הליד מהתור מעצמם.
       if (curFilter === 'todistribute') {
