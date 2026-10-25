@@ -770,6 +770,19 @@
     return views.indexOf(nav) >= 0;
   }
   function applyRole(role) {
+    //  הזרקת פריטי-ניווט שאולי חסרים מ-admin.html ישן ב-cache (כמו "אין מענה")
+    //  — כך הם מופיעים גם לפני שה-cache של דף-המעטפת מתרענן.
+    (function () {
+      var ls = $('leadSub');
+      if (ls && !ls.querySelector('[data-status="no_answer"]')) {
+        var after = ls.querySelector('[data-status="lost"]');
+        var d = document.createElement('div');
+        d.className = 'nav-item'; d.setAttribute('data-nav', 'leads'); d.setAttribute('data-status', 'no_answer'); d.textContent = 'אין מענה';
+        if (after) after.insertAdjacentElement('afterend', d); else ls.appendChild(d);
+      }
+      //  עקיפת גובה תת-התפריט (admin.html ישן ב-cache מגביל ל-320px וחותך פריטים)
+      if (!document.getElementById('navSubFix')) { var s = document.createElement('style'); s.id = 'navSubFix'; s.textContent = '.nav-sub.open{max-height:600px}'; document.head.appendChild(s); }
+    })();
     $('nav').querySelectorAll('.nav-item, .nav-group-label').forEach(function (it) {
       //  כותרת-הקבוצה "תקשורת ומערכת" היא טוגל מתקפל — מוצגת לכולם (גם לא-אדמין
       //  רואה תחתיה את הפריטים המותרים לו, כמו הצעות-מחיר/מסמכים).
