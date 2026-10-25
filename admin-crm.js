@@ -548,8 +548,9 @@
       return { data: fp, error: null };
     });
   }
-  window.C2B_renderLeads = function (statusFilter) {
+  window.C2B_renderLeads = function (statusFilter, opts) {
     curFilter = statusFilter || null; selectedLeads = {}; leadsShowAll = false;
+    fieldFilter = (opts && opts.field) ? { field: opts.field, value: String(opts.value == null ? '' : opts.value).trim(), label: opts.label || opts.field } : null;
     var myLoad = ++leadsLoadId;
     loading();
     Promise.all([
@@ -599,7 +600,7 @@
         { key: 'page_url', label: 'כתובת הדף' }, { key: 'ip', label: 'כתובת IP' }
       ], draw);
       if (!leadCols) leadCols = C.colPicker('leads', LEAD_COLS, draw, { resizable: true, sortable: true });
-      var title = statusFilter === 'todistribute'
+      var title = fieldFilter ? (fieldFilter.label + ': ' + (fieldFilter.value || '(ללא)')) : statusFilter === 'todistribute'
         ? '📥 לידים לחלוקה' + (distOwner.name ? ' \u00b7 ' + distOwner.name : '')
         : (statusFilter ? stDef(statusFilter).label : 'כל הלידים');
       view('<div class="card"><div class="row-between"><h3>' + esc(title) + ' <span class="muted" id="lcount"></span></h3>' +
@@ -618,9 +619,13 @@
       draw();
     });
   };
+  //  סינון לפי שדה (מקור-הגעה / מותג / פלטפורמה) — מופעל ממסך "מקורות לידים":
+  //  לחיצה על מקור פותחת את מסך-הלידים המלא מסונן לערך, בדיוק כמו סינון לפי סטטוס.
+  var fieldFilter = null;   // { field, value, label } או null
   function listRows() {
     var q = (C.$('lq') && C.$('lq').value || '').trim().toLowerCase();
     return cache.filter(function (l) {
+      if (fieldFilter && String(l[fieldFilter.field] == null ? '' : l[fieldFilter.field]).trim() !== fieldFilter.value) return false;
       //  תור החלוקה: סטטוס "חדש" ומשויך למנהל המכירות. העברה לסוכן או
       //  שינוי סטטוס מוציאים את הליד מהתור מעצמם.
       if (curFilter === 'todistribute') {

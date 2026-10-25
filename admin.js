@@ -1028,7 +1028,7 @@
     setActive(nav, opts.status);
     if (!opts.keepOpen && window.innerWidth <= 820) { $('side').classList.remove('open'); $('overlay').classList.remove('open'); }
     if (nav === 'dashboard') return window.C2B_renderDashboard && window.C2B_renderDashboard();
-    if (nav === 'leads') return window.C2B_renderLeads && window.C2B_renderLeads(opts.status);
+    if (nav === 'leads') return window.C2B_renderLeads && window.C2B_renderLeads(opts.status, opts);
     if (nav === 'files') return window.C2B_renderFiles && window.C2B_renderFiles();
     if (nav === 'accounting') return window.C2B_renderAccounting && window.C2B_renderAccounting();
     if (nav === 'activity') return window.C2B_renderActivity && window.C2B_renderActivity();
@@ -3829,37 +3829,35 @@
 
   //  מקורות לידים — פילוח כל הלידים לפי מותג / פלטפורמה / מקור-הגעה (תתי-תצוגות).
   //  עימוד מלא (fetchAll) כדי לכלול את כל הלידים, לא רק 1000 הראשונים.
-  var LS_DIMS = [['brand', 'מותג', 'brand'], ['platform', 'פלטפורמה', 'utm_source'], ['source', 'מקור הגעה', 'source']];
+  //  מקורות לידים — רשימת כל המקורות (מקור-הגעה / מותג / פלטפורמה). לחיצה על מקור
+  //  פותחת את *מסך-הלידים המלא* מסונן לאותו מקור, בדיוק כמו לחיצה על סטטוס בסרגל.
+  var LS_DIMS = [['source', 'מקור הגעה', 'source'], ['brand', 'מותג', 'brand'], ['platform', 'פלטפורמה', 'utm_source']];
   function renderLeadSources(dim) {
-    dim = (LS_DIMS.some(function (d) { return d[0] === dim; })) ? dim : 'brand';
+    dim = (LS_DIMS.some(function (d) { return d[0] === dim; })) ? dim : 'source';
     loading();
-    fetchAll(function () { return db.from('leads').select('id,name,phone,brand,source,utm_source,created_at,status').is('deleted_at', null).order('id', { ascending: true }); })
+    fetchAll(function () { return db.from('leads').select('id,brand,source,utm_source').is('deleted_at', null).order('id', { ascending: true }); })
       .then(function (leads) {
         var d = LS_DIMS.filter(function (x) { return x[0] === dim; })[0], field = d[2];
         var groups = {};
-        leads.forEach(function (l) { var v = String(l[field] == null ? '' : l[field]).trim() || '(ללא ' + d[1] + ')'; (groups[v] = groups[v] || []).push(l); });
-        var keys = Object.keys(groups).sort(function (a, b) { return groups[b].length - groups[a].length; });
+        leads.forEach(function (l) { var raw = String(l[field] == null ? '' : l[field]).trim(); groups[raw] = (groups[raw] || 0) + 1; });
+        var keys = Object.keys(groups).sort(function (a, b) { return groups[b] - groups[a]; });
         var total = leads.length;
         var tabs = '<nav class="tabs" style="margin-bottom:14px;flex-wrap:wrap">' + LS_DIMS.map(function (x) { return '<button data-lsdim="' + x[0] + '"' + (x[0] === dim ? ' class="active"' : '') + '>' + x[1] + '</button>'; }).join('') + '</nav>';
-        var rows = keys.map(function (k) {
-          var n = groups[k].length, pct = total ? Math.round(n / total * 100) : 0;
-          return '<tr data-lsval="' + esc(k) + '" style="cursor:pointer"><td style="padding:9px 12px;font-weight:600">' + esc(k) + '</td><td style="padding:9px 12px;font-weight:800">' + n + '</td><td style="padding:9px 12px;color:var(--muted)">' + pct + '%</td><td style="padding:9px 12px;width:38%"><div style="height:8px;background:var(--brand);border-radius:4px;width:' + Math.max(pct, 2) + '%"></div></td></tr>';
+        var rows = keys.map(function (raw) {
+          var n = groups[raw], pct = total ? Math.round(n / total * 100) : 0, lbl = raw || '(ללא ' + d[1] + ')';
+          return '<button type="button" data-lsval="' + esc(raw) + '" style="display:flex;align-items:center;gap:12px;width:100%;text-align:right;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-bottom:8px;cursor:pointer">' +
+            '<span style="flex:1;font-weight:700;font-size:14px">' + esc(lbl) + '</span>' +
+            '<span style="width:130px;height:7px;background:var(--line);border-radius:4px;overflow:hidden"><span style="display:block;height:100%;width:' + Math.max(pct, 3) + '%;background:var(--brand)"></span></span>' +
+            '<span class="muted" style="width:40px;text-align:left;font-size:12.5px">' + pct + '%</span>' +
+            '<b style="width:58px;text-align:left;font-size:15px">' + n + '</b>' +
+            '<span class="muted" style="font-size:18px;line-height:1">‹</span></button>';
         }).join('');
         view('<h2 style="margin:0 0 4px">📊 מקורות לידים <span class="muted" style="font-size:14px">· ' + total + ' לידים</span></h2>' +
-          '<p class="muted" style="font-size:13px;margin-bottom:12px">פילוח כל הלידים שנכנסו — לפי מותג / פלטפורמה / מקור-הגעה. לחיצה על שורה מציגה את הלידים שבה.</p>' +
-          tabs +
-          '<div class="card"><div class="table-scroll"><table style="width:100%"><thead><tr style="color:var(--muted);font-size:12px;text-align:right"><th style="padding:7px 12px">' + esc(d[1]) + '</th><th style="padding:7px 12px">לידים</th><th style="padding:7px 12px">%</th><th></th></tr></thead><tbody>' + (rows || '<tr><td colspan="4" class="empty">אין לידים</td></tr>') + '</tbody></table></div></div>');
+          '<p class="muted" style="font-size:13px;margin-bottom:12px">בחרו מקור כדי לפתוח את כל הלידים שהגיעו ממנו.</p>' +
+          tabs + '<div>' + (rows || '<p class="empty">אין לידים</p>') + '</div>');
         $('view').querySelectorAll('[data-lsdim]').forEach(function (b) { b.addEventListener('click', function () { renderLeadSources(b.dataset.lsdim); }); });
-        $('view').querySelectorAll('[data-lsval]').forEach(function (tr) {
-          tr.addEventListener('click', function () {
-            var v = tr.dataset.lsval, list = (groups[v] || []);
-            var badge = window.C2B_badge || function () { return ''; };
-            openDrawer('<div class="dw-head"><h3 style="margin:0">' + esc(v) + ' <span class="muted" style="font-size:13px">(' + list.length + ')</span></h3></div>' +
-              '<div class="dw-body">' + list.slice().sort(function (a, b) { return new Date(b.created_at || 0) - new Date(a.created_at || 0); }).map(function (l) {
-                return '<div data-lead="' + l.id + '" style="padding:11px 12px;border-bottom:1px solid var(--line);border-radius:8px;cursor:pointer"><div style="display:flex;justify-content:space-between;gap:8px"><b>' + esc(l.name || 'ליד') + '</b>' + (l.status ? badge(l.status) : '') + '</div><div class="muted" style="font-size:12.5px;margin-top:3px">' + [l.phone, l.brand, fmtDateTime(l.created_at)].filter(Boolean).map(esc).join(' · ') + '</div></div>';
-              }).join('') + '</div>');
-            document.getElementById('drawer').querySelectorAll('[data-lead]').forEach(function (el) { el.addEventListener('click', function () { closeDrawer(); if (window.C2B_openLeadCard) window.C2B_openLeadCard(el.dataset.lead); }); });
-          });
+        $('view').querySelectorAll('[data-lsval]').forEach(function (b) {
+          b.addEventListener('click', function () { go('leads', { field: field, value: b.dataset.lsval, label: d[1] }); });
         });
       }).catch(function (e) { errBox(e.message || e); });
   }
