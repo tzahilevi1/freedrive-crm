@@ -29,6 +29,12 @@
   .done{text-align:center;padding:40px 20px}
   .done .big{font-size:52px}
   .muted{color:var(--muted);font-size:12.5px}
+  .dz{border:2px dashed var(--line);border-radius:12px;padding:16px 14px;text-align:center;cursor:pointer;background:#fafbfc;transition:border-color .15s,background .15s}
+  .dz:hover,.dz.over,.dz:focus-within{border-color:var(--brand);background:#fff8ec;outline:none}
+  .dz-ic{display:block;font-size:22px;color:var(--brand-deep);line-height:1}
+  .dz b{display:block;font-size:14px;margin:4px 0 2px;color:var(--ink);font-weight:700}
+  .dz .lnk{color:var(--brand-deep);text-decoration:underline;font-weight:700}
+  .dz-files{display:block;margin-top:7px;font-size:12.5px;color:#1f8a4c;font-weight:700;word-break:break-word}
 </style>
 </head>
 <body>
@@ -60,14 +66,29 @@
       <label>הערות</label>
       <textarea id="car_description" rows="2" placeholder="מצב הרכב, תוספות, בעיות ידועות…"></textarea>
       <label>📄 תמונת רישיון רכב</label>
-      <input type="file" id="license_file" accept="image/*">
+      <div class="dz" data-input="license_file" tabindex="0">
+        <input type="file" id="license_file" accept="image/*" style="display:none">
+        <span class="dz-ic">⬆</span><b>גררו את התמונה לכאן</b>
+        <span class="muted">או <span class="lnk">בחרו מהמחשב</span> · גם הדבקה (Ctrl+V)</span>
+        <span class="dz-files"></span>
+      </div>
       <label>📷 תמונות הרכב (אפשר כמה)</label>
-      <input type="file" id="car_files" accept="image/*" multiple>
+      <div class="dz" data-input="car_files" tabindex="0">
+        <input type="file" id="car_files" accept="image/*" multiple style="display:none">
+        <span class="dz-ic">⬆</span><b>גררו את תמונות הרכב לכאן</b>
+        <span class="muted">או <span class="lnk">בחרו מהמחשב</span> · אפשר כמה יחד · הדבקה (Ctrl+V)</span>
+        <span class="dz-files"></span>
+      </div>
       <div class="msg muted" id="imgmsg"></div>
       <label class="req">💰 מחירון לוי יצחק (₪)</label>
       <input id="list_price" inputmode="numeric" placeholder="מחיר מחירון" required>
       <label>📋 תמונת מחירון (לא חובה)</label>
-      <input type="file" id="list_price_file" accept="image/*">
+      <div class="dz" data-input="list_price_file" tabindex="0">
+        <input type="file" id="list_price_file" accept="image/*" style="display:none">
+        <span class="dz-ic">⬆</span><b>גררו לכאן</b>
+        <span class="muted">או <span class="lnk">בחרו מהמחשב</span></span>
+        <span class="dz-files"></span>
+      </div>
     </div>
 
     <div class="card">
@@ -143,6 +164,26 @@
         }).catch(function(){ i++; tryOne(); });
     })();
   });
+  // ---- גרירה / בחירה / הדבקה לכל אזורי-ההעלאה (dz) ----
+  (function(){
+    function setFiles(input, files){
+      try{ var dt=new DataTransfer(); for(var i=0;i<files.length;i++){ var f=files[i]; if((f.type||'').indexOf('image/')!==0) continue; dt.items.add(f); if(!input.multiple) break; } if(dt.files.length) input.files=dt.files; }catch(e){}
+      input.dispatchEvent(new Event('change',{bubbles:true}));
+    }
+    Array.prototype.forEach.call(document.querySelectorAll('.dz'),function(dz){
+      var input=document.getElementById(dz.getAttribute('data-input')); if(!input) return;
+      var out=dz.querySelector('.dz-files');
+      function paint(){ var fs=input.files||[]; out.textContent = fs.length ? (fs.length===1 ? '✓ '+fs[0].name : '✓ '+fs.length+' קבצים נבחרו') : ''; }
+      input.addEventListener('change',paint);
+      dz.addEventListener('click',function(){ input.click(); });
+      dz.addEventListener('keydown',function(e){ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); input.click(); } });
+      ['dragenter','dragover'].forEach(function(ev){ dz.addEventListener(ev,function(e){ e.preventDefault(); e.stopPropagation(); dz.classList.add('over'); }); });
+      ['dragleave','dragend'].forEach(function(ev){ dz.addEventListener(ev,function(e){ e.preventDefault(); e.stopPropagation(); dz.classList.remove('over'); }); });
+      dz.addEventListener('drop',function(e){ e.preventDefault(); e.stopPropagation(); dz.classList.remove('over'); var f=e.dataTransfer&&e.dataTransfer.files; if(f&&f.length) setFiles(input,f); });
+      dz.addEventListener('paste',function(e){ var f=e.clipboardData&&e.clipboardData.files; if(f&&f.length){ e.preventDefault(); setFiles(input,f); } });
+    });
+    document.addEventListener('paste',function(e){ if(e.defaultPrevented) return; var f=e.clipboardData&&e.clipboardData.files; if(!f||!f.length) return; var dz=document.querySelector('.dz[data-input="car_files"]')||document.querySelector('.dz'); if(!dz) return; var input=document.getElementById(dz.getAttribute('data-input')); if(input){ e.preventDefault(); setFiles(input,f); } });
+  })();
   $('qf').addEventListener('submit',function(e){
     e.preventDefault();
     var _req=[['agent_name','שם הסוכן'],['branch','סניף'],['agent_phone','טלפון הסוכן'],['customer_name','שם הלקוח'],['customer_phone','טלפון הלקוח'],['list_price','מחירון לוי יצחק']];
