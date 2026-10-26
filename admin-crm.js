@@ -632,11 +632,11 @@
       if (opts && opts.conds !== undefined) { leadFilter.setState(opts.conds || []); saveLF(); }
       else if (opts && opts.fresh) { leadFilter.setState([]); curViewName = null; saveLF(); }   // ניווט = התחלה נקייה
       else {
+        curViewName = null;   // ברענון משחזרים רק את הסינון, לא שם-תצוגה — כותרת לא מטעה
         try {
           var _raw = JSON.parse(localStorage.getItem(LF_KEY) || 'null');
           var _lf = Array.isArray(_raw) ? _raw : ((_raw && _raw.conds) || []);
-          if (_lf && _lf.length) { leadFilter.setState(_lf); if (!Array.isArray(_raw) && _raw) curViewName = _raw.viewName || null; }
-          else curViewName = null;
+          if (_lf && _lf.length) leadFilter.setState(_lf);
         } catch (e) {}
       }
       if (!leadCols) leadCols = C.colPicker('leads', LEAD_COLS, draw, { resizable: true, sortable: true });

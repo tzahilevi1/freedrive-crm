@@ -995,10 +995,15 @@
   function setActive(nav, status) {
     //  פריט האב נשאר מודגש גם כשנמצאים בלשונית משנה שלו
     var g = subGroup(nav); if (g) nav = g; else nav = navBase(nav);
+    var st = (status == null) ? '' : status;   // null = "כל הלידים" (data-status="")
     var items = $('nav').querySelectorAll('.nav-item');
     for (var i = 0; i < items.length; i++) {
-      var it = items[i];
-      it.classList.toggle('active', it.dataset.nav === nav && (status == null || it.dataset.status === status || (it.dataset.status === undefined && !it.dataset.status)));
+      var it = items[i], on = false;
+      //  פריטי-תצוגה שמורה (data-lvid) לא מודגשים לפי סטטוס — מודגשים רק בלחיצה עליהם.
+      if (!it.dataset.lvid && it.dataset.nav === nav) {
+        on = it.dataset.expand ? true : ((it.dataset.status || '') === st);   // אב מודגש תמיד; תת-סטטוס = התאמה מדויקת
+      }
+      it.classList.toggle('active', on);
     }
     var sub = $('leadSub'); if (sub) sub.classList.toggle('open', nav === 'leads');
   }
@@ -1132,6 +1137,9 @@
     if (it.dataset.lvid) {
       var v = (window.C2B._leadViews || {})[it.dataset.lvid], f = (v && v.filter) || {};
       go('leads', { status: f.status || null, field: f.field, value: f.value, label: f.label, conds: f.conds || [], viewName: (v && v.name) || null });
+      //  מדגיש את התצוגה שנבחרה (setActive מדגיש לפי סטטוס; כאן מוסיפים את התצוגה).
+      $('nav').querySelectorAll('[data-lvid]').forEach(function (x) { x.classList.remove('active'); });
+      it.classList.add('active');
       return;
     }
     //  פריט-אב עם תת-תפריט (למשל "לידים") — toggle: לחיצה פותחת את שלבי-המשנה
