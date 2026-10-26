@@ -658,8 +658,8 @@
           bar.innerHTML = '<span class="muted" style="font-size:12px;margin-inline-end:2px">תצוגות:</span>' +
             savedViews.map(function (v) {
               return '<span style="display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:999px;padding:4px 10px;font-size:12.5px;background:var(--surface-2)">' +
-                '<span data-lvapply="' + v.id + '" style="cursor:pointer">📌 ' + esc(v.name) + '</span>' +
-                '<b data-lvdel="' + v.id + '" title="מחק תצוגה" style="color:var(--danger);cursor:pointer">✕</b></span>';
+                '<span data-lvapply="' + esc(v.id) + '" style="cursor:pointer">📌 ' + esc(v.name) + '</span>' +
+                '<b data-lvdel="' + esc(v.id) + '" title="מחק תצוגה" style="color:var(--danger);cursor:pointer">✕</b></span>';
             }).join('');
           bar.querySelectorAll('[data-lvapply]').forEach(function (el) { el.addEventListener('click', function () { var v = savedViews.filter(function (x) { return x.id === el.dataset.lvapply; })[0]; if (v) applyView(v); }); });
           bar.querySelectorAll('[data-lvdel]').forEach(function (el) { el.addEventListener('click', function () {
