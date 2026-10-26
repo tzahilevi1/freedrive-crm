@@ -552,6 +552,7 @@
   window.C2B_renderLeads = function (statusFilter, opts) {
     curFilter = statusFilter || null; selectedLeads = {}; leadsShowAll = false;
     fieldFilter = (opts && opts.field) ? { field: opts.field, value: String(opts.value == null ? '' : opts.value).trim(), label: opts.label || opts.field } : null;
+    var canViews = (C.role === 'admin' || C.role === 'branch');   // תצוגות שמורות — מנהל-סניף/אדמין בלבד
     var myLoad = ++leadsLoadId;
     loading();
     Promise.all([
@@ -563,10 +564,13 @@
       db.from('profiles').select('user_id,full_name,role'),
       //  מי מקבל את הלידים החדשים לחלוקה. נשמר בתצורה ולא מקודד קשיח,
       //  כדי שהעברת התפקיד לאדם אחר לא תדרוש שינוי בקוד.
-      db.from('admin_config').select('value').eq('key', 'default_owner').maybeSingle()
+      db.from('admin_config').select('value').eq('key', 'default_owner').maybeSingle(),
+      //  תצוגות-לידים שמורות (מנהל-סניף/אדמין בלבד; RLS מחזיר ריק לשאר).
+      canViews ? db.from('lead_views').select('*').order('created_at', { ascending: true }) : Promise.resolve({ data: [] })
     ]).then(function (res) {
       if (res[0].error) return errBox(res[0].error.message);
       distOwner = ((res[2] && res[2].data && res[2].data.value) || {});
+      savedViews = (res[3] && res[3].data) || [];
       cache = res[0].data || [];
       profiles = {}; mgrIds = {}; (res[1].data || []).forEach(function (p) { profiles[p.user_id] = p.full_name; if (p.role === 'admin' || p.role === 'branch') mgrIds[p.user_id] = true; });
       leadFilter = C.makeFilter([
@@ -614,7 +618,9 @@
             '<button class="btn btn-ghost btn-sm" id="lxls" style="display:flex;width:100%;justify-content:flex-start;margin-bottom:3px">📊 אקסל (Excel)</button>' +
             '<button class="btn btn-ghost btn-sm" id="lcsv" style="display:flex;width:100%;justify-content:flex-start">📄 CSV</button>' +
           '</div>' +
-        '</span> ' + leadCols.button() + '</div></div>' +
+        '</span> ' + (canViews ? '<button class="btn btn-ghost btn-sm" id="lvNew" title="שמור את הסינון הנוכחי כתצוגה">⭐ תצוגה חדשה</button> ' : '') + leadCols.button() + '</div></div>' +
+        //  שורת התצוגות השמורות (מנהל-סניף/אדמין בלבד) — נבנית ב-renderViewsBar.
+        (canViews ? '<div id="lviewsBar" style="margin:12px 0 2px;display:flex;flex-wrap:wrap;gap:5px;align-items:center"></div>' : '') +
         '<div id="leadsBody"></div></div>');
       C.$('lnew').addEventListener('click', newLeadForm);
       if (C.$('limport')) C.$('limport').addEventListener('click', leadImportForm);
@@ -635,6 +641,47 @@
         menu.addEventListener('click', function () { setTimeout(function () { menu.style.display = 'none'; }, 0); });
       })();
       leadCols.bind();
+      //  --- תצוגות-לידים שמורות (lead_views): צ'יפים + שמירת הסינון הנוכחי (מנהל-סניף/אדמין) ---
+      if (canViews) {
+        var curViewFilter = function () {
+          var f = { status: curFilter || null };
+          if (fieldFilter) { f.field = fieldFilter.field; f.value = fieldFilter.value; f.label = fieldFilter.label; }
+          return f;
+        };
+        var applyView = function (v) {
+          var f = v.filter || {};
+          window.C2B_renderLeads(f.status || null, f.field ? { field: f.field, value: f.value, label: f.label } : undefined);
+        };
+        var renderViewsBar = function () {
+          var bar = C.$('lviewsBar'); if (!bar) return;
+          if (!savedViews.length) { bar.innerHTML = '<span class="muted" style="font-size:12px">אין תצוגות שמורות — סננו (סטטוס/מקור/מגזר…) ולחצו ⭐ תצוגה חדשה.</span>'; return; }
+          bar.innerHTML = '<span class="muted" style="font-size:12px;margin-inline-end:2px">תצוגות:</span>' +
+            savedViews.map(function (v) {
+              return '<span style="display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:999px;padding:4px 10px;font-size:12.5px;background:var(--surface-2)">' +
+                '<span data-lvapply="' + v.id + '" style="cursor:pointer">📌 ' + esc(v.name) + '</span>' +
+                '<b data-lvdel="' + v.id + '" title="מחק תצוגה" style="color:var(--danger);cursor:pointer">✕</b></span>';
+            }).join('');
+          bar.querySelectorAll('[data-lvapply]').forEach(function (el) { el.addEventListener('click', function () { var v = savedViews.filter(function (x) { return x.id === el.dataset.lvapply; })[0]; if (v) applyView(v); }); });
+          bar.querySelectorAll('[data-lvdel]').forEach(function (el) { el.addEventListener('click', function () {
+            var v = savedViews.filter(function (x) { return x.id === el.dataset.lvdel; })[0]; if (!v) return;
+            if (!confirm('למחוק את התצוגה "' + v.name + '"?')) return;
+            db.from('lead_views').delete().eq('id', v.id).then(function (r) {
+              if (r && r.error) return alert('שגיאה: ' + r.error.message);
+              savedViews = savedViews.filter(function (x) { return x.id !== v.id; }); renderViewsBar();
+            });
+          }); });
+        };
+        renderViewsBar();
+        if (C.$('lvNew')) C.$('lvNew').addEventListener('click', function () {
+          var dflt = fieldFilter ? (fieldFilter.label + ': ' + (fieldFilter.value || '')) : (curFilter === 'todistribute' ? 'לחלוקה' : (curFilter ? ((stDef(curFilter) && stDef(curFilter).label) || curFilter) : 'כל הלידים'));
+          var name = (prompt('שם לתצוגה (שומר את הסינון הנוכחי):', dflt) || '').trim();
+          if (!name) return;
+          db.from('lead_views').insert({ name: name, filter: curViewFilter() }).select('*').single().then(function (r) {
+            if (r.error) return alert('שגיאה: ' + r.error.message);
+            savedViews.push(r.data); renderViewsBar();
+          });
+        });
+      }
       draw();
     });
   };
@@ -653,6 +700,7 @@
   //  לחיצה על מקור פותחת את מסך-הלידים המלא מסונן לערך, בדיוק כמו סינון לפי סטטוס.
   //  field='__sector__' = סינון לפי המסווג הנגזר (ולא עמודה גולמית).
   var fieldFilter = null;   // { field, value, label } או null
+  var savedViews = [];      // תצוגות-לידים שמורות (lead_views) — מנהל-סניף/אדמין בלבד
   function listRows() {
     var q = (C.$('lq') && C.$('lq').value || '').trim().toLowerCase();
     return cache.filter(function (l) {
