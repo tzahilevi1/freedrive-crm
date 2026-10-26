@@ -564,13 +564,10 @@
       db.from('profiles').select('user_id,full_name,role'),
       //  מי מקבל את הלידים החדשים לחלוקה. נשמר בתצורה ולא מקודד קשיח,
       //  כדי שהעברת התפקיד לאדם אחר לא תדרוש שינוי בקוד.
-      db.from('admin_config').select('value').eq('key', 'default_owner').maybeSingle(),
-      //  תצוגות-לידים שמורות (מנהל-סניף/אדמין בלבד; RLS מחזיר ריק לשאר).
-      canViews ? db.from('lead_views').select('*').order('created_at', { ascending: true }) : Promise.resolve({ data: [] })
+      db.from('admin_config').select('value').eq('key', 'default_owner').maybeSingle()
     ]).then(function (res) {
       if (res[0].error) return errBox(res[0].error.message);
       distOwner = ((res[2] && res[2].data && res[2].data.value) || {});
-      savedViews = (res[3] && res[3].data) || [];
       cache = res[0].data || [];
       profiles = {}; mgrIds = {}; (res[1].data || []).forEach(function (p) { profiles[p.user_id] = p.full_name; if (p.role === 'admin' || p.role === 'branch') mgrIds[p.user_id] = true; });
       leadFilter = C.makeFilter([
@@ -609,18 +606,23 @@
         ? '📥 לידים לחלוקה' + (distOwner.name ? ' \u00b7 ' + distOwner.name : '')
         : (statusFilter ? stDef(statusFilter).label : 'כל הלידים');
       view('<div class="card"><div class="row-between"><h3>' + esc(title) + ' <span class="muted" id="lcount"></span></h3>' +
-        '<div><input class="inp" id="lq" placeholder="חיפוש חופשי…" style="width:170px"> <button class="btn btn-sm" id="lnew">+ ליד חדש</button> ' + (C.role === 'admin' ? '<button class="btn btn-ghost btn-sm" id="limport">⬆️ ייבוא</button> ' : '') +
-        //  אקסל + CSV אוחדו תחת "ייצוא" (תפריט נפתח בריחוף; קליק פותח/סוגר למגע).
-        //  ה-ids lcsv/lxls נשמרו בתוך התפריט כדי שהמאזינים הקיימים ימשיכו לעבוד.
-        '<span id="lexportWrap" style="position:relative;display:inline-block;vertical-align:top">' +
-          '<button class="btn btn-ghost btn-sm" id="lexportBtn">⬇ ייצוא ▾</button>' +
-          '<div id="lexportMenu" style="position:absolute;top:100%;inset-inline-end:0;margin-top:4px;background:var(--surface);border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow);padding:5px;min-width:160px;z-index:50;display:none">' +
-            '<button class="btn btn-ghost btn-sm" id="lxls" style="display:flex;width:100%;justify-content:flex-start;margin-bottom:3px">📊 אקסל (Excel)</button>' +
-            '<button class="btn btn-ghost btn-sm" id="lcsv" style="display:flex;width:100%;justify-content:flex-start">📄 CSV</button>' +
-          '</div>' +
-        '</span> ' + (canViews ? '<button class="btn btn-ghost btn-sm" id="lvNew" title="שמור את הסינון הנוכחי כתצוגה">⭐ תצוגה חדשה</button> ' : '') + leadCols.button() + '</div></div>' +
-        //  שורת התצוגות השמורות (מנהל-סניף/אדמין בלבד) — נבנית ב-renderViewsBar.
-        (canViews ? '<div id="lviewsBar" style="margin:12px 0 2px;display:flex;flex-wrap:wrap;gap:5px;align-items:center"></div>' : '') +
+        '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">' +
+          '<input class="inp" id="lq" placeholder="חיפוש חופשי…" style="width:170px">' +
+          '<button class="btn btn-sm" id="lnew">+ ליד חדש</button>' +
+          //  תפריט "⋮" (סגנון פייברי): תצוגה חדשה · ייצוא · ייבוא · דוחות.
+          //  ה-ids lvNew/lxls/lcsv/limport נשמרו כדי שהמאזינים הקיימים ימשיכו לעבוד.
+          '<span id="lmoreWrap" style="position:relative;display:inline-block">' +
+            '<button class="btn btn-ghost btn-sm" id="lmoreBtn" title="עוד פעולות" style="font-weight:800;font-size:18px;line-height:1;padding:6px 11px">⋮</button>' +
+            '<div id="lmoreMenu" style="position:absolute;top:100%;inset-inline-end:0;margin-top:4px;background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);padding:6px;min-width:200px;z-index:60;display:none">' +
+              (canViews ? '<button class="lm-item" id="lvNew">➕ תצוגה חדשה</button>' : '') +
+              '<button class="lm-item" id="lxls">📊 ייצוא לאקסל</button>' +
+              '<button class="lm-item" id="lcsv">📄 ייצוא ל-CSV</button>' +
+              (C.role === 'admin' ? '<button class="lm-item" id="limport">⬆️ ייבוא קובץ</button>' : '') +
+              '<button class="lm-item" id="lreports">📈 דוחות וגרפים</button>' +
+            '</div>' +
+          '</span>' +
+          leadCols.button() +
+        '</div></div>' +
         '<div id="leadsBody"></div></div>');
       C.$('lnew').addEventListener('click', newLeadForm);
       if (C.$('limport')) C.$('limport').addEventListener('click', leadImportForm);
@@ -631,57 +633,35 @@
         var xlabels = { created_at: 'תאריך', name: 'שם', phone: 'טלפון', email: 'אימייל', car: 'רכב', source: 'מקור הגעה', status: 'סטטוס', city: 'עיר', brand: 'מותג', marketing_company: 'חברת שיווק', utm_source: 'פלטפורמה', utm_campaign: 'קמפיין', utm_medium: 'סוג תנועה', campaign: 'שם קמפיין', adset_name: 'סדרת מודעות', ad_name: 'מודעה', message: 'הודעה' };
         C.exportXlsx(listRows(), xcols, 'free-drive-leads', xlabels);
       });
-      //  תפריט "ייצוא": נפתח בריחוף-עכבר, קליק פותח/סוגר (למגע), ונסגר אחרי בחירה.
-      (function () {
-        var wrap = C.$('lexportWrap'), menu = C.$('lexportMenu'), btn = C.$('lexportBtn');
-        if (!wrap || !menu) return;
-        wrap.addEventListener('mouseenter', function () { menu.style.display = 'block'; });
-        wrap.addEventListener('mouseleave', function () { menu.style.display = 'none'; });
-        if (btn) btn.addEventListener('click', function (e) { e.stopPropagation(); menu.style.display = (menu.style.display === 'block') ? 'none' : 'block'; });
-        menu.addEventListener('click', function () { setTimeout(function () { menu.style.display = 'none'; }, 0); });
-      })();
       leadCols.bind();
-      //  --- תצוגות-לידים שמורות (lead_views): צ'יפים + שמירת הסינון הנוכחי (מנהל-סניף/אדמין) ---
-      if (canViews) {
-        var curViewFilter = function () {
-          var f = { status: curFilter || null };
-          if (fieldFilter) { f.field = fieldFilter.field; f.value = fieldFilter.value; f.label = fieldFilter.label; }
-          return f;
-        };
-        var applyView = function (v) {
-          var f = v.filter || {};
-          window.C2B_renderLeads(f.status || null, f.field ? { field: f.field, value: f.value, label: f.label } : undefined);
-        };
-        var renderViewsBar = function () {
-          var bar = C.$('lviewsBar'); if (!bar) return;
-          if (!savedViews.length) { bar.innerHTML = '<span class="muted" style="font-size:12px">אין תצוגות שמורות — סננו (סטטוס/מקור/מגזר…) ולחצו ⭐ תצוגה חדשה.</span>'; return; }
-          bar.innerHTML = '<span class="muted" style="font-size:12px;margin-inline-end:2px">תצוגות:</span>' +
-            savedViews.map(function (v) {
-              return '<span style="display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:999px;padding:4px 10px;font-size:12.5px;background:var(--surface-2)">' +
-                '<span data-lvapply="' + esc(v.id) + '" style="cursor:pointer">📌 ' + esc(v.name) + '</span>' +
-                '<b data-lvdel="' + esc(v.id) + '" title="מחק תצוגה" style="color:var(--danger);cursor:pointer">✕</b></span>';
-            }).join('');
-          bar.querySelectorAll('[data-lvapply]').forEach(function (el) { el.addEventListener('click', function () { var v = savedViews.filter(function (x) { return x.id === el.dataset.lvapply; })[0]; if (v) applyView(v); }); });
-          bar.querySelectorAll('[data-lvdel]').forEach(function (el) { el.addEventListener('click', function () {
-            var v = savedViews.filter(function (x) { return x.id === el.dataset.lvdel; })[0]; if (!v) return;
-            if (!confirm('למחוק את התצוגה "' + v.name + '"?')) return;
-            db.from('lead_views').delete().eq('id', v.id).then(function (r) {
-              if (r && r.error) return alert('שגיאה: ' + r.error.message);
-              savedViews = savedViews.filter(function (x) { return x.id !== v.id; }); renderViewsBar();
-            });
-          }); });
-        };
-        renderViewsBar();
-        if (C.$('lvNew')) C.$('lvNew').addEventListener('click', function () {
-          var dflt = fieldFilter ? (fieldFilter.label + ': ' + (fieldFilter.value || '')) : (curFilter === 'todistribute' ? 'לחלוקה' : (curFilter ? ((stDef(curFilter) && stDef(curFilter).label) || curFilter) : 'כל הלידים'));
-          var name = (prompt('שם לתצוגה (שומר את הסינון הנוכחי):', dflt) || '').trim();
-          if (!name) return;
-          db.from('lead_views').insert({ name: name, filter: curViewFilter() }).select('*').single().then(function (r) {
-            if (r.error) return alert('שגיאה: ' + r.error.message);
-            savedViews.push(r.data); renderViewsBar();
-          });
+      //  תפריט "⋮": נפתח בריחוף-עכבר, קליק פותח/סוגר (למגע), ונסגר אחרי בחירה.
+      (function () {
+        var wrap = C.$('lmoreWrap'), menu = C.$('lmoreMenu'), btn = C.$('lmoreBtn');
+        if (!wrap || !menu) return;
+        var close = function () { menu.style.display = 'none'; };
+        wrap.addEventListener('mouseenter', function () { menu.style.display = 'block'; });
+        wrap.addEventListener('mouseleave', close);
+        if (btn) btn.addEventListener('click', function (e) { e.stopPropagation(); menu.style.display = (menu.style.display === 'block') ? 'none' : 'block'; });
+        menu.addEventListener('click', function () { setTimeout(close, 0); });
+      })();
+      //  דוחות וגרפים — קפיצה למסך הדוחות הקיים (דרך פריט-הניווט, אם מותר למשתמש).
+      if (C.$('lreports')) C.$('lreports').addEventListener('click', function () {
+        var rn = document.querySelector('.nav-item[data-nav="reports"]');
+        if (rn) rn.click(); else alert('מסך הדוחות אינו זמין בתפקיד שלך.');
+      });
+      //  תצוגה חדשה — שומר את הסינון הנוכחי ל-lead_views ומרענן את תפריט-הצד.
+      if (canViews && C.$('lvNew')) C.$('lvNew').addEventListener('click', function () {
+        var dflt = fieldFilter ? (fieldFilter.label + ': ' + (fieldFilter.value || '')) : (curFilter === 'todistribute' ? 'לחלוקה' : (curFilter ? ((stDef(curFilter) && stDef(curFilter).label) || curFilter) : 'כל הלידים'));
+        var name = (prompt('שם לתצוגה (שומר את הסינון הנוכחי):', dflt) || '').trim();
+        if (!name) return;
+        var f = { status: curFilter || null };
+        if (fieldFilter) { f.field = fieldFilter.field; f.value = fieldFilter.value; f.label = fieldFilter.label; }
+        db.from('lead_views').insert({ name: name, filter: f }).select('*').single().then(function (r) {
+          if (r.error) return alert('שגיאה: ' + r.error.message);
+          if (window.C2B.reloadLeadViewsNav) window.C2B.reloadLeadViewsNav();
+          alert('✔ התצוגה "' + name + '" נשמרה — בתפריט הצד תחת "לידים".');
         });
-      }
+      });
       draw();
     });
   };
@@ -700,7 +680,6 @@
   //  לחיצה על מקור פותחת את מסך-הלידים המלא מסונן לערך, בדיוק כמו סינון לפי סטטוס.
   //  field='__sector__' = סינון לפי המסווג הנגזר (ולא עמודה גולמית).
   var fieldFilter = null;   // { field, value, label } או null
-  var savedViews = [];      // תצוגות-לידים שמורות (lead_views) — מנהל-סניף/אדמין בלבד
   function listRows() {
     var q = (C.$('lq') && C.$('lq').value || '').trim().toLowerCase();
     return cache.filter(function (l) {

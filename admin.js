@@ -781,7 +781,7 @@
         if (after) after.insertAdjacentElement('afterend', d); else ls.appendChild(d);
       }
       //  עקיפת גובה תת-התפריט (admin.html ישן ב-cache מגביל ל-320px וחותך פריטים)
-      if (!document.getElementById('navSubFix')) { var s = document.createElement('style'); s.id = 'navSubFix'; s.textContent = '.nav-sub.open{max-height:600px}'; document.head.appendChild(s); }
+      if (!document.getElementById('navSubFix')) { var s = document.createElement('style'); s.id = 'navSubFix'; s.textContent = '.nav-sub.open{max-height:1200px}'; document.head.appendChild(s); }
     })();
     $('nav').querySelectorAll('.nav-item, .nav-group-label').forEach(function (it) {
       //  כותרת-הקבוצה "תקשורת ומערכת" היא טוגל מתקפל — מוצגת לכולם (גם לא-אדמין
@@ -798,7 +798,60 @@
     var _slug = (window.__fleetCfg && window.__fleetCfg.slug) || '';
     $('nav').querySelectorAll('[data-yad2]').forEach(function (it) { if (_slug !== 'yad2') it.style.display = 'none'; });
     $('nav').querySelectorAll('[data-notyad2]').forEach(function (it) { if (_slug === 'yad2') it.style.display = 'none'; });
+    //  תצוגות-לידים שמורות בתפריט-הצד (מנהל-סניף/אדמין) — נטען אסינכרונית.
+    if (window.C2B.reloadLeadViewsNav) window.C2B.reloadLeadViewsNav();
   }
+  //  --- תצוגות-לידים שמורות (lead_views) כפריטי-ניווט תחת "לידים", עם גרירה-לסידור ---
+  //  מוזרקים ל-#leadSub; קליק פותח את הסינון, ✕ מוחק, גרירה שומרת position ב-DB.
+  window.C2B._leadViews = {};
+  function bindLvDrag(ls) {
+    var dragEl = null;
+    ls.querySelectorAll('[data-lvid]').forEach(function (el) {
+      el.addEventListener('dragstart', function () { dragEl = el; el.style.opacity = '.5'; });
+      el.addEventListener('dragend', function () { el.style.opacity = ''; });
+      el.addEventListener('dragover', function (e) { e.preventDefault(); });
+      el.addEventListener('drop', function (e) {
+        e.preventDefault();
+        if (!dragEl || dragEl === el) return;
+        var items = Array.prototype.slice.call(ls.querySelectorAll('[data-lvid]'));
+        if (items.indexOf(dragEl) < items.indexOf(el)) el.insertAdjacentElement('afterend', dragEl);
+        else el.insertAdjacentElement('beforebegin', dragEl);
+        //  שמירת הסדר החדש (position פר-תצוגה)
+        Array.prototype.slice.call(ls.querySelectorAll('[data-lvid]')).forEach(function (x, i) {
+          db.from('lead_views').update({ position: i }).eq('id', x.dataset.lvid).then(function () {}, function () {});
+        });
+      });
+    });
+  }
+  window.C2B.reloadLeadViewsNav = function () {
+    var ls = $('leadSub'); if (!ls) return;
+    //  ניקוי פריטים/מפריד קודמים
+    ls.querySelectorAll('[data-lvid]').forEach(function (el) { el.remove(); });
+    var oldSep = document.getElementById('lvNavSep'); if (oldSep) oldSep.remove();
+    var role = (window.C2B && window.C2B.role) || '';
+    if (role !== 'admin' && role !== 'branch') return;
+    db.from('lead_views').select('*').order('position', { ascending: true }).order('created_at', { ascending: true }).then(function (r) {
+      if (r && r.error) return;
+      var views = (r && r.data) || [];
+      window.C2B._leadViews = {};
+      if (!views.length) return;
+      var sep = document.createElement('div');
+      sep.id = 'lvNavSep'; sep.textContent = '⭐ התצוגות שלי';
+      sep.style.cssText = 'font-size:11px;font-weight:700;opacity:.65;padding:9px 12px 4px 40px;letter-spacing:.02em';
+      ls.appendChild(sep);
+      views.forEach(function (v) {
+        window.C2B._leadViews[v.id] = v;
+        var d = document.createElement('div');
+        d.className = 'nav-item'; d.setAttribute('data-nav', 'leads'); d.setAttribute('data-lvid', v.id); d.setAttribute('data-senior', '1');
+        d.setAttribute('draggable', 'true'); d.title = 'גרור לסידור · ✕ למחיקה';
+        d.style.position = 'relative';
+        d.innerHTML = '<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">📌 ' + esc(v.name) + '</span>' +
+          '<b data-lvdel="' + esc(v.id) + '" title="מחק תצוגה" style="opacity:.6;font-size:12px;padding:0 2px">✕</b>';
+        ls.appendChild(d);
+      });
+      bindLvDrag(ls);
+    });
+  };
   window.C2B.GRANTABLE_VIEWS = GRANTABLE_VIEWS;
   window.C2B.DEFAULT_VIEWS = DEFAULT_VIEWS;
   $('loginForm').addEventListener('submit', function (e) {
@@ -1061,7 +1114,26 @@
     return window.C2B_renderDashboard && window.C2B_renderDashboard();
   }
   $('nav').addEventListener('click', function (e) {
+    //  מחיקת תצוגה שמורה (✕) — לפני הניווט, עם עצירת-הפצה.
+    var del = e.target.closest('[data-lvdel]');
+    if (del) {
+      e.stopPropagation();
+      var dv = (window.C2B._leadViews || {})[del.dataset.lvdel];
+      if (dv && confirm('למחוק את התצוגה "' + dv.name + '"?')) {
+        db.from('lead_views').delete().eq('id', del.dataset.lvdel).then(function (r) {
+          if (r && r.error) { alert('שגיאה: ' + r.error.message); return; }
+          if (window.C2B.reloadLeadViewsNav) window.C2B.reloadLeadViewsNav();
+        });
+      }
+      return;
+    }
     var it = e.target.closest('.nav-item'); if (!it) return;
+    //  תצוגה שמורה — פתיחת הסינון השמור במסך הלידים.
+    if (it.dataset.lvid) {
+      var v = (window.C2B._leadViews || {})[it.dataset.lvid], f = (v && v.filter) || {};
+      go('leads', { status: f.status || null, field: f.field, value: f.value, label: f.label });
+      return;
+    }
     //  פריט-אב עם תת-תפריט (למשל "לידים") — toggle: לחיצה פותחת את שלבי-המשנה
     //  (והמגירה נשארת פתוחה בנייד), ולחיצה נוספת סוגרת אותם.
     if (it.dataset.expand) {
