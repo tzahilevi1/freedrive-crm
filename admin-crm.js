@@ -566,32 +566,33 @@
       //  מי מקבל את הלידים החדשים לחלוקה. נשמר בתצורה ולא מקודד קשיח,
       //  כדי שהעברת התפקיד לאדם אחר לא תדרוש שינוי בקוד.
       db.from('admin_config').select('value').eq('key', 'default_owner').maybeSingle(),
-      //  שמות-הטפסים (+מותג שכיח) לרשימת-הסינון — שלם, מכבד RLS, קטן.
-      db.rpc('lead_form_options')
+      //  רשימות-בחירה לשדות-הסינון (jsonb אחד): form_name(כולל מחוברים)/campaign/
+      //  adset_name/ad_name/close_reason/city/utm_campaign — שלם, מכבד RLS.
+      db.rpc('lead_list_options')
     ]).then(function (res) {
       if (res[0].error) return errBox(res[0].error.message);
       distOwner = ((res[2] && res[2].data && res[2].data.value) || {});
-      var formRows = (res[3] && res[3].data) || [];
+      var rpcOpts = (res[3] && res[3].data) || {};
       cache = res[0].data || [];
       profiles = {}; mgrIds = {}; (res[1].data || []).forEach(function (p) { profiles[p.user_id] = p.full_name; if (p.role === 'admin' || p.role === 'branch') mgrIds[p.user_id] = true; });
-      //  אפשרויות "שם טופס" כרשימה נפתחת — מ-RPC lead_form_options (כל הטפסים שהמשתמש
-      //  רשאי לראות, לא רק העמוד הראשון) עם המותג השכיח לכל טופס. ריק → טקסט חופשי.
-      function formNameOpts() {
-        if (!formRows.length) return null;
-        var rows = formRows.slice().sort(function (a, b) { return String(a.form_name).localeCompare(String(b.form_name), 'he'); });
-        return [{ v: '', l: '— הכל —' }].concat(rows.map(function (r) {
-          return { v: r.form_name, l: r.form_name + (r.brand ? '  ·  ' + r.brand : '') };
-        }));
+      //  אפשרויות רשימה נפתחת לשדה מה-RPC (כל הערכים, מכבד RLS). ריק → טקסט חופשי.
+      function listFrom(field) { var a = rpcOpts[field] || []; return a.length ? [{ v: '', l: '— הכל —' }].concat(a) : null; }
+      function formNameOpts() { return listFrom('form_name'); }
+      //  "איש מכירות" — רשימת המשתמשים (כבר טעונים ב-profiles), ממוינת.
+      function assignedOpts() {
+        var names = {}; Object.keys(profiles).forEach(function (uid) { var n = (profiles[uid] || '').trim(); if (n) names[n] = 1; });
+        var arr = Object.keys(names).sort(function (a, b) { return a.localeCompare(b, 'he'); });
+        return arr.length ? [{ v: '', l: '— הכל —' }].concat(arr.map(function (n) { return { v: n, l: n }; })) : null;
       }
       leadFilter = C.makeFilter([
         // פרטי הלקוח
         { key: 'name', label: 'שם לקוח' }, { key: 'phone', label: 'טלפון' }, { key: 'email', label: 'אימייל' },
-        { key: 'id_num', label: 'תעודת זהות' }, { key: 'city', label: 'עיר' },
+        { key: 'id_num', label: 'תעודת זהות' }, { key: 'city', label: 'עיר', options: listFrom('city'), multi: true },
         { key: 'car', label: 'רכב' }, { key: 'message', label: 'הודעה / פרטים נוספים' },
         // סטטוס וטיפול
         { key: 'status', label: 'סטטוס', options: STATUSES.map(function (s) { return { v: s.k, l: s.label }; }), multi: true },
-        { key: 'assigned', label: 'איש מכירות', get: function (l) { return profiles[l.assigned_to] || ''; } },
-        { key: 'close_reason', label: 'סיבת סגירה' },
+        { key: 'assigned', label: 'איש מכירות', get: function (l) { return profiles[l.assigned_to] || ''; }, options: assignedOpts(), multi: true },
+        { key: 'close_reason', label: 'סיבת סגירה', options: listFrom('close_reason'), multi: true },
         // תאריכים
         { key: 'created_at', label: 'נוצר בתאריך', type: 'date' },
         { key: 'status_changed_at', label: 'שינוי סטטוס אחרון', type: 'date' },
@@ -601,13 +602,13 @@
         { key: 'brand', label: 'מותג', options: listOpts('brand'), multi: true },
         { key: 'source', label: 'מקור הגעה', options: listOpts('source'), multi: true },
         { key: 'marketing_company', label: 'חברת שיווק', options: listOpts('marketing_company'), multi: true },
-        { key: 'campaign', label: 'שם קמפיין' },
-        { key: 'adset_name', label: 'שם סדרה' },
-        { key: 'ad_name', label: 'שם מודעה' },
+        { key: 'campaign', label: 'שם קמפיין', options: listFrom('campaign'), multi: true },
+        { key: 'adset_name', label: 'שם סדרה', options: listFrom('adset_name'), multi: true },
+        { key: 'ad_name', label: 'שם מודעה', options: listFrom('ad_name'), multi: true },
         { key: 'form_name', label: 'שם טופס', options: formNameOpts(), multi: true },
         // פרוטקול UTM מלא
         { key: 'utm_source', label: 'utm_source', options: listOpts('utm_source'), multi: true },
-        { key: 'utm_medium', label: 'utm_medium' }, { key: 'utm_campaign', label: 'utm_campaign' },
+        { key: 'utm_medium', label: 'utm_medium' }, { key: 'utm_campaign', label: 'utm_campaign', options: listFrom('utm_campaign'), multi: true },
         { key: 'utm_content', label: 'utm_content' }, { key: 'utm_term', label: 'utm_term' },
         { key: 'ad_group', label: 'ad_group' },
         // מזהים טכניים — לאיתור ליד בודד מול פייסבוק
