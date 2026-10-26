@@ -1,5 +1,5 @@
 /* ============================================================
-   __BRAND_NAME__ — CRM module: clean leads table, full-page lead view
+   פרי דרייב — CRM module: clean leads table, full-page lead view
    (prev/next, clickable status, quick actions, car picker, timeline),
    manager dashboard, and a status menu reusable anywhere. window.C2B.
    ============================================================ */
@@ -9,14 +9,14 @@
   if (!C) return;
   var db = C.db, esc = C.esc, fmt = C.fmt, nis = C.nis, view = C.view, loading = C.loading, errBox = C.errBox;
   //  מיתוג פר-ארגון בזמן-ריצה (נטען ל-C.brand ב-boot). fallback לטוקן-הבנייה.
-  function bname() { var b = C.brand || {}; return b.name || '__BRAND_NAME__'; }
+  function bname() { var b = C.brand || {}; return b.name || 'פרי דרייב'; }
   function blegal() {
     var b = C.brand || {};
     if (b.legal_entity) return b.legal_entity;
-    //  נפילה לישות מה-build (‎.env / __LEGAL_ENTITY__‎) מותרת **רק** למותג-הבנייה עצמו:
+    //  נפילה לישות מה-build (‎.env / נ.ש פוקס מוטורס בע"מ ח.פ. 516742731‎) מותרת **רק** למותג-הבנייה עצמו:
     //  org הבית (שם הארגון === מותג-הבנייה) או פרויקט מותג-יחיד (אין C.brand).
     //  לארגון אחר בפלטפורמה המשותפת → ריק. אסור לחשוף ישות/ח.פ של חברה אחרת בהסכם.
-    if (!b.name || b.name === '__BRAND_NAME__') return LEGAL_ENTITY || '';
+    if (!b.name || b.name === 'פרי דרייב') return LEGAL_ENTITY || '';
     return '';
   }
   function bregno() { var b = C.brand || {}; return b.reg_no || ''; }
@@ -45,7 +45,7 @@
     { k: 'new', label: 'חדש', icon: '🆕', color: '#3b82f6', flow: true },
     { k: 'in_progress', label: 'בטיפול', icon: '📞', color: '#6366f1', flow: true },
     { k: 'meeting_set', label: 'פגישה נקבעה', icon: '📅', color: '#8b5cf6', flow: true },
-    { k: 'quote_sent', label: 'הצעת מחיר', icon: '💰', color: '__BRAND_COLOR__', flow: true },
+    { k: 'quote_sent', label: 'הצעת מחיר', icon: '💰', color: '#6E8B10', flow: true },
     { k: 'underwriting', label: 'בתהליך חיתום', icon: '📝', color: '#eab308', flow: true },
     { k: 'won', label: 'עסקה נסגרה', icon: '✅', color: '#16a34a', flow: true, terminal: true },
     { k: 'lost', label: 'לא רלוונטי', icon: '❌', color: '#e2555a', terminal: true },
@@ -373,7 +373,7 @@
   // יש שם אנגלי תקין ב-extra.name_en ("BYD Seal U"). מעדיפים אותו ומנרמלים אותיות.
   // הישות המשפטית שמופיעה בכותרת ההסכם. ריק = לא מוצגת שורה כלל,
   // וזה עדיף על פני הצגת ח.פ של חברה אחרת.
-  var LEGAL_ENTITY = '__LEGAL_ENTITY__';
+  var LEGAL_ENTITY = 'נ.ש פוקס מוטורס בע"מ ח.פ. 516742731';
 
   var CAR_ACR = { byd:'BYD', bmw:'BMW', mg:'MG', kia:'KIA', gac:'GAC', gwm:'GWM', ev:'EV', dm:'DM',
                   suv:'SUV', gt:'GT', phev:'PHEV', hev:'HEV', bev:'BEV', fl:'FL', vw:'VW', ds:'DS',
@@ -604,17 +604,35 @@
         ? '📥 לידים לחלוקה' + (distOwner.name ? ' \u00b7 ' + distOwner.name : '')
         : (statusFilter ? stDef(statusFilter).label : 'כל הלידים');
       view('<div class="card"><div class="row-between"><h3>' + esc(title) + ' <span class="muted" id="lcount"></span></h3>' +
-        '<div><input class="inp" id="lq" placeholder="חיפוש חופשי…" style="width:170px"> <button class="btn btn-sm" id="lnew">+ ליד חדש</button> ' + (C.role === 'admin' ? '<button class="btn btn-ghost btn-sm" id="limport">⬆️ ייבוא</button> ' : '') + '<button class="btn btn-ghost btn-sm" id="lcsv">CSV</button> <button class="btn btn-ghost btn-sm" id="lxls">📊 אקסל</button> ' + leadCols.button() + '</div></div>' +
+        '<div><input class="inp" id="lq" placeholder="חיפוש חופשי…" style="width:170px"> <button class="btn btn-sm" id="lnew">+ ליד חדש</button> ' + (C.role === 'admin' ? '<button class="btn btn-ghost btn-sm" id="limport">⬆️ ייבוא</button> ' : '') +
+        //  אקסל + CSV אוחדו תחת "ייצוא" (תפריט נפתח בריחוף; קליק פותח/סוגר למגע).
+        //  ה-ids lcsv/lxls נשמרו בתוך התפריט כדי שהמאזינים הקיימים ימשיכו לעבוד.
+        '<span id="lexportWrap" style="position:relative;display:inline-block;vertical-align:top">' +
+          '<button class="btn btn-ghost btn-sm" id="lexportBtn">⬇ ייצוא ▾</button>' +
+          '<div id="lexportMenu" style="position:absolute;top:100%;inset-inline-end:0;margin-top:4px;background:var(--surface);border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow);padding:5px;min-width:160px;z-index:50;display:none">' +
+            '<button class="btn btn-ghost btn-sm" id="lxls" style="display:flex;width:100%;justify-content:flex-start;margin-bottom:3px">📊 אקסל (Excel)</button>' +
+            '<button class="btn btn-ghost btn-sm" id="lcsv" style="display:flex;width:100%;justify-content:flex-start">📄 CSV</button>' +
+          '</div>' +
+        '</span> ' + leadCols.button() + '</div></div>' +
         '<div id="leadsBody"></div></div>');
       C.$('lnew').addEventListener('click', newLeadForm);
       if (C.$('limport')) C.$('limport').addEventListener('click', leadImportForm);
       C.$('lq').addEventListener('input', draw);
-      C.$('lcsv').addEventListener('click', function () { C.exportCsv(listRows(), ['created_at', 'name', 'phone', 'email', 'car', 'source', 'status', 'city', 'brand', 'marketing_company', 'utm_source', 'utm_campaign', 'message'], '__BRAND_SLUG__-leads'); });
+      C.$('lcsv').addEventListener('click', function () { C.exportCsv(listRows(), ['created_at', 'name', 'phone', 'email', 'car', 'source', 'status', 'city', 'brand', 'marketing_company', 'utm_source', 'utm_campaign', 'message'], 'free-drive-leads'); });
       C.$('lxls').addEventListener('click', function () {
         var xcols = ['created_at', 'name', 'phone', 'email', 'car', 'source', 'status', 'city', 'brand', 'marketing_company', 'utm_source', 'utm_campaign', 'utm_medium', 'campaign', 'adset_name', 'ad_name', 'message'];
         var xlabels = { created_at: 'תאריך', name: 'שם', phone: 'טלפון', email: 'אימייל', car: 'רכב', source: 'מקור הגעה', status: 'סטטוס', city: 'עיר', brand: 'מותג', marketing_company: 'חברת שיווק', utm_source: 'פלטפורמה', utm_campaign: 'קמפיין', utm_medium: 'סוג תנועה', campaign: 'שם קמפיין', adset_name: 'סדרת מודעות', ad_name: 'מודעה', message: 'הודעה' };
-        C.exportXlsx(listRows(), xcols, '__BRAND_SLUG__-leads', xlabels);
+        C.exportXlsx(listRows(), xcols, 'free-drive-leads', xlabels);
       });
+      //  תפריט "ייצוא": נפתח בריחוף-עכבר, קליק פותח/סוגר (למגע), ונסגר אחרי בחירה.
+      (function () {
+        var wrap = C.$('lexportWrap'), menu = C.$('lexportMenu'), btn = C.$('lexportBtn');
+        if (!wrap || !menu) return;
+        wrap.addEventListener('mouseenter', function () { menu.style.display = 'block'; });
+        wrap.addEventListener('mouseleave', function () { menu.style.display = 'none'; });
+        if (btn) btn.addEventListener('click', function (e) { e.stopPropagation(); menu.style.display = (menu.style.display === 'block') ? 'none' : 'block'; });
+        menu.addEventListener('click', function () { setTimeout(function () { menu.style.display = 'none'; }, 0); });
+      })();
       leadCols.bind();
       draw();
     });
@@ -3938,9 +3956,9 @@
     if (deal.id) {
       // sign.html מוגש מאותו origin כמו ה-CRM (ברשימת RESERVED ב-fleet-boot, בשורש),
       // עם ‎?o=slug לבחירת הארגון. בצי הפרונטאנד מוגש גולמי, לכן גוזרים את הבסיס
-      // בזמן-ריצה מ-location.origin ולא מטוקן-בנייה (__CRM_BASE_URL__ לא הוחלף שם →
+      // בזמן-ריצה מ-location.origin ולא מטוקן-בנייה (https://crm.freedrive.co.il לא הוחלף שם →
       // קישור-החתימה בהעתקה-ידנית/וואטסאפ/SMS יצא שבור). נפילה לטוקן אם origin ריק.
-      var signBase = (window.location && window.location.origin ? window.location.origin : '__CRM_BASE_URL__') + '/sign.html';
+      var signBase = (window.location && window.location.origin ? window.location.origin : 'https://crm.freedrive.co.il') + '/sign.html';
       var signUrl = null;
       function withUrl(cb) {
         if (signUrl) return cb(signUrl);
