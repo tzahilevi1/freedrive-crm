@@ -506,6 +506,7 @@
     C.txtCol('ad_group', 'מזהה קבוצת מודעות', { ltr: true, w: 170 }),
     C.txtCol('ad_id', 'מזהה מודעה', { ltr: true, w: 150 }),
     C.txtCol('form_id', 'מזהה טופס', { ltr: true, w: 150 }),
+    C.txtCol('form_name', 'שם טופס', { w: 200 }),
     C.txtCol('external_id', 'lead_id', { ltr: true, w: 170 }),
     C.txtCol('page_url', 'דף נחיתה', { ltr: true, w: 240 }),
     C.txtCol('close_reason', 'סיבת סגירה', { w: 190 }),
@@ -532,7 +533,7 @@
   var leadCols = null;
   //  PostgREST חוסם כל תשובה ב-1000 שורות (limit לא עוקף) — ולכן שליפה
   //  בעימוד range() ואיחוד, כדי לטעון את *כל* הלידים (סינון/חיפוש בצד-לקוח).
-  var LEADS_SELECT = 'id,name,phone,email,car,car_category,city,source,status,brand,marketing_company,assigned_to,created_at,updated_at,status_changed_at,first_response_at,close_reason,id_num,ip,no_marketing,utm_source,utm_campaign,utm_medium,utm_content,utm_term,ad_group,adset_name,ad_name,campaign,ad_id,form_id,external_id,message,page_url';
+  var LEADS_SELECT = 'id,name,phone,email,car,car_category,city,source,status,brand,marketing_company,assigned_to,created_at,updated_at,status_changed_at,first_response_at,close_reason,id_num,ip,no_marketing,utm_source,utm_campaign,utm_medium,utm_content,utm_term,ad_group,adset_name,ad_name,campaign,ad_id,form_id,form_name,external_id,message,page_url';
   //  טעינה הדרגתית: מחזיר מיד את 500 הלידים הראשונים (המסך נפתח מהר), ושאר
   //  הלידים נטענים *ברקע במקביל* ומצטרפים דרך onMore — כך לא ממתינים להורדת
   //  כל האלפים לפני שרואים משהו. הספירה/חיפוש/סינון עובדים על הכל בסיום.
@@ -591,6 +592,7 @@
         { key: 'campaign', label: 'שם קמפיין' },
         { key: 'adset_name', label: 'שם סדרה' },
         { key: 'ad_name', label: 'שם מודעה' },
+        { key: 'form_name', label: 'שם טופס' },
         // פרוטקול UTM מלא
         { key: 'utm_source', label: 'utm_source', options: listOpts('utm_source') },
         { key: 'utm_medium', label: 'utm_medium' }, { key: 'utm_campaign', label: 'utm_campaign' },
@@ -1516,6 +1518,7 @@
       lf('lead_id', lead.external_id
         ? '<span class="mono" style="user-select:all;direction:ltr;display:inline-block">' + esc(lead.external_id) + '</span>'
         : '') +
+      lf('שם טופס', esc(lead.form_name)) +
       lf('מזהה טופס', esc(lead.form_id)) +
       lf('מזהה מודעה', esc(lead.ad_id)) +
       lf('utm_source', esc(lead.utm_source)) +
