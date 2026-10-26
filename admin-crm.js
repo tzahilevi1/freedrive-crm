@@ -2150,6 +2150,20 @@
         '<div id="icList" style="margin-top:8px"></div><div id="icResult" style="margin-top:8px"></div></div>' : '') + '</div>';
     // notes area for the file manager — write client notes to help manage leads from here
     var fileNotesCard = fileMode ? '<div class="card"><h3>📝 הערות על הלקוח</h3><textarea class="inp" id="dlClientNote" rows="3" placeholder="כתבי הערה על הלקוח / התיק (מתועדת עם תאריך)…" style="width:100%"></textarea><div style="display:flex;justify-content:flex-end;margin-top:8px"><button class="btn btn-sm" id="dlAddNote">➕ הוסף הערה</button></div><div id="dlNotesList" style="margin-top:12px">טוען הערות…</div></div>' : '';
+    //  ===== פיילוט סנכרון-מחלקות — electric-lease בלבד (מגודר-slug). =====
+    //  טאב „צוות": מתאמת/שותף/מתוגמל/ערוץ/מקדם. שדות אלה קיימים ב-deals רק ב-electric-lease,
+    //  לכן גם ה-UI וגם ה-payload מגודרים (ראה readForm) — אחרת שמירת-עסקה בשאר הצי תישבר.
+    var isELpilot = (window.__fleetCfg && window.__fleetCfg.slug) === 'electric-lease';
+    var pilotCoordOpts = Object.keys(profiles || {}).map(function (uid) { return '<option value="' + esc(uid) + '"' + (deal.coordinator_id === uid ? ' selected' : '') + '>' + esc(profiles[uid]) + '</option>'; }).join('');
+    var teamCard = !isELpilot ? '' : '<div class="card"><h3>👥 צוות העסקה</h3>' +
+      '<p class="muted" style="font-size:12px;margin:-4px 0 10px">שיוך בעלי-התפקיד לעסקה — לבסיס הסנכרון בין מכירות, מתאמות והנהלת-חשבונות.</p>' +
+      '<div class="grid2">' +
+        '<div class="field" style="margin:0"><label>מתאמת (קבעה את הפגישה)</label><select class="inp" id="dl_coordinator" style="width:100%"><option value="">— ללא —</option>' + pilotCoordOpts + '</select></div>' +
+        '<div class="field" style="margin:0"><label>ערוץ</label><select class="inp" id="dl_channel" style="width:100%"><option value="">—</option><option value="פרונטלי"' + (deal.channel === 'פרונטלי' ? ' selected' : '') + '>פרונטלי</option><option value="טלפוני"' + (deal.channel === 'טלפוני' ? ' selected' : '') + '>טלפוני</option></select></div>' +
+        '<div class="field" style="margin:0"><label>סוכן שותף</label><input class="inp" id="dl_partner_agent" value="' + esc(deal.partner_agent || '') + '" style="width:100%"></div>' +
+        '<div class="field" style="margin:0"><label>סוכן מתוגמל</label><input class="inp" id="dl_paid_agent" value="' + esc(deal.paid_agent || '') + '" style="width:100%"></div>' +
+        '<div class="field" style="margin:0"><label>מקדם עסקה <span class="muted" style="font-weight:400">(אופציונלי)</span></label><input class="inp" id="dl_deal_coefficient" type="number" step="0.01" value="' + esc(deal.deal_coefficient != null ? deal.deal_coefficient : '') + '" style="width:100%"></div>' +
+      '</div></div>';
     function dTab(k, label, active) { return '<button data-dtab="' + k + '"' + (active ? ' class="active"' : '') + '>' + label + '</button>'; }
     function dPanel(k, active, inner) { return '<div class="dl-panel' + (active ? '' : ' hidden') + '" data-dpanel="' + k + '">' + inner + '</div>'; }
     view(
@@ -2160,6 +2174,7 @@
       (fileMode ? '<div class="card" style="padding:12px"><h3 style="margin:0 0 8px;font-size:13px">שלב התיק (מנהלת תיקי לקוחות)</h3><div class="flow" id="dlStageBar">' + stageBar(curStage) + '</div></div>' : '') +
       '<nav class="tabs" id="dlTabs" style="margin-bottom:14px;flex-wrap:wrap">' +
         dTab('client', '👤 פרטי הלקוח', true) + dTab('deal', '📋 פרטי העסקה') + dTab('car', '🚗 פרטי הרכב המוזמן') + dTab('fin', '🏦 מקטע מימון') + dTab('trade', '🔁 מקטע טרייד-אין') + dTab('record', '🗂️ סיכום ומסמכים') +
+        (isELpilot ? dTab('team', '👥 צוות') : '') +
       '</nav>' +
       dPanel('client', true, '<div class="grid2">' + clientCard + formCard + '</div>') +
       dPanel('deal', false, '<div class="grid2">' + pricingCard + addonsCard + '</div>' + summaryCard) +
@@ -2169,6 +2184,7 @@
       //  מקטע התשלומים/קבלות/חשבוניות הוסר מטופס-המכירות — מנוהל ע"י הנהלת-החשבונות
       //  בתצוגה שלה (openAcctLeadView). (החיווט ב-dlPayForm מגודר וממילא לא ירוץ.)
       dPanel('record', false, '<div class="grid2">' + checklistCard + recordCard + '</div>') +
+      (isELpilot ? dPanel('team', false, teamCard) : '') +
       fileNotesCard   // הערות על הלקוח — הכי למטה, מתחת להכל (מנהלת תיקי לקוחות)
     );
     var $ = C.$;
@@ -2378,7 +2394,7 @@
     // read the current form into a deal object (reused by save + contract)
     function readForm() {
       var c = compute();
-      return {
+      var f = {
         lead_id: lead.id, form_type: $('dl_form_type').value, status: $('dl_status').value, salesperson: $('dl_salesperson').value, brand: $('dl_brand') ? $('dl_brand').value : null,
         client_name: $('dl_client_name').value, client_phone: $('dl_client_phone').value, client_email: $('dl_client_email').value, client_address: $('dl_client_address').value, client_id: $('dl_client_id').value, invoice_name: $('dl_invoice_name').value,
         car_make: $('dl_car_make').value, car_model: $('dl_car_model').value, car_year: num('dl_car_year') || null, car_trim: $('dl_car_trim').value, car_engine: $('dl_car_engine') ? $('dl_car_engine').value : (deal.car_engine || null), car_gearbox: $('dl_car_gearbox') ? $('dl_car_gearbox').value : (deal.car_gearbox || null), car_color: $('dl_car_color') ? $('dl_car_color').value : null,
@@ -2390,6 +2406,16 @@
         financing: { amount: num('dl_fin_amount') || null, approved: num('dl_fin_approved') || null, payments: num('dl_fin_payments') || null, monthly: num('dl_fin_monthly') || null, track: $('dl_fin_track').value, offer: $('dl_fin_offer').value, balloon: num('dl_fin_balloon') || null, mgmt_fee: num('dl_fin_mgmt_fee') || null, status: $('dl_fin_status').value, transferred: $('dl_fin_transferred').checked },
         tradein: { plate: $('dl_ti_plate') ? $('dl_ti_plate').value : null, make: $('dl_ti_make').value, model: $('dl_ti_model').value, trim: $('dl_ti_trim').value, year: num('dl_ti_year') || null, hand: $('dl_ti_hand').value, km: num('dl_ti_km') || null, color: $('dl_ti_color') ? $('dl_ti_color').value : null, fuel: $('dl_ti_fuel') ? $('dl_ti_fuel').value : null, vin: $('dl_ti_vin') ? $('dl_ti_vin').value : null, list: num('dl_ti_list') || null, buy: num('dl_ti_buy') || null, lien: num('dl_ti_lien') || null, holder: $('dl_ti_holder').value, delivery: $('dl_ti_delivery').value || null, liened: $('dl_ti_liened').checked, images: tiImages.slice(), license_doc: tiDocs.license || null, img_rear: tiDocs.rear || null, img_side: tiDocs.side || null, commercial: ($('dl_ti_commercial') ? $('dl_ti_commercial').checked : !!ti.commercial) }
       };
+      //  פיילוט electric-lease בלבד: שדות-הצוות קיימים ב-deals רק שם, לכן מצורפים
+      //  ל-payload רק כאן — כדי לא לשבור שמירת-עסקה בשאר הצי (עמודות לא קיימות).
+      if (isELpilot) {
+        f.coordinator_id = $('dl_coordinator') ? ($('dl_coordinator').value || null) : (deal.coordinator_id || null);
+        f.channel = $('dl_channel') ? ($('dl_channel').value || null) : (deal.channel || null);
+        f.partner_agent = $('dl_partner_agent') ? ($('dl_partner_agent').value.trim() || null) : (deal.partner_agent || null);
+        f.paid_agent = $('dl_paid_agent') ? ($('dl_paid_agent').value.trim() || null) : (deal.paid_agent || null);
+        f.deal_coefficient = $('dl_deal_coefficient') ? (num('dl_deal_coefficient') || null) : (deal.deal_coefficient != null ? deal.deal_coefficient : null);
+      }
+      return f;
     }
     // ---- auto-save: persist every change (debounced), no button, no page refresh ----
     var saveTimer = null, inFlight = false, dirtyAgain = false, dealLogged = !!deal.id, lastStatus = deal.status || 'quote';
