@@ -584,6 +584,9 @@
         var arr = Object.keys(names).sort(function (a, b) { return a.localeCompare(b, 'he'); });
         return arr.length ? [{ v: '', l: '— הכל —' }].concat(arr.map(function (n) { return { v: n, l: n }; })) : null;
       }
+      //  שמירת סינון-השדות בין רענונים (פר-ארגון). נשמר בכל שינוי, משוחזר בטעינה.
+      var LF_KEY = 'c2b_lf_' + ((window.__fleetCfg && window.__fleetCfg.slug) || 'default');
+      function saveLF() { try { localStorage.setItem(LF_KEY, JSON.stringify(leadFilter ? leadFilter.getState() : [])); } catch (e) {} }
       leadFilter = C.makeFilter([
         // פרטי הלקוח
         { key: 'name', label: 'שם לקוח' }, { key: 'phone', label: 'טלפון' }, { key: 'email', label: 'אימייל' },
@@ -615,9 +618,11 @@
         { key: 'ad_id', label: 'מזהה מודעה' }, { key: 'form_id', label: 'מזהה טופס' },
         { key: 'external_id', label: 'lead_id' },
         { key: 'page_url', label: 'כתובת הדף' }, { key: 'ip', label: 'כתובת IP' }
-      ], draw);
-      //  החלת תצוגה שמורה שתפסה סינון מלא (conds) — משחזר את תנאי-הסינון.
-      if (opts && opts.conds && opts.conds.length && leadFilter && leadFilter.setState) leadFilter.setState(opts.conds);
+      ], function () { saveLF(); draw(); });
+      //  החלת סינון: תצוגה שמורה (conds מפורש, כולל ריק=נקה) גוברת; אחרת — שחזור
+      //  הסינון האחרון מ-localStorage (שורד רענון), פר-ארגון.
+      if (opts && opts.conds !== undefined) { leadFilter.setState(opts.conds || []); saveLF(); }
+      else { try { var _lf = JSON.parse(localStorage.getItem(LF_KEY) || '[]'); if (_lf && _lf.length) leadFilter.setState(_lf); } catch (e) {} }
       if (!leadCols) leadCols = C.colPicker('leads', LEAD_COLS, draw, { resizable: true, sortable: true });
       var title = fieldFilter ? (fieldFilter.label + ': ' + (fieldFilter.value || '(ללא)')) : statusFilter === 'todistribute'
         ? '📥 לידים לחלוקה' + (distOwner.name ? ' \u00b7 ' + distOwner.name : '')
