@@ -7138,28 +7138,21 @@
     function fld(label, id, val, type) { return '<div class="field" style="margin:0"><label>' + label + '</label><input class="inp" id="' + id + '" type="' + (type || 'text') + '" value="' + esc(val == null ? '' : val) + '" style="width:100%"></div>'; }
     td.innerHTML = '<div class="card" style="box-shadow:none;border:1px solid var(--line);background:var(--surface-2);margin:8px 0">' +
       '<div class="row-between" style="margin-bottom:10px"><b>✏️ עריכת פרטי משתמש</b><span class="muted" style="font-size:11.5px">' + roleLabel(p.role) + '</span></div>' +
+      // זהות ותפקיד בלבד. „נייד" הוסר (כפילות של „טלפון", לא היה בשימוש); שדות
+      // הטלפוניה (SIP + מספרי-נציג) קובצו לסעיף נפרד למטה כדי לא להציף את החלק העליון.
       '<div class="grid2">' +
         fld('שם מלא', 'ue_name', p.full_name) +
         fld('מייל', 'ue_email', p.email, 'email') +
         fld('טלפון', 'ue_phone', p.phone, 'tel') +
-        fld('נייד', 'ue_mobile', p.mobile, 'tel') +
-        // התפקיד קובע מה המשתמש רואה ומה מותר לו. עד עכשיו אפשר היה לשנות אותו
-        // רק מהתפריט הקטן בטבלה — כאן הוא במקום שבו באמת עורכים משתמש.
-        '<div class="field" style="margin:0"><label>תפקיד במערכת</label>' +
+        fld('סניף', 'ue_branch', p.branch) +
+        // התפקיד קובע מה המשתמש רואה ומה מותר לו.
+        '<div class="field" style="margin:0;grid-column:1/-1"><label>תפקיד במערכת</label>' +
           '<select class="inp" id="ue_role" style="width:100%"' + (isSelf ? ' disabled' : '') + '>' +
           ROLES.filter(function (r) { return (window.C2B && window.C2B.role) === 'admin' || r[0] !== 'admin'; })
             .map(function (r) { return '<option value="' + r[0] + '"' + (p.role === r[0] ? ' selected' : '') + '>' + esc(r[1]) + '</option>'; }).join('') +
           '</select>' +
           (isSelf ? '<span class="muted" style="font-size:11px">אי אפשר לשנות את התפקיד של עצמך</span>' : '') +
         '</div>' +
-        fld('שלוחת SIP', 'ue_sip', p.sip_ext) +
-        fld('סניף', 'ue_branch', p.branch) +
-        '<div class="field" style="margin:0"><label>📞 מספר נציג בוויס סנטר</label>' +
-          '<input class="inp" id="ue_agent_phone" type="tel" value="' + esc(((p.agent_phone || '').split(',')[0] || '').trim()) + '" placeholder="למשל 0534494707" style="width:100%">' +
-          '<span class="muted" style="font-size:11px">קובע אילו שיחות המשתמש רואה — רק שלו.</span></div>' +
-        '<div class="field" style="margin:0"><label>📞 מספר נציג נוסף (אם יש)</label>' +
-          '<input class="inp" id="ue_agent_phone2" type="tel" value="' + esc(((p.agent_phone || '').split(',')[1] || '').trim()) + '" placeholder="למשל 0534495197" style="width:100%">' +
-          '<span class="muted" style="font-size:11px">לנציג עם שני מספרים (כמו ליאור).</span></div>' +
       '</div>' +
       //  שיוך-מותג (מוצג לפי התפקיד; מנהל-סניף/אדמין רואים הכול ולכן מוסתר):
       '<div class="field" id="ue_brandSingleWrap" style="margin-top:10px;display:' + (UE_SINGLE[p.role] ? '' : 'none') + '"><label>מותג משויך <span style="color:var(--danger)">*</span></label>' +
@@ -7168,6 +7161,16 @@
         '<div id="ue_brandsBox" style="border:1px solid var(--line);border-radius:8px;padding:8px;max-height:130px;overflow:auto;line-height:2.1">' +
           (ueBrandList.map(function (b) { return '<label style="display:inline-flex;gap:4px;margin:2px 10px 2px 0;font-size:12.5px;white-space:nowrap"><input type="checkbox" data-uebrand="' + esc(b) + '"' + (ueBrands0.indexOf(b) >= 0 ? ' checked' : '') + '> ' + esc(b) + '</label>'; }).join('') || '<span class="muted" style="font-size:12px">אין מותגים להצגה</span>') +
         '</div><span class="muted" style="font-size:11px;display:block;margin-top:2px">מנהל-מותג חייב מותג אחד לפחות — בלי מותג הוא רואה 0 לידים.</span></div>' +
+      //  טלפוניה (Voice Center) — מקובץ. רשות; פונקציונלי: קובע אילו שיחות/משימות
+      //  המשתמש רואה (ניתוב לפי מספר-הנציג) + חיוג SIP. רלוונטי בעיקר לסוכנים/מתאמות.
+      '<div style="margin-top:14px;border-top:1px solid var(--line);padding-top:12px">' +
+        '<div style="font-size:12px;color:var(--muted);font-weight:700;margin-bottom:8px">📞 טלפוניה (Voice Center) <span style="font-weight:400">— רשות; קובע אילו שיחות/משימות המשתמש רואה</span></div>' +
+        '<div class="grid2">' +
+          fld('שלוחת SIP', 'ue_sip', p.sip_ext) +
+          '<div class="field" style="margin:0"><label>מספר נציג</label><input class="inp" id="ue_agent_phone" type="tel" value="' + esc(((p.agent_phone || '').split(',')[0] || '').trim()) + '" placeholder="0534494707" style="width:100%"></div>' +
+          '<div class="field" style="margin:0"><label>מספר נציג נוסף <span class="muted" style="font-weight:400">(אם יש)</span></label><input class="inp" id="ue_agent_phone2" type="tel" value="' + esc(((p.agent_phone || '').split(',')[1] || '').trim()) + '" placeholder="0534495197" style="width:100%"></div>' +
+        '</div>' +
+      '</div>' +
       '' +
       // התראות-מייל על ליד חדש (notify_staff). המתג מאפשר לבחור אם לקבל, בלי לגעת
       // בהרשאות. נמענים בפועל: מנהל-מערכת (ברירת-מחדל מקבל) ומנהל-סניף (ברירת-מחדל
@@ -7210,7 +7213,6 @@
         full_name: ($('ue_name').value || '').trim() || null,
         email: ($('ue_email').value || '').trim() || null,
         phone: ($('ue_phone').value || '').trim() || null,
-        mobile: ($('ue_mobile').value || '').trim() || null,
         sip_ext: ($('ue_sip').value || '').trim() || null,
         agent_phone: [($('ue_agent_phone').value || '').trim(), ($('ue_agent_phone2') ? ($('ue_agent_phone2').value || '').trim() : '')].filter(Boolean).join(',') || null,
         title: roleLabel(newRoleValue()),   // נגזר מהתפקיד — אין יותר שדה נפרד
