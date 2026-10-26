@@ -708,7 +708,12 @@
         db.from('lead_views').insert({ name: name, filter: f }).select('*').single().then(function (r) {
           if (r.error) return alert('שגיאה: ' + r.error.message);
           if (window.C2B.reloadLeadViewsNav) window.C2B.reloadLeadViewsNav();
-          alert('✔ התצוגה "' + name + '" נשמרה — בתפריט הצד תחת "לידים".');
+          //  ניקוי הסינון הלייב — כל תצוגה נבנית נקייה (מונע הצטברות בין תצוגות).
+          if (leadFilter && leadFilter.setState) leadFilter.setState([]);
+          curViewName = null; saveLF();
+          var _t2 = C.$('lTitle'); if (_t2) _t2.textContent = baseTitle;
+          draw();
+          alert('✔ התצוגה "' + name + '" נשמרה (' + conds.length + ' תנאי סינון) — בתפריט הצד. הסינון נוקה, אפשר ליצור עוד.');
         });
       });
       draw();
