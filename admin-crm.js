@@ -2102,7 +2102,10 @@
       '<div class="field" style="margin-top:6px"><label>סכום תוספות ₪</label><input class="inp" id="dl_addons_amount" type="number" value="' + esc(ad.addons_amount == null ? '' : ad.addons_amount) + '" style="width:100%"></div></div>';
     var summaryCard = '<div class="card"><h3>סיכום הזמנה ורווחיות</h3>' + grid(G('הנחה (%)', 'discount_pct', deal.discount_pct, 'number') + G('הנחה (סכום) ₪', 'discount_amt', deal.discount_amt, 'number') + G('שולם ₪', 'paid', deal.paid, 'number')) +
       '<label style="display:flex;gap:8px;align-items:center;padding:8px 0"><input type="checkbox" id="dl_vat"' + (deal.vat_included !== false ? ' checked' : '') + '> כולל מע"מ</label><div id="dlSummary" style="margin-top:8px"></div></div>';
-    var finCard = '<div class="card"><h3>🏦 מקטע מימון</h3>' + grid(G('גובה מימון מבוקש ₪', 'fin_amount', fin.amount, 'number') + G('מימון מאושר ₪', 'fin_approved', fin.approved, 'number') + G('מספר תשלומים', 'fin_payments', fin.payments, 'number') + G('החזר חודשי ₪', 'fin_monthly', fin.monthly, 'number') + G('מסלול / סוג עסקת מימון', 'fin_track', fin.track) + G('מספר הצעה', 'fin_offer', fin.offer) + G('יתרת בלון ₪', 'fin_balloon', fin.balloon, 'number') + G('דמי ניהול תיק מימון ₪', 'fin_mgmt_fee', fin.mgmt_fee, 'number') + G('סטטוס מימון', 'fin_status', fin.status)) +
+    //  חברת מימון — שדה-רשימה (לכל הארגונים). נשמר ב-financing.company (JSON, בלי מיגרציה).
+    var finCompanySel = '<div class="field" style="margin:0"><label>חברת מימון</label><select class="inp" id="dl_fin_company" style="width:100%">' +
+      ['', 'מקס', 'מימון ישיר', 'מזרחי'].map(function (o) { return '<option value="' + esc(o) + '"' + (((fin && fin.company) || '') === o ? ' selected' : '') + '>' + (o || '— בחר —') + '</option>'; }).join('') + '</select></div>';
+    var finCard = '<div class="card"><h3>🏦 מקטע מימון</h3>' + grid(finCompanySel + G('גובה מימון מבוקש ₪', 'fin_amount', fin.amount, 'number') + G('מימון מאושר ₪', 'fin_approved', fin.approved, 'number') + G('מספר תשלומים', 'fin_payments', fin.payments, 'number') + G('החזר חודשי ₪', 'fin_monthly', fin.monthly, 'number') + G('מסלול / סוג עסקת מימון', 'fin_track', fin.track) + G('מספר הצעה', 'fin_offer', fin.offer) + G('יתרת בלון ₪', 'fin_balloon', fin.balloon, 'number') + G('דמי ניהול תיק מימון ₪', 'fin_mgmt_fee', fin.mgmt_fee, 'number') + G('סטטוס מימון', 'fin_status', fin.status)) +
       '<label style="display:flex;gap:8px;align-items:center;padding:8px 0"><input type="checkbox" id="dl_fin_transferred"' + (fin.transferred ? ' checked' : '') + '> עברו כספים מגוף המימון</label></div>';
     var tradeCard = '<div class="card"><h3>🔁 מקטע טרייד-אין</h3>' +
       (ti.offer != null && ti.offer !== '' ? '<div style="background:#eafbea;border:1px solid #1a7a1a;border-radius:10px;padding:12px 14px;margin:0 0 14px"><b style="color:#1a7a1a;font-size:15px">💰 הצעת יד2 התקבלה: ' + Number(ti.offer).toLocaleString('en-US') + ' ₪</b>' + (ti.offer_supplier ? ' <span class="muted" style="font-size:12px">· ' + esc(ti.offer_supplier) + '</span>' : '') + (ti.offer_at ? '<div class="muted" style="font-size:11.5px;margin-top:3px">התקבל: ' + fmt(ti.offer_at) + '</div>' : '') + '</div>' : '') +
@@ -2164,6 +2167,15 @@
         '<div class="field" style="margin:0"><label>סוכן מתוגמל</label><input class="inp" id="dl_paid_agent" value="' + esc(deal.paid_agent || '') + '" style="width:100%"></div>' +
         '<div class="field" style="margin:0"><label>מקדם עסקה <span class="muted" style="font-weight:400">(אופציונלי)</span></label><input class="inp" id="dl_deal_coefficient" type="number" step="0.01" value="' + esc(deal.deal_coefficient != null ? deal.deal_coefficient : '') + '" style="width:100%"></div>' +
       '</div></div>';
+    //  טאבים פיננסיים (הוצאות/רווחיות) — מגודרים גם ב-slug וגם בתפקיד (הנה״ח/אדמין/מנהל-סניף).
+    //  ה-RLS ממילא חוסם את הנתונים לשאר, אבל מסתירים גם את ה-UI כדי שלא יבלבל.
+    var pilotFin = isELpilot && (C.role === 'accounting' || C.role === 'admin' || C.role === 'branch');
+    var EXP_KINDS = ['רישוי מסחרית', 'תיווך', 'בעלות + גרר', 'אביזרים', 'עמדת טעינה', 'ביטוחים וטיפולים', 'זיכוי לקוח / חוויה', 'אחר'];
+    var expensesCard = !pilotFin ? '' : '<div class="card"><h3>💸 הוצאות העסקה</h3>' +
+      (deal.id ? '<div id="dlExpBody">טוען…</div>' : '<p class="muted" style="font-size:13px">שמרו את העסקה קודם כדי להוסיף הוצאות.</p>') + '</div>';
+    var profitCard = !pilotFin ? '' : '<div class="card"><h3>📊 רווחיות</h3>' +
+      '<p class="muted" style="font-size:12px;margin:-4px 0 10px">ברוטו ונטו מחושבים אוטומטית. השדות המשוקלל/תקן/אביטל/נטלי הם קלט ידני עד שנחווט את הנוסחאות ממנהל-החשבונות.</p>' +
+      (deal.id ? '<div id="dlProfitBody">טוען…</div>' : '<p class="muted" style="font-size:13px">שמרו את העסקה קודם.</p>') + '</div>';
     function dTab(k, label, active) { return '<button data-dtab="' + k + '"' + (active ? ' class="active"' : '') + '>' + label + '</button>'; }
     function dPanel(k, active, inner) { return '<div class="dl-panel' + (active ? '' : ' hidden') + '" data-dpanel="' + k + '">' + inner + '</div>'; }
     view(
@@ -2175,6 +2187,7 @@
       '<nav class="tabs" id="dlTabs" style="margin-bottom:14px;flex-wrap:wrap">' +
         dTab('client', '👤 פרטי הלקוח', true) + dTab('deal', '📋 פרטי העסקה') + dTab('car', '🚗 פרטי הרכב המוזמן') + dTab('fin', '🏦 מקטע מימון') + dTab('trade', '🔁 מקטע טרייד-אין') + dTab('record', '🗂️ סיכום ומסמכים') +
         (isELpilot ? dTab('team', '👥 צוות') : '') +
+        (pilotFin ? dTab('expenses', '💸 הוצאות') + dTab('profit', '📊 רווחיות') : '') +
       '</nav>' +
       dPanel('client', true, '<div class="grid2">' + clientCard + formCard + '</div>') +
       dPanel('deal', false, '<div class="grid2">' + pricingCard + addonsCard + '</div>' + summaryCard) +
@@ -2185,11 +2198,84 @@
       //  בתצוגה שלה (openAcctLeadView). (החיווט ב-dlPayForm מגודר וממילא לא ירוץ.)
       dPanel('record', false, '<div class="grid2">' + checklistCard + recordCard + '</div>') +
       (isELpilot ? dPanel('team', false, teamCard) : '') +
+      (pilotFin ? dPanel('expenses', false, expensesCard) + dPanel('profit', false, profitCard) : '') +
       fileNotesCard   // הערות על הלקוח — הכי למטה, מתחת להכל (מנהלת תיקי לקוחות)
     );
     var $ = C.$;
     $('dlBack').addEventListener('click', function () { if ((C.role || '') === 'files') return window.C2B_renderFiles(); window.C2B_openLeadCard(lead.id); });
     $('dlTabs').addEventListener('click', function (e) { var b = e.target.closest('[data-dtab]'); if (!b) return; $('dlTabs').querySelectorAll('button').forEach(function (x) { x.classList.toggle('active', x === b); }); C.$('view').querySelectorAll('[data-dpanel]').forEach(function (p) { p.classList.toggle('hidden', p.dataset.dpanel !== b.dataset.dtab); }); });
+    //  ===== פיילוט electric-lease: טעינת+עריכת הוצאות ורווחיות (RLS חוסם לשאר) =====
+    function pilotNumOrNull(id) { var v = $(id); if (!v || v.value === '') return null; var n = Number(v.value); return isNaN(n) ? null : n; }
+    function loadPilotFin() {
+      if (!pilotFin || !deal.id) return;
+      Promise.all([
+        db.from('deal_expenses').select('*').eq('deal_id', deal.id).order('created_at', { ascending: true }),
+        db.from('deal_finance').select('*').eq('deal_id', deal.id).maybeSingle()
+      ]).then(function (res) {
+        var exps = (res[0] && res[0].data) || [];
+        var fin = (res[1] && res[1].data) || {};
+        var expTotal = exps.reduce(function (s, e) { return s + Number(e.amount || 0); }, 0);
+        renderPilotExp(exps, expTotal);
+        renderPilotProfit(fin, expTotal);
+      });
+    }
+    function renderPilotExp(exps, total) {
+      var body = $('dlExpBody'); if (!body) return;
+      var rows = exps.map(function (e) {
+        return '<tr><td style="padding:6px 8px">' + esc(e.kind) + '</td><td style="padding:6px 8px;font-weight:700">' + nis(e.amount) + '</td><td style="padding:6px 8px;color:var(--muted)">' + esc(e.note || '') + '</td><td style="padding:6px 8px;text-align:left"><button class="btn btn-ghost btn-sm" data-expdel="' + esc(e.id) + '">🗑</button></td></tr>';
+      }).join('');
+      body.innerHTML =
+        '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:flex-end;margin-bottom:10px">' +
+          '<select class="inp" id="expKind" style="width:160px">' + EXP_KINDS.map(function (k) { return '<option>' + esc(k) + '</option>'; }).join('') + '</select>' +
+          '<input class="inp" id="expAmount" type="number" placeholder="סכום ₪" style="width:120px">' +
+          '<input class="inp" id="expNote" placeholder="הערה (אופציונלי)" style="width:170px">' +
+          '<button class="btn btn-sm" id="expAdd">➕ הוסף</button></div>' +
+        '<table style="width:100%"><thead><tr style="color:var(--muted);font-size:12px;text-align:right"><th style="padding:4px 8px">סוג</th><th style="padding:4px 8px">סכום</th><th style="padding:4px 8px">הערה</th><th></th></tr></thead><tbody>' + (rows || '<tr><td colspan="4" class="muted" style="padding:10px 8px">אין הוצאות עדיין.</td></tr>') + '</tbody></table>' +
+        '<div style="text-align:left;font-weight:800;margin-top:10px;font-size:14px">סה״כ הוצאות: ' + nis(total) + '</div>';
+      $('expAdd').addEventListener('click', function () {
+        var amt = Number($('expAmount').value); if (!amt) { $('expAmount').focus(); return; }
+        var btn = this; btn.disabled = true;
+        db.from('deal_expenses').insert({ deal_id: deal.id, kind: $('expKind').value, amount: amt, note: ($('expNote').value || '').trim() || null }).then(function (r) {
+          btn.disabled = false; if (r.error) { alert('שגיאה: ' + r.error.message); return; } loadPilotFin();
+        });
+      });
+      body.querySelectorAll('[data-expdel]').forEach(function (b) {
+        b.addEventListener('click', function () {
+          if (!confirm('למחוק את ההוצאה?')) return;
+          db.from('deal_expenses').delete().eq('id', b.dataset.expdel).then(function (r) { if (r.error) { alert('שגיאה: ' + r.error.message); return; } loadPilotFin(); });
+        });
+      });
+    }
+    function renderPilotProfit(fin, expTotal) {
+      var body = $('dlProfitBody'); if (!body) return;
+      var carP = Number(deal.car_price) || 0, purP = Number(deal.purchase_price) || 0;
+      var gross = carP - purP, net = gross - expTotal;
+      function ln(k, v, strong) { return '<div style="display:flex;justify-content:space-between;padding:7px 2px;border-bottom:1px solid #eee"><span style="color:var(--muted)">' + k + '</span><b style="' + (strong ? 'font-size:15px' : '') + '">' + v + '</b></div>'; }
+      function finp(id, label, val) { return '<div class="field" style="margin:0"><label>' + label + '</label><input class="inp" id="' + id + '" type="number" step="0.01" value="' + esc(val != null ? val : '') + '" style="width:100%"></div>'; }
+      body.innerHTML =
+        '<div style="margin-bottom:14px">' + ln('מחיר מכירה', nis(carP)) + ln('מחיר קנייה', nis(purP)) + ln('פדיון ברוטו (מכירה − קנייה)', nis(gross)) + ln('סה״כ הוצאות', nis(expTotal)) + ln('פדיון נטו (ברוטו − הוצאות)', nis(net), true) + '</div>' +
+        '<div style="font-size:12px;color:var(--muted);font-weight:700;margin-bottom:8px">שדות חוק-בית (קלט ידני — עד חיווט הנוסחאות)</div>' +
+        '<div class="grid2">' +
+          finp('fin_coefficient', 'מקדם', fin.coefficient) + finp('fin_weighted_net', 'פדיון משוקלל נטו', fin.weighted_net) +
+          finp('fin_weighted_gross', 'פדיון משוקלל ברוטו', fin.weighted_gross) + finp('fin_standard_revenue', 'פדיון תקן', fin.standard_revenue) +
+          finp('fin_standard_sale_price', 'מחיר מכירה תקן', fin.standard_sale_price) + finp('fin_abital_revenue', 'פדיון אביטל', fin.abital_revenue) +
+          finp('fin_nataly_price', 'מחיר נטלי / EasyList', fin.nataly_price) + finp('fin_purchase_registered', 'מחיר קנייה רשום', fin.purchase_price_registered) +
+        '</div>' +
+        '<div style="margin-top:10px"><button class="btn btn-sm" id="finSave">💾 שמור רווחיות</button> <span id="finMsg" class="muted" style="font-size:12.5px;margin-inline-start:8px"></span></div>';
+      $('finSave').addEventListener('click', function () {
+        var btn = this; btn.disabled = true; $('finMsg').style.color = 'var(--muted)'; $('finMsg').textContent = 'שומר…';
+        var row = { deal_id: deal.id, gross_revenue: gross, net_revenue: net, coefficient: pilotNumOrNull('fin_coefficient'),
+          weighted_net: pilotNumOrNull('fin_weighted_net'), weighted_gross: pilotNumOrNull('fin_weighted_gross'), standard_revenue: pilotNumOrNull('fin_standard_revenue'),
+          standard_sale_price: pilotNumOrNull('fin_standard_sale_price'), abital_revenue: pilotNumOrNull('fin_abital_revenue'), nataly_price: pilotNumOrNull('fin_nataly_price'),
+          purchase_price_registered: pilotNumOrNull('fin_purchase_registered'), updated_at: new Date().toISOString() };
+        db.from('deal_finance').upsert(row, { onConflict: 'deal_id' }).then(function (r) {
+          btn.disabled = false;
+          if (r.error) { $('finMsg').style.color = 'var(--danger)'; $('finMsg').textContent = 'שגיאה: ' + r.error.message; return; }
+          $('finMsg').style.color = 'var(--ok)'; $('finMsg').textContent = '✓ נשמר';
+        });
+      });
+    }
+    loadPilotFin();
     // stage bar (shown to file manager / admin only) — persist first, re-render only on success so it never silently drifts
     if ($('dlStageBar')) $('dlStageBar').addEventListener('click', function (e) {
       var st = e.target.closest('[data-stage]'); if (!st) return;
@@ -2403,7 +2489,7 @@
         addons: { charging: $('dl_charging').checked, armor: $('dl_armor').checked, accessories: $('dl_accessories').checked, insurance: $('dl_insurance').checked, addons_amount: num('dl_addons_amount') },
         vat_included: $('dl_vat').checked, discount_pct: num('dl_discount_pct') || null, discount_amt: c.disc, total: c.total, paid: num('dl_paid') || null, spec: $('dl_spec').value,
         stage: curStage, checklist: checklist, cancel_reason: (curStage === 'cancelled' ? (deal.cancel_reason || null) : null), contract_type: ($('dl_contract_kind') ? $('dl_contract_kind').value : (deal.contract_type || 'car2buy')),
-        financing: { amount: num('dl_fin_amount') || null, approved: num('dl_fin_approved') || null, payments: num('dl_fin_payments') || null, monthly: num('dl_fin_monthly') || null, track: $('dl_fin_track').value, offer: $('dl_fin_offer').value, balloon: num('dl_fin_balloon') || null, mgmt_fee: num('dl_fin_mgmt_fee') || null, status: $('dl_fin_status').value, transferred: $('dl_fin_transferred').checked },
+        financing: { company: ($('dl_fin_company') ? $('dl_fin_company').value : '') || null, amount: num('dl_fin_amount') || null, approved: num('dl_fin_approved') || null, payments: num('dl_fin_payments') || null, monthly: num('dl_fin_monthly') || null, track: $('dl_fin_track').value, offer: $('dl_fin_offer').value, balloon: num('dl_fin_balloon') || null, mgmt_fee: num('dl_fin_mgmt_fee') || null, status: $('dl_fin_status').value, transferred: $('dl_fin_transferred').checked },
         tradein: { plate: $('dl_ti_plate') ? $('dl_ti_plate').value : null, make: $('dl_ti_make').value, model: $('dl_ti_model').value, trim: $('dl_ti_trim').value, year: num('dl_ti_year') || null, hand: $('dl_ti_hand').value, km: num('dl_ti_km') || null, color: $('dl_ti_color') ? $('dl_ti_color').value : null, fuel: $('dl_ti_fuel') ? $('dl_ti_fuel').value : null, vin: $('dl_ti_vin') ? $('dl_ti_vin').value : null, list: num('dl_ti_list') || null, buy: num('dl_ti_buy') || null, lien: num('dl_ti_lien') || null, holder: $('dl_ti_holder').value, delivery: $('dl_ti_delivery').value || null, liened: $('dl_ti_liened').checked, images: tiImages.slice(), license_doc: tiDocs.license || null, img_rear: tiDocs.rear || null, img_side: tiDocs.side || null, commercial: ($('dl_ti_commercial') ? $('dl_ti_commercial').checked : !!ti.commercial) }
       };
       //  פיילוט electric-lease בלבד: שדות-הצוות קיימים ב-deals רק שם, לכן מצורפים
