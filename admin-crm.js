@@ -2179,6 +2179,16 @@
     var profitCard = !pilotFin ? '' : '<div class="card"><h3>📊 רווחיות</h3>' +
       '<p class="muted" style="font-size:12px;margin:-4px 0 10px">ברוטו ונטו מחושבים אוטומטית. השדות המשוקלל/תקן/אביטל/נטלי הם קלט ידני עד שנחווט את הנוסחאות ממנהל-החשבונות.</p>' +
       (deal.id ? '<div id="dlProfitBody">טוען…</div>' : '<p class="muted" style="font-size:13px">שמרו את העסקה קודם.</p>') + '</div>';
+    //  שלב 1 — עמלות (הנה״ח/אדמין/מנהל-סניף). שלב 2 — תשלומים (גם תיקי-לקוחות).
+    var pilotPay = isELpilot && (C.role === 'accounting' || C.role === 'admin' || C.role === 'branch' || C.role === 'files');
+    var COMM_TYPES = [['agent', 'סוכן'], ['coordinator', 'מתאמת'], ['file_manager', 'מנהלת תיק'], ['partner', 'סוכן שותף']];
+    var PAY_SOURCES = ['נטלי', 'מימון ישיר', 'MAX', 'מזרחי', 'סליקה', 'קליל', 'העברה בנקאית', 'שיקים', 'ERN', 'בלון'];
+    var commCard = !pilotFin ? '' : '<div class="card"><h3>💸 עמלות</h3>' +
+      '<p class="muted" style="font-size:12px;margin:-4px 0 10px">עמלה לכל צד — <b>תקן</b> מול <b>מאושר בפועל</b> (העודף מחושב).</p>' +
+      (deal.id ? '<div id="dlCommBody">טוען…</div>' : '<p class="muted" style="font-size:13px">שמרו את העסקה קודם.</p>') + '</div>';
+    var payCard = !pilotPay ? '' : '<div class="card"><h3>🏦 פירוק תשלומים</h3>' +
+      '<p class="muted" style="font-size:12px;margin:-4px 0 10px">פירוק העסקה לפי מקור-הכסף (נטלי / מימון ישיר / MAX / מזרחי / ...).</p>' +
+      (deal.id ? '<div id="dlPayBody">טוען…</div>' : '<p class="muted" style="font-size:13px">שמרו את העסקה קודם.</p>') + '</div>';
     function dTab(k, label, active) { return '<button data-dtab="' + k + '"' + (active ? ' class="active"' : '') + '>' + label + '</button>'; }
     function dPanel(k, active, inner) { return '<div class="dl-panel' + (active ? '' : ' hidden') + '" data-dpanel="' + k + '">' + inner + '</div>'; }
     view(
@@ -2190,7 +2200,8 @@
       '<nav class="tabs" id="dlTabs" style="margin-bottom:14px;flex-wrap:wrap">' +
         dTab('client', '👤 פרטי הלקוח', true) + dTab('deal', '📋 פרטי העסקה') + dTab('car', '🚗 פרטי הרכב המוזמן') + dTab('fin', '🏦 מקטע מימון') + dTab('trade', '🔁 מקטע טרייד-אין') + dTab('record', '🗂️ סיכום ומסמכים') +
         (isELpilot ? dTab('team', '👥 צוות') : '') +
-        (pilotFin ? dTab('expenses', '💸 הוצאות') + dTab('profit', '📊 רווחיות') : '') +
+        (pilotFin ? dTab('expenses', '💸 הוצאות') + dTab('profit', '📊 רווחיות') + dTab('comm', '🧮 עמלות') : '') +
+        (pilotPay ? dTab('pay', '🏦 תשלומים') : '') +
       '</nav>' +
       dPanel('client', true, '<div class="grid2">' + clientCard + formCard + '</div>') +
       dPanel('deal', false, '<div class="grid2">' + pricingCard + addonsCard + '</div>' + summaryCard) +
@@ -2201,7 +2212,8 @@
       //  בתצוגה שלה (openAcctLeadView). (החיווט ב-dlPayForm מגודר וממילא לא ירוץ.)
       dPanel('record', false, '<div class="grid2">' + checklistCard + recordCard + '</div>') +
       (isELpilot ? dPanel('team', false, teamCard) : '') +
-      (pilotFin ? dPanel('expenses', false, expensesCard) + dPanel('profit', false, profitCard) : '') +
+      (pilotFin ? dPanel('expenses', false, expensesCard) + dPanel('profit', false, profitCard) + dPanel('comm', false, commCard) : '') +
+      (pilotPay ? dPanel('pay', false, payCard) : '') +
       fileNotesCard   // הערות על הלקוח — הכי למטה, מתחת להכל (מנהלת תיקי לקוחות)
     );
     var $ = C.$;
@@ -2210,16 +2222,22 @@
     //  ===== פיילוט electric-lease: טעינת+עריכת הוצאות ורווחיות (RLS חוסם לשאר) =====
     function pilotNumOrNull(id) { var v = $(id); if (!v || v.value === '') return null; var n = Number(v.value); return isNaN(n) ? null : n; }
     function loadPilotFin() {
-      if (!pilotFin || !deal.id) return;
-      Promise.all([
-        db.from('deal_expenses').select('*').eq('deal_id', deal.id).order('created_at', { ascending: true }),
-        db.from('deal_finance').select('*').eq('deal_id', deal.id).maybeSingle()
-      ]).then(function (res) {
-        var exps = (res[0] && res[0].data) || [];
-        var fin = (res[1] && res[1].data) || {};
-        var expTotal = exps.reduce(function (s, e) { return s + Number(e.amount || 0); }, 0);
-        renderPilotExp(exps, expTotal);
-        renderPilotProfit(fin, expTotal);
+      if (!deal.id || !(pilotFin || pilotPay)) return;
+      var reqs = [];
+      if (pilotFin) {
+        reqs.push(db.from('deal_expenses').select('*').eq('deal_id', deal.id).order('created_at', { ascending: true }));
+        reqs.push(db.from('deal_finance').select('*').eq('deal_id', deal.id).maybeSingle());
+        reqs.push(db.from('deal_commissions').select('*').eq('deal_id', deal.id).order('created_at', { ascending: true }));
+      }
+      if (pilotPay) reqs.push(db.from('deal_payment_lines').select('*').eq('deal_id', deal.id).order('created_at', { ascending: true }));
+      Promise.all(reqs).then(function (res) {
+        var i = 0;
+        if (pilotFin) {
+          var exps = (res[i++].data) || [], fin = (res[i++].data) || {}, comms = (res[i++].data) || [];
+          var expTotal = exps.reduce(function (s, e) { return s + Number(e.amount || 0); }, 0);
+          renderPilotExp(exps, expTotal); renderPilotProfit(fin, expTotal); renderPilotComm(comms);
+        }
+        if (pilotPay) { renderPilotPay((res[i++].data) || []); }
       });
     }
     function renderPilotExp(exps, total) {
@@ -2277,6 +2295,47 @@
           $('finMsg').style.color = 'var(--ok)'; $('finMsg').textContent = '✓ נשמר';
         });
       });
+    }
+    function renderPilotComm(comms) {
+      var body = $('dlCommBody'); if (!body) return;
+      var tStd = 0, tApp = 0;
+      var rows = comms.map(function (c) {
+        var std = Number(c.standard_amount || 0), app = Number(c.approved_amount || 0), surp = app - std; tStd += std; tApp += app;
+        var tl = (COMM_TYPES.filter(function (t) { return t[0] === c.party_type; })[0] || [c.party_type, c.party_type])[1];
+        return '<tr><td style="padding:6px 8px">' + esc(tl) + '</td><td style="padding:6px 8px">' + esc(c.party_name || '') + '</td><td style="padding:6px 8px">' + nis(std) + '</td><td style="padding:6px 8px;font-weight:700">' + nis(app) + '</td><td style="padding:6px 8px;color:' + (surp < 0 ? 'var(--danger)' : 'var(--ok)') + '">' + nis(surp) + '</td><td style="padding:6px 8px;text-align:left"><button class="btn btn-ghost btn-sm" data-commdel="' + esc(c.id) + '">🗑</button></td></tr>';
+      }).join('');
+      body.innerHTML =
+        '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:flex-end;margin-bottom:10px">' +
+          '<select class="inp" id="commType" style="width:130px">' + COMM_TYPES.map(function (t) { return '<option value="' + t[0] + '">' + t[1] + '</option>'; }).join('') + '</select>' +
+          '<input class="inp" id="commName" placeholder="שם" style="width:130px"><input class="inp" id="commStd" type="number" placeholder="תקן ₪" style="width:100px"><input class="inp" id="commApp" type="number" placeholder="מאושר ₪" style="width:100px">' +
+          '<button class="btn btn-sm" id="commAdd">➕ הוסף</button></div>' +
+        '<table style="width:100%"><thead><tr style="color:var(--muted);font-size:12px;text-align:right"><th style="padding:4px 8px">צד</th><th style="padding:4px 8px">שם</th><th style="padding:4px 8px">תקן</th><th style="padding:4px 8px">מאושר</th><th style="padding:4px 8px">עודף</th><th></th></tr></thead><tbody>' + (rows || '<tr><td colspan="6" class="muted" style="padding:10px 8px">אין עמלות עדיין.</td></tr>') + '</tbody></table>' +
+        '<div style="text-align:left;font-weight:800;margin-top:10px;font-size:13px">סה״כ תקן: ' + nis(tStd) + ' · מאושר: ' + nis(tApp) + '</div>';
+      $('commAdd').addEventListener('click', function () {
+        var btn = this; btn.disabled = true;
+        db.from('deal_commissions').insert({ deal_id: deal.id, party_type: $('commType').value, party_name: ($('commName').value || '').trim() || null, standard_amount: pilotNumOrNull('commStd'), approved_amount: pilotNumOrNull('commApp') }).then(function (r) { btn.disabled = false; if (r.error) { alert('שגיאה: ' + r.error.message); return; } loadPilotFin(); });
+      });
+      body.querySelectorAll('[data-commdel]').forEach(function (b) { b.addEventListener('click', function () { if (!confirm('למחוק את העמלה?')) return; db.from('deal_commissions').delete().eq('id', b.dataset.commdel).then(function (r) { if (r.error) { alert('שגיאה: ' + r.error.message); return; } loadPilotFin(); }); }); });
+    }
+    function renderPilotPay(pays) {
+      var body = $('dlPayBody'); if (!body) return;
+      var total = pays.reduce(function (s, p) { return s + Number(p.amount || 0); }, 0);
+      var rows = pays.map(function (p) {
+        return '<tr><td style="padding:6px 8px">' + esc(p.source) + '</td><td style="padding:6px 8px;font-weight:700">' + nis(p.amount) + '</td><td style="padding:6px 8px;color:var(--muted)">' + esc(p.note || '') + '</td><td style="padding:6px 8px;text-align:left"><button class="btn btn-ghost btn-sm" data-paydel="' + esc(p.id) + '">🗑</button></td></tr>';
+      }).join('');
+      body.innerHTML =
+        '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:flex-end;margin-bottom:10px">' +
+          '<select class="inp" id="paySource" style="width:150px">' + PAY_SOURCES.map(function (s) { return '<option>' + esc(s) + '</option>'; }).join('') + '</select>' +
+          '<input class="inp" id="payAmount" type="number" placeholder="סכום ₪" style="width:120px"><input class="inp" id="payNote" placeholder="הערה" style="width:150px">' +
+          '<button class="btn btn-sm" id="payAdd">➕ הוסף</button></div>' +
+        '<table style="width:100%"><thead><tr style="color:var(--muted);font-size:12px;text-align:right"><th style="padding:4px 8px">מקור</th><th style="padding:4px 8px">סכום</th><th style="padding:4px 8px">הערה</th><th></th></tr></thead><tbody>' + (rows || '<tr><td colspan="4" class="muted" style="padding:10px 8px">אין תשלומים עדיין.</td></tr>') + '</tbody></table>' +
+        '<div style="text-align:left;font-weight:800;margin-top:10px;font-size:14px">סה״כ תשלומים: ' + nis(total) + '</div>';
+      $('payAdd').addEventListener('click', function () {
+        var amt = Number($('payAmount').value); if (!amt) { $('payAmount').focus(); return; }
+        var btn = this; btn.disabled = true;
+        db.from('deal_payment_lines').insert({ deal_id: deal.id, source: $('paySource').value, amount: amt, note: ($('payNote').value || '').trim() || null }).then(function (r) { btn.disabled = false; if (r.error) { alert('שגיאה: ' + r.error.message); return; } loadPilotFin(); });
+      });
+      body.querySelectorAll('[data-paydel]').forEach(function (b) { b.addEventListener('click', function () { if (!confirm('למחוק את השורה?')) return; db.from('deal_payment_lines').delete().eq('id', b.dataset.paydel).then(function (r) { if (r.error) { alert('שגיאה: ' + r.error.message); return; } loadPilotFin(); }); }); });
     }
     loadPilotFin();
     // stage bar (shown to file manager / admin only) — persist first, re-render only on success so it never silently drifts
