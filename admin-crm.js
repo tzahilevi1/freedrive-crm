@@ -630,6 +630,7 @@
       //  החלת סינון: תצוגה שמורה (conds מפורש, כולל ריק=נקה) גוברת; אחרת — שחזור
       //  הסינון האחרון מ-localStorage (שורד רענון), פר-ארגון.
       if (opts && opts.conds !== undefined) { leadFilter.setState(opts.conds || []); saveLF(); }
+      else if (opts && opts.fresh) { leadFilter.setState([]); curViewName = null; saveLF(); }   // ניווט = התחלה נקייה
       else {
         try {
           var _raw = JSON.parse(localStorage.getItem(LF_KEY) || 'null');

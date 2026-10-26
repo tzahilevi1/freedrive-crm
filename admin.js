@@ -1139,10 +1139,11 @@
     if (it.dataset.expand) {
       var sub = document.getElementById(it.dataset.expand);
       if (sub && sub.classList.contains('open')) { sub.classList.remove('open'); return; }
-      go(it.dataset.nav, { status: it.dataset.status, keepOpen: true });
+      go(it.dataset.nav, { status: it.dataset.status, keepOpen: true, fresh: true });
       return;
     }
-    go(it.dataset.nav, { status: it.dataset.status });
+    //  ניווט לסטטוס/תצוגה = התחלה נקייה (fresh): לא גוררים את סינון-השדות הדביק.
+    go(it.dataset.nav, { status: it.dataset.status, fresh: true });
   });
   //  לשוניות המשנה. המאזין על המיכל שנשאר בדף, ולכן שורד כל רינדור.
   $('subnav').addEventListener('click', function (e) {
