@@ -565,12 +565,24 @@
       db.from('profiles').select('user_id,full_name,role'),
       //  מי מקבל את הלידים החדשים לחלוקה. נשמר בתצורה ולא מקודד קשיח,
       //  כדי שהעברת התפקיד לאדם אחר לא תדרוש שינוי בקוד.
-      db.from('admin_config').select('value').eq('key', 'default_owner').maybeSingle()
+      db.from('admin_config').select('value').eq('key', 'default_owner').maybeSingle(),
+      //  שמות-הטפסים (+מותג שכיח) לרשימת-הסינון — שלם, מכבד RLS, קטן.
+      db.rpc('lead_form_options')
     ]).then(function (res) {
       if (res[0].error) return errBox(res[0].error.message);
       distOwner = ((res[2] && res[2].data && res[2].data.value) || {});
+      var formRows = (res[3] && res[3].data) || [];
       cache = res[0].data || [];
       profiles = {}; mgrIds = {}; (res[1].data || []).forEach(function (p) { profiles[p.user_id] = p.full_name; if (p.role === 'admin' || p.role === 'branch') mgrIds[p.user_id] = true; });
+      //  אפשרויות "שם טופס" כרשימה נפתחת — מ-RPC lead_form_options (כל הטפסים שהמשתמש
+      //  רשאי לראות, לא רק העמוד הראשון) עם המותג השכיח לכל טופס. ריק → טקסט חופשי.
+      function formNameOpts() {
+        if (!formRows.length) return null;
+        var rows = formRows.slice().sort(function (a, b) { return String(a.form_name).localeCompare(String(b.form_name), 'he'); });
+        return [{ v: '', l: '— הכל —' }].concat(rows.map(function (r) {
+          return { v: r.form_name, l: r.form_name + (r.brand ? '  ·  ' + r.brand : '') };
+        }));
+      }
       leadFilter = C.makeFilter([
         // פרטי הלקוח
         { key: 'name', label: 'שם לקוח' }, { key: 'phone', label: 'טלפון' }, { key: 'email', label: 'אימייל' },
@@ -592,7 +604,7 @@
         { key: 'campaign', label: 'שם קמפיין' },
         { key: 'adset_name', label: 'שם סדרה' },
         { key: 'ad_name', label: 'שם מודעה' },
-        { key: 'form_name', label: 'שם טופס' },
+        { key: 'form_name', label: 'שם טופס', options: formNameOpts() },
         // פרוטקול UTM מלא
         { key: 'utm_source', label: 'utm_source', options: listOpts('utm_source') },
         { key: 'utm_medium', label: 'utm_medium' }, { key: 'utm_campaign', label: 'utm_campaign' },
