@@ -473,6 +473,7 @@
   // ---------- LEADS TABLE ----------
   var cache = [], profiles = {}, orderIds = [], curFilter = null, curDeals = [], leadFilter = null, selectedLeads = {};
   var distOwner = {};        // מנהל המכירות שאליו נוחתים לידים חדשים
+  var mgrIds = {};           // user_id → true למנהלים (אדמין/מנהל-סניף) — "מחזיקים" שלידיהם עדיין לחלוקה
   // configurable columns for the leads table (show/hide/reorder via the column chooser)
   var LEAD_COLS = [
     { key: 'name', label: 'שם לקוח', w: 200, cell: function (l) { return '<td style="cursor:pointer" data-open="1"><span class="avatar" style="margin-inline-end:8px">' + esc(initials(l.name)) + '</span><b>' + esc(l.name) + '</b></td>'; } },
@@ -559,7 +560,7 @@
         if (myLoad !== leadsLoadId || !C.$('leadsBody')) return;
         cache = cache.concat(more); draw();
       }),
-      db.from('profiles').select('user_id,full_name'),
+      db.from('profiles').select('user_id,full_name,role'),
       //  מי מקבל את הלידים החדשים לחלוקה. נשמר בתצורה ולא מקודד קשיח,
       //  כדי שהעברת התפקיד לאדם אחר לא תדרוש שינוי בקוד.
       db.from('admin_config').select('value').eq('key', 'default_owner').maybeSingle()
@@ -567,7 +568,7 @@
       if (res[0].error) return errBox(res[0].error.message);
       distOwner = ((res[2] && res[2].data && res[2].data.value) || {});
       cache = res[0].data || [];
-      profiles = {}; (res[1].data || []).forEach(function (p) { profiles[p.user_id] = p.full_name; });
+      profiles = {}; mgrIds = {}; (res[1].data || []).forEach(function (p) { profiles[p.user_id] = p.full_name; if (p.role === 'admin' || p.role === 'branch') mgrIds[p.user_id] = true; });
       leadFilter = C.makeFilter([
         // פרטי הלקוח
         { key: 'name', label: 'שם לקוח' }, { key: 'phone', label: 'טלפון' }, { key: 'email', label: 'אימייל' },
@@ -659,11 +660,13 @@
         var _lv = (fieldFilter.field === '__sector__') ? sectorOf(l) : String(l[fieldFilter.field] == null ? '' : l[fieldFilter.field]).trim();
         if (_lv !== fieldFilter.value) return false;
       }
-      //  תור החלוקה: סטטוס "חדש" ומשויך למנהל המכירות. העברה לסוכן או
-      //  שינוי סטטוס מוציאים את הליד מהתור מעצמם.
+      //  תור החלוקה: ליד "חדש" שעדיין לא אצל סוכן-מכירות — כלומר ללא-שיוך, או
+      //  מוחזק ע"י מנהל (אדמין/מנהל-סניף) או בעל-הלידים. ברגע שעובר לסוכן או
+      //  משנה סטטוס — יוצא מהתור מעצמו. (לידים מיובאים נשארו null/אצל-האדמין ולכן
+      //  נעלמו מהתור הישן שסינן רק את בעל-הלידים — התיקון מחזיר אותם.)
       if (curFilter === 'todistribute') {
         if ((l.status || 'new') !== 'new') return false;
-        if (!distOwner.user_id || l.assigned_to !== distOwner.user_id) return false;
+        if (l.assigned_to && !mgrIds[l.assigned_to] && l.assigned_to !== distOwner.user_id) return false;
       } else if (curFilter && (l.status || 'new') !== curFilter) return false;
       if (q && !((l.name || '') + ' ' + (l.phone || '') + ' ' + (l.car || '')).toLowerCase().includes(q)) return false;
       if (leadFilter && !leadFilter.match(l)) return false;
