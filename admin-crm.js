@@ -584,9 +584,13 @@
         var arr = Object.keys(names).sort(function (a, b) { return a.localeCompare(b, 'he'); });
         return arr.length ? [{ v: '', l: '— הכל —' }].concat(arr.map(function (n) { return { v: n, l: n }; })) : null;
       }
-      //  שמירת סינון-השדות בין רענונים (פר-ארגון). נשמר בכל שינוי, משוחזר בטעינה.
+      //  שמירת סינון-השדות + שם-התצוגה בין רענונים (פר-ארגון).
       var LF_KEY = 'c2b_lf_' + ((window.__fleetCfg && window.__fleetCfg.slug) || 'default');
-      function saveLF() { try { localStorage.setItem(LF_KEY, JSON.stringify(leadFilter ? leadFilter.getState() : [])); } catch (e) {} }
+      var curViewName = (opts && opts.viewName) || null;   // שם התצוגה שהוחלה (לכותרת)
+      var baseTitle = fieldFilter ? (fieldFilter.label + ': ' + (fieldFilter.value || '(ללא)')) : statusFilter === 'todistribute'
+        ? '📥 לידים לחלוקה' + (distOwner.name ? ' · ' + distOwner.name : '')
+        : (statusFilter ? stDef(statusFilter).label : 'כל הלידים');
+      function saveLF() { try { localStorage.setItem(LF_KEY, JSON.stringify({ conds: leadFilter ? leadFilter.getState() : [], viewName: curViewName || null })); } catch (e) {} }
       leadFilter = C.makeFilter([
         // פרטי הלקוח
         { key: 'name', label: 'שם לקוח' }, { key: 'phone', label: 'טלפון' }, { key: 'email', label: 'אימייל' },
@@ -618,16 +622,28 @@
         { key: 'ad_id', label: 'מזהה מודעה' }, { key: 'form_id', label: 'מזהה טופס' },
         { key: 'external_id', label: 'lead_id' },
         { key: 'page_url', label: 'כתובת הדף' }, { key: 'ip', label: 'כתובת IP' }
-      ], function () { saveLF(); draw(); });
+      ], function () {
+        //  שינוי-סינון ידני → כבר לא "התצוגה ששמרת"; מנקים את השם מהכותרת.
+        if (curViewName) { curViewName = null; var _t = C.$('lTitle'); if (_t) _t.textContent = baseTitle; }
+        saveLF(); draw();
+      });
       //  החלת סינון: תצוגה שמורה (conds מפורש, כולל ריק=נקה) גוברת; אחרת — שחזור
       //  הסינון האחרון מ-localStorage (שורד רענון), פר-ארגון.
       if (opts && opts.conds !== undefined) { leadFilter.setState(opts.conds || []); saveLF(); }
-      else { try { var _lf = JSON.parse(localStorage.getItem(LF_KEY) || '[]'); if (_lf && _lf.length) leadFilter.setState(_lf); } catch (e) {} }
+      else {
+        try {
+          var _raw = JSON.parse(localStorage.getItem(LF_KEY) || 'null');
+          var _lf = Array.isArray(_raw) ? _raw : ((_raw && _raw.conds) || []);
+          if (_lf && _lf.length) { leadFilter.setState(_lf); if (!Array.isArray(_raw) && _raw) curViewName = _raw.viewName || null; }
+          else curViewName = null;
+        } catch (e) {}
+      }
       if (!leadCols) leadCols = C.colPicker('leads', LEAD_COLS, draw, { resizable: true, sortable: true });
       var title = fieldFilter ? (fieldFilter.label + ': ' + (fieldFilter.value || '(ללא)')) : statusFilter === 'todistribute'
         ? '📥 לידים לחלוקה' + (distOwner.name ? ' \u00b7 ' + distOwner.name : '')
         : (statusFilter ? stDef(statusFilter).label : 'כל הלידים');
-      view('<div class="card"><div class="row-between"><h3>' + esc(title) + ' <span class="muted" id="lcount"></span></h3>' +
+      if (curViewName) title = '📌 ' + curViewName;
+      view('<div class="card"><div class="row-between"><h3><span id="lTitle">' + esc(title) + '</span> <span class="muted" id="lcount"></span></h3>' +
         '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">' +
           '<input class="inp" id="lq" placeholder="חיפוש חופשי…" style="width:170px">' +
           '<button class="btn btn-sm" id="lnew">+ ליד חדש</button>' +

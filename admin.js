@@ -1131,7 +1131,7 @@
     //  תצוגה שמורה — פתיחת הסינון השמור במסך הלידים.
     if (it.dataset.lvid) {
       var v = (window.C2B._leadViews || {})[it.dataset.lvid], f = (v && v.filter) || {};
-      go('leads', { status: f.status || null, field: f.field, value: f.value, label: f.label, conds: f.conds || [] });
+      go('leads', { status: f.status || null, field: f.field, value: f.value, label: f.label, conds: f.conds || [], viewName: (v && v.name) || null });
       return;
     }
     //  פריט-אב עם תת-תפריט (למשל "לידים") — toggle: לחיצה פותחת את שלבי-המשנה
