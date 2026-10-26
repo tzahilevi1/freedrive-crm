@@ -689,9 +689,13 @@
       });
       //  תצוגה חדשה — שומר את הסינון הנוכחי ל-lead_views ומרענן את תפריט-הצד.
       if (canViews && C.$('lvNew')) C.$('lvNew').addEventListener('click', function () {
+        //  מצרף בחירה שבפאנל שטרם נלחץ עליה "+ הוסף" — כדי שלא תאבד בשמירה.
+        if (leadFilter && leadFilter.commitPending && leadFilter.commitPending()) { saveLF(); draw(); }
         //  תופס גם את תנאי-הסינון (conds) של סרגל-הסינון, כך שתצוגה שמורה משחזרת
         //  סינון מלא (כולל רב-בחירה של שם-טופס/מקור/וכו').
         var conds = (leadFilter && leadFilter.getState) ? leadFilter.getState() : [];
+        //  אזהרה אם אין סינון כלל — אחרת נשמרת "תצוגה" שמציגה את כל הלידים.
+        if (!conds.length && !curFilter && !fieldFilter) { if (!confirm('לא בחרת סינון — התצוגה תציג את כל הלידים. לשמור בכל זאת?')) return; }
         var cdesc = '';
         if (conds.length) { var c0 = conds[0], vs = Array.isArray(c0.val) ? c0.val : [c0.val]; cdesc = (vs.length <= 2 ? vs.join(', ') : vs.length + ' ערכים'); }
         var dflt = cdesc || (fieldFilter ? (fieldFilter.label + ': ' + (fieldFilter.value || '')) : (curFilter === 'todistribute' ? 'לחלוקה' : (curFilter ? ((stDef(curFilter) && stDef(curFilter).label) || curFilter) : 'כל הלידים')));

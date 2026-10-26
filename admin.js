@@ -1302,6 +1302,30 @@
       return f.val;
     }
 
+    //  קורא את הבחירה שבפאנל (שדה+אופרטור+ערך/צ'ק-בוקסים) ומוסיף תנאי/ם ל-state.
+    //  מוחזר true אם נוסף משהו. משמש גם את "+ הוסף" וגם את commitPending (שמירת-תצוגה).
+    function addFromControls() {
+      if (!$('fbField')) return false;
+      var field = $('fbField').value, f = byKey[field];
+      if (f && f.multi) {
+        var box = $('fbVal'), checked = [], added = false;
+        if (box) box.querySelectorAll('input[type=checkbox]:checked').forEach(function (c) { checked.push(c.value); });
+        if (!checked.length) return false;
+        checked.forEach(function (v) {
+          if (!state.some(function (c) { return c.field === field && c.op === 'eq' && String(c.val) === String(v); })) { state.push({ field: field, op: 'eq', val: v }); added = true; }
+        });
+        return added;
+      }
+      var op = $('fbOp') ? $('fbOp').value : 'contains';
+      var el = $('fbVal'), val = (el && !el.hasAttribute('data-noval') && el.value || '').trim();
+      if (val === '@custom') val = ($('fbValD') && $('fbValD').value || '').trim();
+      var val2 = ($('fbVal2') && $('fbVal2').value || '').trim();
+      if (op === 'empty' || op === 'nempty') val = '';
+      else if (!val || (op === 'between' && !val2)) return false;
+      if (op === 'between' && f && f.type === 'date' && val > val2) { var tmp = val; val = val2; val2 = tmp; }
+      state.push({ field: field, op: op, val: val, val2: val2 }); return true;
+    }
+
     var api = {
       render: function () {
         var f0 = fields[0], first0 = Object.keys(opsOf(f0))[0];
@@ -1352,30 +1376,7 @@
             $('fbValD').classList.toggle('hidden', e.target.value !== '@custom');
           }
         });
-        $('fbAdd').addEventListener('click', function () {
-          var field = $('fbField').value, f = byKey[field];
-          //  רב-בחירה: כל ערך שנבחר → תנאי נפרד (op "eq"), כך שאפשר להסיר כל אחד
-          //  בנפרד (צ'יפ משלו). תנאים על אותו שדה-רב-בחירה מאוחדים ב-OR ב-match.
-          if (f && f.multi) {
-            var box = $('fbVal'), checked = [];
-            if (box) box.querySelectorAll('input[type=checkbox]:checked').forEach(function (c) { checked.push(c.value); });
-            if (!checked.length) return;
-            checked.forEach(function (v) {
-              if (!state.some(function (c) { return c.field === field && c.op === 'eq' && String(c.val) === String(v); }))
-                state.push({ field: field, op: 'eq', val: v });
-            });
-            onApply(); return;
-          }
-          var op = $('fbOp').value;
-          var el = $('fbVal'), val = (el && !el.hasAttribute('data-noval') && el.value || '').trim();
-          if (val === '@custom') val = ($('fbValD') && $('fbValD').value || '').trim();
-          var val2 = ($('fbVal2') && $('fbVal2').value || '').trim();
-          if (op === 'empty' || op === 'nempty') val = '';
-          else if (!val || (op === 'between' && !val2)) return;
-          // טווח הפוך הוא טעות הקלדה ולא כוונה — מסדרים במקום להחזיר רשימה ריקה
-          if (op === 'between' && f && f.type === 'date' && val > val2) { var tmp = val; val = val2; val2 = tmp; }
-          state.push({ field: field, op: op, val: val, val2: val2 }); onApply();
-        });
+        $('fbAdd').addEventListener('click', function () { if (addFromControls()) onApply(); });
         if ($('fbClear')) $('fbClear').addEventListener('click', function () { state = []; onApply(); });
         bar.querySelectorAll('[data-rmf]').forEach(function (b) { b.addEventListener('click', function () { state.splice(+b.dataset.rmf, 1); onApply(); }); });
       },
@@ -1417,6 +1418,8 @@
         });
       },
       count: function () { return state.length; },
+      //  מצרף בחירה שבפאנל אך טרם נלחץ "+ הוסף" (בשמירת-תצוגה) — מחזיר true אם נוסף.
+      commitPending: function () { return addFromControls(); },
       //  שמירה/שחזור של מצב-הסינון (לשמירת תצוגות שתופסות את הסינון המלא).
       getState: function () { return state.map(function (c) { return { field: c.field, op: c.op, val: (c.val && c.val.slice) ? c.val.slice() : c.val, val2: c.val2 }; }); },
       setState: function (arr) { state = (arr || []).map(function (c) { return { field: c.field, op: c.op, val: (c.val && c.val.slice) ? c.val.slice() : c.val, val2: c.val2 }; }); }
