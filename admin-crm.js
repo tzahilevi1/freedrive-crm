@@ -589,7 +589,7 @@
         { key: 'id_num', label: 'תעודת זהות' }, { key: 'city', label: 'עיר' },
         { key: 'car', label: 'רכב' }, { key: 'message', label: 'הודעה / פרטים נוספים' },
         // סטטוס וטיפול
-        { key: 'status', label: 'סטטוס', options: STATUSES.map(function (s) { return { v: s.k, l: s.label }; }) },
+        { key: 'status', label: 'סטטוס', options: STATUSES.map(function (s) { return { v: s.k, l: s.label }; }), multi: true },
         { key: 'assigned', label: 'איש מכירות', get: function (l) { return profiles[l.assigned_to] || ''; } },
         { key: 'close_reason', label: 'סיבת סגירה' },
         // תאריכים
@@ -598,15 +598,15 @@
         { key: 'first_response_at', label: 'מענה ראשון', type: 'date' },
         { key: 'updated_at', label: 'עודכן בתאריך', type: 'date' },
         // מיתוג ושיווק
-        { key: 'brand', label: 'מותג', options: listOpts('brand') },
-        { key: 'source', label: 'מקור הגעה', options: listOpts('source') },
-        { key: 'marketing_company', label: 'חברת שיווק', options: listOpts('marketing_company') },
+        { key: 'brand', label: 'מותג', options: listOpts('brand'), multi: true },
+        { key: 'source', label: 'מקור הגעה', options: listOpts('source'), multi: true },
+        { key: 'marketing_company', label: 'חברת שיווק', options: listOpts('marketing_company'), multi: true },
         { key: 'campaign', label: 'שם קמפיין' },
         { key: 'adset_name', label: 'שם סדרה' },
         { key: 'ad_name', label: 'שם מודעה' },
-        { key: 'form_name', label: 'שם טופס', options: formNameOpts() },
+        { key: 'form_name', label: 'שם טופס', options: formNameOpts(), multi: true },
         // פרוטקול UTM מלא
-        { key: 'utm_source', label: 'utm_source', options: listOpts('utm_source') },
+        { key: 'utm_source', label: 'utm_source', options: listOpts('utm_source'), multi: true },
         { key: 'utm_medium', label: 'utm_medium' }, { key: 'utm_campaign', label: 'utm_campaign' },
         { key: 'utm_content', label: 'utm_content' }, { key: 'utm_term', label: 'utm_term' },
         { key: 'ad_group', label: 'ad_group' },
@@ -615,6 +615,8 @@
         { key: 'external_id', label: 'lead_id' },
         { key: 'page_url', label: 'כתובת הדף' }, { key: 'ip', label: 'כתובת IP' }
       ], draw);
+      //  החלת תצוגה שמורה שתפסה סינון מלא (conds) — משחזר את תנאי-הסינון.
+      if (opts && opts.conds && opts.conds.length && leadFilter && leadFilter.setState) leadFilter.setState(opts.conds);
       if (!leadCols) leadCols = C.colPicker('leads', LEAD_COLS, draw, { resizable: true, sortable: true });
       var title = fieldFilter ? (fieldFilter.label + ': ' + (fieldFilter.value || '(ללא)')) : statusFilter === 'todistribute'
         ? '📥 לידים לחלוקה' + (distOwner.name ? ' \u00b7 ' + distOwner.name : '')
@@ -665,11 +667,17 @@
       });
       //  תצוגה חדשה — שומר את הסינון הנוכחי ל-lead_views ומרענן את תפריט-הצד.
       if (canViews && C.$('lvNew')) C.$('lvNew').addEventListener('click', function () {
-        var dflt = fieldFilter ? (fieldFilter.label + ': ' + (fieldFilter.value || '')) : (curFilter === 'todistribute' ? 'לחלוקה' : (curFilter ? ((stDef(curFilter) && stDef(curFilter).label) || curFilter) : 'כל הלידים'));
+        //  תופס גם את תנאי-הסינון (conds) של סרגל-הסינון, כך שתצוגה שמורה משחזרת
+        //  סינון מלא (כולל רב-בחירה של שם-טופס/מקור/וכו').
+        var conds = (leadFilter && leadFilter.getState) ? leadFilter.getState() : [];
+        var cdesc = '';
+        if (conds.length) { var c0 = conds[0], vs = Array.isArray(c0.val) ? c0.val : [c0.val]; cdesc = (vs.length <= 2 ? vs.join(', ') : vs.length + ' ערכים'); }
+        var dflt = cdesc || (fieldFilter ? (fieldFilter.label + ': ' + (fieldFilter.value || '')) : (curFilter === 'todistribute' ? 'לחלוקה' : (curFilter ? ((stDef(curFilter) && stDef(curFilter).label) || curFilter) : 'כל הלידים')));
         var name = (prompt('שם לתצוגה (שומר את הסינון הנוכחי):', dflt) || '').trim();
         if (!name) return;
         var f = { status: curFilter || null };
         if (fieldFilter) { f.field = fieldFilter.field; f.value = fieldFilter.value; f.label = fieldFilter.label; }
+        if (conds.length) f.conds = conds;
         db.from('lead_views').insert({ name: name, filter: f }).select('*').single().then(function (r) {
           if (r.error) return alert('שגיאה: ' + r.error.message);
           if (window.C2B.reloadLeadViewsNav) window.C2B.reloadLeadViewsNav();

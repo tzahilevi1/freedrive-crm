@@ -1131,7 +1131,7 @@
     //  תצוגה שמורה — פתיחת הסינון השמור במסך הלידים.
     if (it.dataset.lvid) {
       var v = (window.C2B._leadViews || {})[it.dataset.lvid], f = (v && v.filter) || {};
-      go('leads', { status: f.status || null, field: f.field, value: f.value, label: f.label });
+      go('leads', { status: f.status || null, field: f.field, value: f.value, label: f.label, conds: f.conds || [] });
       return;
     }
     //  פריט-אב עם תת-תפריט (למשל "לידים") — toggle: לחיצה פותחת את שלבי-המשנה
@@ -1244,9 +1244,11 @@
   function makeFilter(fields, onApply) {
     var byKey = {}; fields.forEach(function (f) { byKey[f.key] = f; });
     var state = [];
+    var expanded = false;   // הפאנל מוסתר כברירת-מחדל; כפתור "סינון" פותח/סוגר
 
     function opsOf(f) { return (f && f.type === 'date') ? DATE_OPS : OPS; }
     function opSel(f, cur) {
+      if (f && f.multi) return '';   // רב-בחירה: בלי אופרטור (תמיד "אחד מהנבחרים")
       var o = opsOf(f);
       return '<select id="fbOp">' + Object.keys(o).map(function (k) {
         return '<option value="' + k + '"' + (k === cur ? ' selected' : '') + '>' + esc(o[k]) + '</option>';
@@ -1254,6 +1256,13 @@
     }
     function valCtl(f, op) {
       if (op === 'empty' || op === 'nempty') return '<span id="fbVal" data-noval></span>';
+      //  רב-בחירה: רשימת צ'ק-בוקסים (בוחרים כמה, "+ הוסף" מצרף לצ'יפ אחד — op "in").
+      if (f && f.options && f.multi) {
+        return '<span id="fbVal" data-multi style="display:inline-block;vertical-align:top;border:1px solid var(--line);border-radius:9px;padding:5px 9px;max-height:150px;overflow:auto;min-width:230px;background:var(--surface-2);line-height:1.95">' +
+          f.options.filter(function (o) { return o.v !== ''; }).map(function (o) {
+            return '<label style="display:block;font-size:12.5px;white-space:nowrap;cursor:pointer"><input type="checkbox" value="' + esc(o.v) + '" style="margin-inline-end:6px;vertical-align:middle">' + esc(o.l) + '</label>';
+          }).join('') + '</span>';
+      }
       if (f && f.options) return '<select id="fbVal">' + f.options.map(function (o) { return '<option value="' + esc(o.v) + '">' + esc(o.l) + '</option>'; }).join('') + '</select>';
       if (f && f.type === 'date') {
         if (op === 'between') return '<input id="fbVal" type="date" style="width:140px"> <span class="muted" style="font-size:12px">עד</span> <input id="fbVal2" type="date" style="width:140px">';
@@ -1285,6 +1294,7 @@
         if (PERIOD_LBL[f.val]) return PERIOD_LBL[f.val];
         return heDate(f.val);
       }
+      if (f.op === 'in') { var arr = Array.isArray(f.val) ? f.val : [f.val]; return arr.length <= 2 ? arr.join(' / ') : (arr.length + ' נבחרו'); }
       if (f.op === 'between') return f.val + ' — ' + f.val2;
       if (d && d.options) return (d.options.filter(function (o) { return String(o.v) === String(f.val); })[0] || {}).l || f.val;
       return f.val;
@@ -1295,16 +1305,30 @@
         var f0 = fields[0], first0 = Object.keys(opsOf(f0))[0];
         var chips = state.map(function (f, i) {
           var d = byKey[f.field], o = opsOf(d);
-          return '<span class="chip">' + esc(d ? d.label : f.field) + ' ' + esc(o[f.op] || f.op) + ' ' +
+          var opTxt = (f.op === 'in') ? ':' : (o[f.op] || f.op);
+          return '<span class="chip">' + esc(d ? d.label : f.field) + ' ' + esc(opTxt) + ' ' +
             esc(chipText(f) || '') + ' <b data-rmf="' + i + '">✕</b></span>';
         }).join('');
-        return '<div class="filterbar" id="fbar"><span class="muted" style="font-size:12px">🧲 סינון לפי שדה:</span>' +
-          '<select id="fbField">' + fields.map(function (f) { return '<option value="' + f.key + '">' + esc(f.label) + '</option>'; }).join('') + '</select>' +
-          '<span id="fbCtl">' + opSel(f0, first0) + ' ' + valCtl(f0, first0) + '</span>' +
-          '<button class="btn btn-sm" id="fbAdd">+ הוסף</button>' +
-          (state.length ? '<button class="btn btn-ghost btn-sm" id="fbClear">נקה הכל</button>' : '') + chips + '</div>';
+        //  הסינון מתקפל: כפתור "🧲 סינון · N" פותח פאנל עם הבונה + התנאים הפעילים
+        //  (עריכה/מחיקה). מוסתר כברירת-מחדל; expanded נשמר בין ציורים.
+        var builder = '<select id="fbField">' + fields.map(function (f) { return '<option value="' + f.key + '">' + esc(f.label) + '</option>'; }).join('') + '</select>' +
+          ' <span id="fbCtl">' + opSel(f0, first0) + ' ' + valCtl(f0, first0) + '</span>' +
+          ' <button class="btn btn-sm" id="fbAdd">+ הוסף</button>' +
+          (state.length ? ' <button class="btn btn-ghost btn-sm" id="fbClear">נקה הכל</button>' : '');
+        return '<div class="filterbar" id="fbar">' +
+          '<button class="btn btn-ghost btn-sm" id="fbToggle">🧲 סינון' + (state.length ? ' · ' + state.length : '') + ' ' + (expanded ? '▴' : '▾') + '</button>' +
+          '<div id="fbPanel"' + (expanded ? '' : ' class="hidden"') + ' style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-start;margin-top:10px;padding:11px;border:1px solid var(--line);border-radius:12px;background:var(--surface-2)">' +
+            builder +
+            (chips ? '<div id="fbChips" style="display:flex;flex-wrap:wrap;gap:6px;width:100%;margin-top:6px;padding-top:8px;border-top:1px dashed var(--line)">' + chips + '</div>' : '') +
+          '</div></div>';
       },
       bind: function () {
+        var tog = $('fbToggle');
+        if (tog) tog.addEventListener('click', function () {
+          expanded = !expanded;
+          var p = $('fbPanel'); if (p) p.classList.toggle('hidden', !expanded);
+          tog.innerHTML = '🧲 סינון' + (state.length ? ' · ' + state.length : '') + ' ' + (expanded ? '▴' : '▾');
+        });
         var bar = $('fbar'); if (!bar || !$('fbAdd')) return;
         // האזנה על המיכל: הפקדים נבנים מחדש בכל שינוי שדה או אופרטור,
         // ומאזין ישיר עליהם היה הולך לאיבוד ברינדור השני
@@ -1321,7 +1345,15 @@
           }
         });
         $('fbAdd').addEventListener('click', function () {
-          var field = $('fbField').value, op = $('fbOp').value, f = byKey[field];
+          var field = $('fbField').value, f = byKey[field];
+          //  רב-בחירה: אוספים את הטפסים המסומנים → תנאי יחיד (op "in", val=מערך).
+          if (f && f.multi) {
+            var box = $('fbVal'), checked = [];
+            if (box) box.querySelectorAll('input:checked').forEach(function (c) { checked.push(c.value); });
+            if (!checked.length) return;
+            state.push({ field: field, op: 'in', val: checked }); onApply(); return;
+          }
+          var op = $('fbOp').value;
           var el = $('fbVal'), val = (el && !el.hasAttribute('data-noval') && el.value || '').trim();
           if (val === '@custom') val = ($('fbValD') && $('fbValD').value || '').trim();
           var val2 = ($('fbVal2') && $('fbVal2').value || '').trim();
@@ -1354,6 +1386,7 @@
             if (f.op === 'lt') return t < r[0];
           }
           if (f.op === 'between') { var n = parseFloat(raw); return n >= parseFloat(f.val) && n <= parseFloat(f.val2); }
+          if (f.op === 'in') { var arr = Array.isArray(f.val) ? f.val : [f.val]; return arr.some(function (v) { return s === String(v).toLowerCase(); }); }
           if (f.op === 'contains') return s.indexOf(q) >= 0;
           if (f.op === 'eq') return s === q;
           if (f.op === 'ne') return s !== q;
@@ -1364,7 +1397,10 @@
           return true;
         });
       },
-      count: function () { return state.length; }
+      count: function () { return state.length; },
+      //  שמירה/שחזור של מצב-הסינון (לשמירת תצוגות שתופסות את הסינון המלא).
+      getState: function () { return state.map(function (c) { return { field: c.field, op: c.op, val: (c.val && c.val.slice) ? c.val.slice() : c.val, val2: c.val2 }; }); },
+      setState: function (arr) { state = (arr || []).map(function (c) { return { field: c.field, op: c.op, val: (c.val && c.val.slice) ? c.val.slice() : c.val, val2: c.val2 }; }); }
     };
     return api;
   }
