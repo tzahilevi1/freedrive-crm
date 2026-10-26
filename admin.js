@@ -6959,8 +6959,12 @@
       var roleOpts = ROLES.filter(function (x) { return isAdminU || x[0] !== 'admin'; });
       var rows = ps.map(function (p) {
         var reset = !canEditRow(p) ? '' : (p.email ? '<button class="btn btn-ghost btn-sm" data-reset="' + esc(p.email) + '">🔑 אפס סיסמה</button>' : '<span class="muted" style="font-size:12px">אין אימייל</span>');
+        //  מאפייני-סינון על כל שורה → applyUserFilter מסנן בהצגה/הסתרה בלבד
+        //  (בלי רינדור-מחדש, כדי לא לאבד מאזינים או עורך פתוח).
+        var sk = ((p.full_name || '') + ' ' + (p.email || '') + ' ' + (p.phone || '') + ' ' + roleLabel(p.role)).toLowerCase();
+        var attrs = ' data-urow="' + p.user_id + '" data-uname="' + esc(sk) + '" data-urole="' + esc(p.role || '') + '" data-uactive="' + (p.active ? '1' : '0') + '"';
         if (!canEditRow(p)) {
-          return '<tr><td><span class="avatar" style="margin-inline-end:8px">' + esc((p.full_name || '?').charAt(0)) + '</span>' + esc(p.full_name || '—') +
+          return '<tr' + attrs + '><td><span class="avatar" style="margin-inline-end:8px">' + esc((p.full_name || '?').charAt(0)) + '</span>' + esc(p.full_name || '—') +
             (p.email ? '<div class="muted" style="font-size:11px">' + esc(p.email) + '</div>' : '') + '</td>' +
             '<td>' + esc(roleLabel(p.role)) + '</td>' +
             '<td style="white-space:normal;max-width:260px">' + (p.role === 'admin' ? '<span class="muted" style="font-size:12.5px">👑 רואה את הכל</span>' : viewsLabel((window.C2B.roleViews && window.C2B.roleViews[p.role]) || DEFAULT_VIEWS[p.role], p.role)) + '</td>' +
@@ -6970,7 +6974,7 @@
         var seg = '<div style="display:inline-flex;border:1px solid var(--line);border-radius:9px;overflow:hidden">' +
           '<button data-actset="' + p.user_id + '" data-on="1" style="border:none;padding:6px 12px;font-size:12.5px;cursor:pointer;font-weight:600;background:' + (p.active ? 'var(--ok)' : 'transparent') + ';color:' + (p.active ? '#fff' : 'var(--muted)') + '">✓ פעיל</button>' +
           '<button data-actset="' + p.user_id + '" data-on="0" style="border:none;border-inline-start:1px solid var(--line);padding:6px 12px;font-size:12.5px;cursor:pointer;font-weight:600;background:' + (!p.active ? 'var(--danger)' : 'transparent') + ';color:' + (!p.active ? '#fff' : 'var(--muted)') + '">✕ לא פעיל</button></div>';
-        return '<tr><td><span class="avatar" style="margin-inline-end:8px">' + esc((p.full_name || '?').charAt(0)) + '</span><span class="uname-txt" data-nameuid="' + p.user_id + '">' + esc(p.full_name || '—') + '</span> <button class="btn btn-ghost btn-sm" data-edituser="' + p.user_id + '" title="ערוך את כל פרטי המשתמש">✏️ ערוך</button>' + (p.email ? '<div class="muted" style="font-size:11px">' + esc(p.email) + '</div>' : '') + '</td>' +
+        return '<tr' + attrs + '><td><span class="avatar" style="margin-inline-end:8px">' + esc((p.full_name || '?').charAt(0)) + '</span><span class="uname-txt" data-nameuid="' + p.user_id + '">' + esc(p.full_name || '—') + '</span> <button class="btn btn-ghost btn-sm" data-edituser="' + p.user_id + '" title="ערוך את כל פרטי המשתמש">✏️ ערוך</button>' + (p.email ? '<div class="muted" style="font-size:11px">' + esc(p.email) + '</div>' : '') + '</td>' +
           '<td><select class="inp" data-role="' + p.user_id + '">' + roleOpts.map(function (x) { return '<option value="' + x[0] + '"' + (p.role === x[0] ? ' selected' : '') + '>' + x[1] + '</option>'; }).join('') + '</select></td>' +
           '<td style="white-space:normal;max-width:260px">' + (p.role === 'admin' ? '<span class="muted" style="font-size:12.5px">👑 מנהל מערכת — רואה את הכל (תצוגות לא חלות על מנהל)</span>' : viewsLabel((window.C2B.roleViews && window.C2B.roleViews[p.role]) || DEFAULT_VIEWS[p.role], p.role) + ' <span class="muted" style="font-size:11px">(לפי התפקיד — עריכה בהגדרות←הרשאות)</span>') + '</td>' +
           '<td>' + seg + '</td>' +
@@ -6991,14 +6995,60 @@
         '</div>' +
         '<p class="muted" style="font-size:12.5px;margin-top:12px">התצוגות נקבעות אוטומטית לפי התפקיד. לשינוי — הגדרות ← הרשאות.</p>' +
         '<div style="margin-top:14px"><button class="btn" id="nuCreate">צור משתמש ושלח הזמנה</button> <span id="nuMsg" style="font-size:13px;margin-inline-start:10px"></span></div><div id="nuResult" style="margin-top:12px"></div></div>';
+      //  סרגל-סינון לרשימת המשתמשים: חיפוש חופשי + תפקיד + מצב (פעיל/לא-פעיל).
+      //  עובד לכל מי שרואה את המסך (גם מנהל-סניף), ולכן מחווט לפני שומר-canEditUsers.
+      var ufStBtn = 'border:none;background:transparent;color:var(--muted);padding:7px 14px;font-size:12.5px;font-weight:600;cursor:pointer';
+      var ufBar = '<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:14px">' +
+        '<input class="inp" id="uf_search" placeholder="🔍 חיפוש שם, מייל או טלפון…" style="flex:1;min-width:200px">' +
+        '<select class="inp" id="uf_role"><option value="">כל התפקידים</option>' + roleOpts.map(function (x) { return '<option value="' + x[0] + '">' + x[1] + '</option>'; }).join('') + '</select>' +
+        '<div id="uf_status" style="display:inline-flex;border:1px solid var(--line);border-radius:10px;overflow:hidden">' +
+          '<button type="button" data-ufstat="" style="' + ufStBtn + ';background:var(--brand);color:#fff">הכל</button>' +
+          '<button type="button" data-ufstat="1" style="' + ufStBtn + ';border-inline-start:1px solid var(--line)">● פעילים</button>' +
+          '<button type="button" data-ufstat="0" style="' + ufStBtn + ';border-inline-start:1px solid var(--line)">● לא פעילים</button>' +
+        '</div></div>';
       //  ערוצי Hey · WhatsApp עברו למסך "הגדרות ורשימות" → טלפוניה ווואטסאפ
       //  (הם הגדרת-מערכת, לא ניהול-משתמשים).
       view('<h2 style="margin:0 0 14px">משתמשים והרשאות</h2>' +
         (isAdminU ? '' : '<div class="sec-note">🔑 אתם יכולים ליצור משתמשים, לשנות תפקידים והרשאות ולהפעיל או לכבות אנשי צוות. תפקיד <b>מנהל מערכת</b> שמור לבעל המערכת — אי אפשר ליצור אותו או לערוך משתמש שכבר מוגדר כך.</div>') +
         (canEditUsers ? addForm : '') +
-        '<div class="card"><h3>משתמשים קיימים (' + ps.length + ')</h3>' +
-        '<div class="table-scroll"><table><thead><tr><th>שם</th><th>תפקיד</th><th>תצוגות מותרות</th><th>פעיל</th><th></th></tr></thead><tbody>' + (rows || '<tr><td colspan="5" class="empty">אין משתמשים</td></tr>') + '</tbody></table></div>' +
+        '<div class="card"><h3>משתמשים קיימים <span class="muted" id="uf_count" style="font-weight:400;font-size:13px;margin-inline-start:4px"></span></h3>' +
+        ufBar +
+        '<div class="table-scroll"><table><thead><tr><th>שם</th><th>תפקיד</th><th>תצוגות מותרות</th><th>פעיל</th><th></th></tr></thead><tbody>' + (rows || '<tr><td colspan="5" class="empty">אין משתמשים</td></tr>') + '<tr id="uf_empty" style="display:none"><td colspan="5" class="empty">לא נמצאו משתמשים התואמים לסינון</td></tr></tbody></table></div>' +
         '<div class="muted" style="font-size:12.5px;margin-top:10px">מנהל מערכת רואה הכל. שאר המשתמשים רואים רק את הלידים <b>שהוקצו להם</b> ואת התצוגות שסומנו כאן.</div></div>');
+
+      //  --- סינון רשימת המשתמשים (הצגה/הסתרה בלבד; שומר על עורך פתוח ועל מאזינים) ---
+      var UF = { q: '', role: '', status: '' };
+      function paintUfStatus() {
+        $('view').querySelectorAll('[data-ufstat]').forEach(function (b) {
+          var v = b.getAttribute('data-ufstat'), on = (v === UF.status);
+          var bg = v === '1' ? 'var(--ok)' : (v === '0' ? 'var(--danger)' : 'var(--brand)');
+          b.style.background = on ? bg : 'transparent';
+          b.style.color = on ? '#fff' : 'var(--muted)';
+        });
+      }
+      function applyUserFilter() {
+        var shown = 0, total = 0;
+        $('view').querySelectorAll('tbody tr[data-urow]').forEach(function (tr) {
+          total++;
+          var ok = true;
+          if (UF.q && tr.getAttribute('data-uname').indexOf(UF.q) < 0) ok = false;
+          if (ok && UF.role && tr.getAttribute('data-urole') !== UF.role) ok = false;
+          if (ok && UF.status !== '' && tr.getAttribute('data-uactive') !== UF.status) ok = false;
+          tr.style.display = ok ? '' : 'none';
+          //  שורת-העורך הנלווית: '' מחזיר את שליטת .hidden (פתוח/סגור), 'none' מסתיר עם ההורה.
+          var ed = document.getElementById('uedit_' + tr.getAttribute('data-urow'));
+          if (ed) ed.style.display = ok ? '' : 'none';
+          if (ok) shown++;
+        });
+        var c = $('uf_count'); if (c) c.textContent = (shown === total) ? ('(' + total + ')') : ('מציג ' + shown + ' מתוך ' + total);
+        var emp = $('uf_empty'); if (emp) emp.style.display = (shown === 0 && total > 0) ? '' : 'none';
+      }
+      if ($('uf_search')) $('uf_search').addEventListener('input', function () { UF.q = this.value.trim().toLowerCase(); applyUserFilter(); });
+      if ($('uf_role')) $('uf_role').addEventListener('change', function () { UF.role = this.value; applyUserFilter(); });
+      $('view').querySelectorAll('[data-ufstat]').forEach(function (b) {
+        b.addEventListener('click', function () { UF.status = b.getAttribute('data-ufstat'); paintUfStatus(); applyUserFilter(); });
+      });
+      applyUserFilter();
 
       if (!canEditUsers) return;                 // אין מאזיני עריכה בתצוגת הצפייה
       // sync the Cloudflare Access gate to the CRM's active users (manager never touches Cloudflare)
@@ -7136,23 +7186,38 @@
     var ueBrandList = (window.C2B && window.C2B.marketingBrands) || [];
     function ueBrandsLblHtml(r) { return (r === 'brand_manager') ? 'מותגים שהמנהל אחראי עליהם <span style="color:var(--danger)">*</span>' : 'מותגים שהוא מנהל <span class="muted" style="font-weight:400">(ריק = כל הארגון)</span>'; }
     function fld(label, id, val, type) { return '<div class="field" style="margin:0"><label>' + label + '</label><input class="inp" id="' + id + '" type="' + (type || 'text') + '" value="' + esc(val == null ? '' : val) + '" style="width:100%"></div>'; }
-    td.innerHTML = '<div class="card" style="box-shadow:none;border:1px solid var(--line);background:var(--surface-2);margin:8px 0">' +
-      '<div class="row-between" style="margin-bottom:10px"><b>✏️ עריכת פרטי משתמש</b><span class="muted" style="font-size:11.5px">' + roleLabel(p.role) + '</span></div>' +
-      // זהות ותפקיד בלבד. „נייד" הוסר (כפילות של „טלפון", לא היה בשימוש); שדות
-      // הטלפוניה (SIP + מספרי-נציג) קובצו לסעיף נפרד למטה כדי לא להציף את החלק העליון.
+    //  כותרת-סעיף אחידה + תג-מצב פעיל/לא-פעיל לכותרת-הזהות.
+    function secHead(t) { return '<div style="font-size:11px;font-weight:700;letter-spacing:.04em;color:var(--muted);margin:18px 0 10px">' + t + '</div>'; }
+    var statusPill = p.active
+      ? '<span style="display:inline-flex;align-items:center;gap:5px;padding:3px 11px;border-radius:999px;font-size:12px;font-weight:700;background:color-mix(in srgb,var(--ok) 14%,transparent);color:var(--ok)">● פעיל</span>'
+      : '<span style="display:inline-flex;align-items:center;gap:5px;padding:3px 11px;border-radius:999px;font-size:12px;font-weight:700;background:color-mix(in srgb,var(--danger) 14%,transparent);color:var(--danger)">● לא פעיל</span>';
+    //  סעיף ההתראות/שיוך-לידים מוצג רק כשיש בו תוכן (אדמין/מנהל-סניף למתג-המייל, אדמין לבעל-הלידים).
+    var hasNotifSec = (p.role === 'admin' || p.role === 'branch') || (window.C2B && window.C2B.role === 'admin');
+    td.innerHTML = '<div class="card" style="box-shadow:none;border:1px solid var(--line);background:var(--surface-2);margin:8px 0;padding:18px">' +
+      //  כותרת-זהות: אווטאר + שם + מייל, ולצד — תפקיד ומצב.
+      '<div style="display:flex;align-items:center;gap:12px;padding-bottom:14px;border-bottom:1px solid var(--line)">' +
+        '<span class="avatar" style="width:44px;height:44px;font-size:18px;flex:none">' + esc((p.full_name || '?').charAt(0)) + '</span>' +
+        '<div style="min-width:0;flex:1">' +
+          '<div style="font-weight:700;font-size:15px;line-height:1.2">' + esc(p.full_name || '—') + '</div>' +
+          (p.email ? '<div class="muted" style="font-size:12px;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(p.email) + '</div>' : '') +
+        '</div>' +
+        '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end"><span class="tag">' + roleLabel(p.role) + '</span>' + statusPill + '</div>' +
+      '</div>' +
+      secHead('פרטים אישיים') +
       '<div class="grid2">' +
         fld('שם מלא', 'ue_name', p.full_name) +
         fld('מייל', 'ue_email', p.email, 'email') +
         fld('טלפון', 'ue_phone', p.phone, 'tel') +
         fld('סניף', 'ue_branch', p.branch) +
-        // התפקיד קובע מה המשתמש רואה ומה מותר לו.
-        '<div class="field" style="margin:0;grid-column:1/-1"><label>תפקיד במערכת</label>' +
-          '<select class="inp" id="ue_role" style="width:100%"' + (isSelf ? ' disabled' : '') + '>' +
-          ROLES.filter(function (r) { return (window.C2B && window.C2B.role) === 'admin' || r[0] !== 'admin'; })
-            .map(function (r) { return '<option value="' + r[0] + '"' + (p.role === r[0] ? ' selected' : '') + '>' + esc(r[1]) + '</option>'; }).join('') +
-          '</select>' +
-          (isSelf ? '<span class="muted" style="font-size:11px">אי אפשר לשנות את התפקיד של עצמך</span>' : '') +
-        '</div>' +
+      '</div>' +
+      //  תפקיד ושיוך-מותג. התפקיד קובע מה המשתמש רואה ומה מותר לו; שיוך-המותג נגזר ממנו.
+      secHead('תפקיד ושיוך מותג') +
+      '<div class="field" style="margin:0"><label>תפקיד במערכת</label>' +
+        '<select class="inp" id="ue_role" style="width:100%"' + (isSelf ? ' disabled' : '') + '>' +
+        ROLES.filter(function (r) { return (window.C2B && window.C2B.role) === 'admin' || r[0] !== 'admin'; })
+          .map(function (r) { return '<option value="' + r[0] + '"' + (p.role === r[0] ? ' selected' : '') + '>' + esc(r[1]) + '</option>'; }).join('') +
+        '</select>' +
+        (isSelf ? '<span class="muted" style="font-size:11px">אי אפשר לשנות את התפקיד של עצמך</span>' : '') +
       '</div>' +
       //  שיוך-מותג (מוצג לפי התפקיד; מנהל-סניף/אדמין רואים הכול ולכן מוסתר):
       '<div class="field" id="ue_brandSingleWrap" style="margin-top:10px;display:' + (UE_SINGLE[p.role] ? '' : 'none') + '"><label>מותג משויך <span style="color:var(--danger)">*</span></label>' +
@@ -7161,22 +7226,21 @@
         '<div id="ue_brandsBox" style="border:1px solid var(--line);border-radius:8px;padding:8px;max-height:130px;overflow:auto;line-height:2.1">' +
           (ueBrandList.map(function (b) { return '<label style="display:inline-flex;gap:4px;margin:2px 10px 2px 0;font-size:12.5px;white-space:nowrap"><input type="checkbox" data-uebrand="' + esc(b) + '"' + (ueBrands0.indexOf(b) >= 0 ? ' checked' : '') + '> ' + esc(b) + '</label>'; }).join('') || '<span class="muted" style="font-size:12px">אין מותגים להצגה</span>') +
         '</div><span class="muted" style="font-size:11px;display:block;margin-top:2px">מנהל-מותג חייב מותג אחד לפחות — בלי מותג הוא רואה 0 לידים.</span></div>' +
-      //  טלפוניה (Voice Center) — מקובץ. רשות; פונקציונלי: קובע אילו שיחות/משימות
-      //  המשתמש רואה (ניתוב לפי מספר-הנציג) + חיוג SIP. רלוונטי בעיקר לסוכנים/מתאמות.
-      '<div style="margin-top:14px;border-top:1px solid var(--line);padding-top:12px">' +
-        '<div style="font-size:12px;color:var(--muted);font-weight:700;margin-bottom:8px">📞 טלפוניה (Voice Center) <span style="font-weight:400">— רשות; קובע אילו שיחות/משימות המשתמש רואה</span></div>' +
-        '<div class="grid2">' +
-          fld('שלוחת SIP', 'ue_sip', p.sip_ext) +
-          '<div class="field" style="margin:0"><label>מספר נציג</label><input class="inp" id="ue_agent_phone" type="tel" value="' + esc(((p.agent_phone || '').split(',')[0] || '').trim()) + '" placeholder="0534494707" style="width:100%"></div>' +
-          '<div class="field" style="margin:0"><label>מספר נציג נוסף <span class="muted" style="font-weight:400">(אם יש)</span></label><input class="inp" id="ue_agent_phone2" type="tel" value="' + esc(((p.agent_phone || '').split(',')[1] || '').trim()) + '" placeholder="0534495197" style="width:100%"></div>' +
-        '</div>' +
+      //  טלפוניה (Voice Center) — רשות; קובע אילו שיחות/משימות המשתמש רואה (ניתוב לפי מספר-הנציג) + חיוג SIP.
+      secHead('📞 טלפוניה (Voice Center)') +
+      '<div class="muted" style="font-size:11.5px;margin:-4px 0 10px">רשות — קובע אילו שיחות/משימות המשתמש רואה (ניתוב לפי מספר-הנציג) וחיוג SIP. רלוונטי בעיקר לסוכנים ולמתאמות.</div>' +
+      '<div class="grid2">' +
+        fld('שלוחת SIP', 'ue_sip', p.sip_ext) +
+        '<div class="field" style="margin:0"><label>מספר נציג</label><input class="inp" id="ue_agent_phone" type="tel" value="' + esc(((p.agent_phone || '').split(',')[0] || '').trim()) + '" placeholder="0534494707" style="width:100%"></div>' +
+        '<div class="field" style="margin:0"><label>מספר נציג נוסף <span class="muted" style="font-weight:400">(אם יש)</span></label><input class="inp" id="ue_agent_phone2" type="tel" value="' + esc(((p.agent_phone || '').split(',')[1] || '').trim()) + '" placeholder="0534495197" style="width:100%"></div>' +
       '</div>' +
-      '' +
+      //  התראות ושיוך-לידים (מוצג רק כשיש בו תוכן: אדמין/מנהל-סניף למתג-המייל, אדמין לבעל-הלידים).
+      (hasNotifSec ? secHead('התראות ושיוך לידים') : '') +
       // התראות-מייל על ליד חדש (notify_staff). המתג מאפשר לבחור אם לקבל, בלי לגעת
       // בהרשאות. נמענים בפועל: מנהל-מערכת (ברירת-מחדל מקבל) ומנהל-סניף (ברירת-מחדל
       // לא — opt-in). סוכן/תיקים/חשבונות אינם נמענים ולכן אין להם מתג.
       ((p.role === 'admin' || p.role === 'branch') ?
-        '<label style="display:flex;gap:8px;align-items:center;margin-top:12px;font-size:13px">' +
+        '<label style="display:flex;gap:8px;align-items:center;font-size:13px">' +
           '<input type="checkbox" id="ue_notifyLeads"' + (p.notify_leads === true ? ' checked' : '') + '> 📧 מקבל מייל על כל ליד חדש שנכנס' +
         '</label>' +
         '<span class="muted" style="font-size:11px;display:block;margin-top:2px">כברירת-מחדל <b>כבוי</b> — אף אחד לא מקבל מיילי-לידים אלא אם מסמנים כאן במפורש. לא משפיע על מסך הלידים — הם ממשיכים להיכנס כרגיל.</span>'
@@ -7190,9 +7254,15 @@
         '</label>' +
         '<span class="muted" style="font-size:11px;display:block;margin-top:2px">רק משתמש אחד יכול להיות מסומן — סימון כאן מעביר אליו את כל הלידים הנכנסים. לידים שכבר שויכו לא מושפעים; ביטול הסימון → לידים נכנסים נשארים לא-משויכים.</span>'
         : '') +
-      '<div class="field" style="margin-top:10px"><label>הערות</label><textarea class="inp" id="ue_notes" style="height:64px;width:100%">' + esc(p.notes || '') + '</textarea></div>' +
-      '<div style="margin-top:12px"><button class="btn btn-sm" id="ue_save">💾 שמור פרטים</button> <button class="btn btn-ghost btn-sm" id="ue_close">✕ סגור</button> <span id="ue_msg" style="font-size:12.5px;margin-inline-start:8px"></span></div>' +
-      '<p class="muted" style="font-size:11px;margin-top:8px">שדות אלו (שלוחת SIP, טלפון, סניף…) זמינים לחיבור אוטומציות, חיוג וניתוב בהמשך.</p>' +
+      secHead('הערות') +
+      '<textarea class="inp" id="ue_notes" style="height:64px;width:100%" placeholder="הערות פנימיות על המשתמש…">' + esc(p.notes || '') + '</textarea>' +
+      //  סרגל-פעולה תחתון
+      '<div style="display:flex;align-items:center;gap:10px;margin-top:16px;padding-top:14px;border-top:1px solid var(--line)">' +
+        '<button class="btn" id="ue_save">💾 שמור פרטים</button>' +
+        '<button class="btn btn-ghost btn-sm" id="ue_close">✕ סגור</button>' +
+        '<span id="ue_msg" style="font-size:12.5px;margin-inline-start:4px"></span>' +
+      '</div>' +
+      '<p class="muted" style="font-size:11px;margin:10px 0 0">שדות אלו (שלוחת SIP, טלפון, סניף…) זמינים לחיבור אוטומציות, חיוג וניתוב בהמשך.</p>' +
     '</div>';
     $('ue_close').addEventListener('click', function () { tr.classList.add('hidden'); td.innerHTML = ''; });
     function newRoleValue() { return ($('ue_role') && !isSelf) ? $('ue_role').value : p.role; }
