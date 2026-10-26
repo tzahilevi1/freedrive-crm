@@ -7960,6 +7960,10 @@
   function renderSettings(sec) {
     sec = sec || 'lists';
     loading();
+    //  סנכרון מותגים (מסך הרשימות): מותג שקיים במערכת (brand_companies) וחסר ברשימת-
+    //  הבחירה (field_options) מתווסף אוטומטית — כך מותג שנוסף בשיוך דף-פייסבוק/חיבור
+    //  מופיע כאן תמיד. אחרי ההשלמה proceed() קורא מחדש וה-chips מקבלים id אמיתי.
+    function proceed() {
     db.from('field_options').select('*').order('field', { ascending: true }).order('value', { ascending: true }).then(function (r) {
       var opts = (r && r.data) || [], byField = {}, fieldErr = r && r.error;
       LIST_FIELDS.forEach(function (f) { byField[f[0]] = []; });
@@ -7967,7 +7971,7 @@
       var warn = fieldErr ? '<div class="card" style="border:1px solid var(--warn);background:rgba(245,158,11,.08)"><b style="color:var(--warn)">⚠️ רשימות השדות לא זמינות</b> — הריצו את <b>field-lists.sql</b> (הרשימות למטה יהיו ריקות עד אז). עורך סרגל הפעולות עובד בכל מקרה.</div>' : '';
       var cards = LIST_FIELDS.map(function (f) {
         var key = f[0], label = f[1];
-        var chips = (byField[key] || []).map(function (o) { return '<span class="tag" style="margin:3px">' + esc(o.value) + ' <b data-del="' + o.id + '" data-delfield="' + esc(o.field) + '" data-delval="' + esc(o.value) + '" style="cursor:pointer;color:var(--danger)">✕</b></span>'; }).join('') || '<span class="muted" style="font-size:13px">אין ערכים עדיין</span>';
+        var chips = (byField[key] || []).map(function (o) { return '<span class="tag" style="margin:3px"><span class="chip-ed" data-edfield="' + esc(o.field) + '" data-edval="' + esc(o.value) + '" style="cursor:pointer" title="לחצו לשינוי שם">' + esc(o.value) + '</span> <b data-del="' + o.id + '" data-delfield="' + esc(o.field) + '" data-delval="' + esc(o.value) + '" style="cursor:pointer;color:var(--danger)">✕</b></span>'; }).join('') || '<span class="muted" style="font-size:13px">אין ערכים עדיין</span>';
         return '<div class="card"><div class="row-between"><h3 style="margin:0">' + esc(label) + '</h3>' + (key === 'brand' ? '<span class="muted" style="font-size:12px">מותגי-שיווק (לא יצרנים)</span>' : '') + '</div>' +
           '<div id="chips_' + key + '" style="margin:10px 0;line-height:2.2">' + chips + '</div>' +
           '<div style="display:flex;gap:8px"><input class="inp" data-add="' + key + '" placeholder="ערך חדש…" style="flex:1"><button class="btn btn-sm" data-addbtn="' + key + '">+ הוסף</button></div></div>';
@@ -8041,6 +8045,31 @@
         });
       }
       $('view').querySelectorAll('[data-del]').forEach(bindDel);
+      //  עריכת-שם בלחיצה על הצ'יפ. השינוי תופס גם ברשומות הקיימות לפי השדה:
+      //  מותג → brand_companies + field_options + leads · חברת שיווק → brand_companies.company ·
+      //  מקור/utm → leads. (מקור-אמת זהה לקסקייד הקיים במסך "מותגים".)
+      function bindEd(el) {
+        if (!el) return;
+        el.addEventListener('click', function () {
+          var field = el.dataset.edfield, oldVal = el.dataset.edval;
+          var nn = prompt('שם חדש לערך "' + oldVal + '" (יתעדכן גם ברשומות הקיימות):', oldVal);
+          if (nn == null) return; nn = nn.trim(); if (!nn || nn === oldVal) return;
+          db.from('field_options').update({ value: nn }).eq('field', field).eq('value', oldVal).then(function (u) {
+            if (u && u.error) return alert('שגיאה: ' + u.error.message);
+            if (field === 'brand') {
+              db.from('brand_companies').update({ brand: nn }).eq('brand', oldVal).then(function () {
+                db.from('leads').update({ brand: nn }).eq('brand', oldVal).then(function () { loadLists(); renderSettings('lists'); });
+              });
+            } else if (field === 'marketing_company') {
+              db.from('brand_companies').update({ company: nn }).eq('company', oldVal).then(function () { loadLists(); renderSettings('lists'); });
+            } else if (field === 'source' || field === 'utm_source') {
+              var o = {}; o[field] = nn;
+              db.from('leads').update(o).eq(field, oldVal).then(function () { renderSettings('lists'); });
+            } else { renderSettings('lists'); }
+          });
+        });
+      }
+      $('view').querySelectorAll('.chip-ed').forEach(bindEd);
       // הוספת ערך במקום — מוסיף צ'יפ חדש בלי לרענן את כל הדף
       $('view').querySelectorAll('[data-addbtn]').forEach(function (b) {
         b.addEventListener('click', function () {
@@ -8053,9 +8082,10 @@
               var ph = cont.querySelector('.muted'); if (ph) ph.remove();
               var span = document.createElement('span');
               span.className = 'tag'; span.style.margin = '3px';
-              span.innerHTML = esc(val) + ' <b data-del="' + u.data.id + '" data-delfield="' + esc(key) + '" data-delval="' + esc(val) + '" style="cursor:pointer;color:var(--danger)">✕</b>';
+              span.innerHTML = '<span class="chip-ed" data-edfield="' + esc(key) + '" data-edval="' + esc(val) + '" style="cursor:pointer" title="לחצו לשינוי שם">' + esc(val) + '</span> <b data-del="' + u.data.id + '" data-delfield="' + esc(key) + '" data-delval="' + esc(val) + '" style="cursor:pointer;color:var(--danger)">✕</b>';
               cont.appendChild(span);
               bindDel(span.querySelector('[data-del]'));
+              bindEd(span.querySelector('.chip-ed'));
             }
             inp.value = ''; inp.focus();
             if (key === 'brand') db.from('brand_companies').upsert({ brand: val, company: val }, { onConflict: 'brand' }).then(function () { loadLists(); renderBrandMap(); });
@@ -8080,6 +8110,19 @@
         });
       });
     });
+    }
+    //  קודם משלימים מותגים חסרים (מסך הרשימות בלבד), ואז מרנדרים.
+    if (sec === 'lists') {
+      Promise.all([
+        db.from('field_options').select('value').eq('field', 'brand'),
+        db.from('brand_companies').select('brand')
+      ]).then(function (res) {
+        var have = {}; (((res[0] && res[0].data) || [])).forEach(function (o) { have[o.value] = 1; });
+        var missing = (((res[1] && res[1].data) || [])).map(function (x) { return x.brand; }).filter(function (b) { return b && !have[b]; });
+        if (!missing.length) return proceed();
+        db.from('field_options').insert(missing.map(function (b) { return { field: 'brand', value: b }; })).then(function () { loadLists(); proceed(); }, proceed);
+      }, proceed);
+    } else proceed();
   }
 
   // ---------- SETTINGS: brand → marketing company mapping (admin) ----------
