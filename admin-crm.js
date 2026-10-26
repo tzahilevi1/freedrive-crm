@@ -2158,13 +2158,16 @@
     //  לכן גם ה-UI וגם ה-payload מגודרים (ראה readForm) — אחרת שמירת-עסקה בשאר הצי תישבר.
     var isELpilot = (window.__fleetCfg && window.__fleetCfg.slug) === 'electric-lease';
     var pilotCoordOpts = Object.keys(profiles || {}).map(function (uid) { return '<option value="' + esc(uid) + '"' + (deal.coordinator_id === uid ? ' selected' : '') + '>' + esc(profiles[uid]) + '</option>'; }).join('');
+    //  רשימת-משתמשים (לפי שם) לסוכן-שותף/מתוגמל. „מתוגמל" מתמלא אוטומטית מהסוכן המוכר.
+    var pilotUserNames = Object.keys(profiles || {}).map(function (uid) { return profiles[uid]; }).filter(Boolean);
+    function pilotUserSel(id, sel) { return '<select class="inp" id="' + id + '" style="width:100%"><option value="">— ללא —</option>' + pilotUserNames.map(function (n) { return '<option value="' + esc(n) + '"' + (sel === n ? ' selected' : '') + '>' + esc(n) + '</option>'; }).join('') + '</select>'; }
     var teamCard = !isELpilot ? '' : '<div class="card"><h3>👥 צוות העסקה</h3>' +
       '<p class="muted" style="font-size:12px;margin:-4px 0 10px">שיוך בעלי-התפקיד לעסקה — לבסיס הסנכרון בין מכירות, מתאמות והנהלת-חשבונות.</p>' +
       '<div class="grid2">' +
         '<div class="field" style="margin:0"><label>מתאמת (קבעה את הפגישה)</label><select class="inp" id="dl_coordinator" style="width:100%"><option value="">— ללא —</option>' + pilotCoordOpts + '</select></div>' +
         '<div class="field" style="margin:0"><label>ערוץ</label><select class="inp" id="dl_channel" style="width:100%"><option value="">—</option><option value="פרונטלי"' + (deal.channel === 'פרונטלי' ? ' selected' : '') + '>פרונטלי</option><option value="טלפוני"' + (deal.channel === 'טלפוני' ? ' selected' : '') + '>טלפוני</option></select></div>' +
-        '<div class="field" style="margin:0"><label>סוכן שותף</label><input class="inp" id="dl_partner_agent" value="' + esc(deal.partner_agent || '') + '" style="width:100%"></div>' +
-        '<div class="field" style="margin:0"><label>סוכן מתוגמל</label><input class="inp" id="dl_paid_agent" value="' + esc(deal.paid_agent || '') + '" style="width:100%"></div>' +
+        '<div class="field" style="margin:0"><label>סוכן שותף</label>' + pilotUserSel('dl_partner_agent', deal.partner_agent) + '</div>' +
+        '<div class="field" style="margin:0"><label>סוכן מתוגמל <span class="muted" style="font-weight:400">(מי שמכר — אוטומטי)</span></label>' + pilotUserSel('dl_paid_agent', deal.paid_agent || deal.salesperson || (window.C2B && window.C2B.userName)) + '</div>' +
         '<div class="field" style="margin:0"><label>מקדם עסקה <span class="muted" style="font-weight:400">(אופציונלי)</span></label><input class="inp" id="dl_deal_coefficient" type="number" step="0.01" value="' + esc(deal.deal_coefficient != null ? deal.deal_coefficient : '') + '" style="width:100%"></div>' +
       '</div></div>';
     //  טאבים פיננסיים (הוצאות/רווחיות) — מגודרים גם ב-slug וגם בתפקיד (הנה״ח/אדמין/מנהל-סניף).
