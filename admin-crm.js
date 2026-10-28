@@ -838,7 +838,7 @@
       '<span style="color:var(--line)">|</span>' +
       '<select id="bulkField"><option value="">➕ שדה נוסף…</option>' + BULK_FIELDS.map(function (f) { return '<option value="' + f.key + '">' + esc(f.label) + '</option>'; }).join('') + '</select>' +
       '<input id="bulkFieldVal" list="bulkFieldValL" placeholder="ערך…" style="width:130px"><datalist id="bulkFieldValL"></datalist>' +
-      '<button class="btn btn-sm" id="bulkApply">החל</button>' + (C.role !== 'sales' ? '<button class="btn btn-ghost btn-sm" id="bulkDel" style="color:var(--danger);border-color:var(--danger)">🗑️ מחק</button>' : '') + '<button class="btn btn-ghost btn-sm" id="bulkClear">בטל בחירה</button></div>';
+      '<button class="btn btn-sm" id="bulkApply">החל</button>' + (C.role === 'admin' ? '<button class="btn btn-ghost btn-sm" id="bulkDel" style="color:var(--danger);border-color:var(--danger)">🗑️ מחק</button>' : '') + '<button class="btn btn-ghost btn-sm" id="bulkClear">בטל בחירה</button></div>';
     var moreBar = hiddenN > 0 ? '<div style="text-align:center;padding:12px 0;border-top:1px solid var(--line)"><span class="muted" style="font-size:12.5px">מוצגים ' + rows.length + ' מתוך ' + allRows.length + ' · 🔍 חיפוש/סינון פועלים על כל הלידים</span> <button class="btn btn-ghost btn-sm" id="lShowAll">הצג את כולם (' + allRows.length + ')</button></div>' : '';
     C.$('leadsBody').innerHTML = (leadFilter ? leadFilter.render() : '') + bulkBar +
       '<div class="table-scroll"><table class="rz"><thead><tr><th style="width:30px;text-align:center"><input type="checkbox" id="selAll" title="בחר הכל"></th>' + leadCols.thead() + '</tr></thead><tbody id="ltbl">' + body + '</tbody></table></div>' + moreBar;
