@@ -587,10 +587,20 @@
       //  שמירת סינון-השדות + שם-התצוגה בין רענונים (פר-ארגון).
       var LF_KEY = 'c2b_lf_' + ((window.__fleetCfg && window.__fleetCfg.slug) || 'default');
       var curViewName = (opts && opts.viewName) || null;   // שם התצוגה שהוחלה (לכותרת)
+      var curViewId = (opts && opts.viewId) || null;       // id התצוגה הפעילה — עריכות נשמרות אליה בלבד
       var baseTitle = fieldFilter ? (fieldFilter.label + ': ' + (fieldFilter.value || '(ללא)')) : statusFilter === 'todistribute'
         ? '📥 לידים לחלוקה' + (distOwner.name ? ' · ' + distOwner.name : '')
         : (statusFilter ? stDef(statusFilter).label : 'כל הלידים');
-      function saveLF() { try { localStorage.setItem(LF_KEY, JSON.stringify({ conds: leadFilter ? leadFilter.getState() : [], viewName: curViewName || null })); } catch (e) {} }
+      function saveLF() { try { localStorage.setItem(LF_KEY, JSON.stringify({ conds: leadFilter ? leadFilter.getState() : [], viewName: curViewName || null, viewId: curViewId || null })); } catch (e) {} }
+      //  עריכת-סינון כשנמצאים על תצוגה → שמירה לתצוגה ההיא בלבד (DB + מטמון). אחרת → localStorage.
+      function persistFilter() {
+        if (curViewId) {
+          var _flt = { status: curFilter || null, conds: leadFilter ? leadFilter.getState() : [] };
+          db.from('lead_views').update({ filter: _flt }).eq('id', curViewId).then(function () {}, function () {});
+          if (window.C2B._leadViews && window.C2B._leadViews[curViewId]) window.C2B._leadViews[curViewId].filter = _flt;
+          saveLF();   // גם ל-localStorage כדי שרענון יחזיר את אותה תצוגה
+        } else saveLF();
+      }
       leadFilter = C.makeFilter([
         // פרטי הלקוח
         { key: 'name', label: 'שם לקוח' }, { key: 'phone', label: 'טלפון' }, { key: 'email', label: 'אימייל' },
@@ -623,20 +633,21 @@
         { key: 'external_id', label: 'lead_id' },
         { key: 'page_url', label: 'כתובת הדף' }, { key: 'ip', label: 'כתובת IP' }
       ], function () {
-        //  שינוי-סינון ידני → כבר לא "התצוגה ששמרת"; מנקים את השם מהכותרת.
-        if (curViewName) { curViewName = null; var _t = C.$('lTitle'); if (_t) _t.textContent = baseTitle; }
-        saveLF(); draw();
+        //  עריכת-סינון: אם נמצאים על תצוגה — נשמר לתצוגה ההיא בלבד (הכותרת נשארת);
+        //  אחרת — ל-localStorage (שורד רענון). כל תצוגה עצמאית לחלוטין.
+        persistFilter(); draw();
       });
-      //  החלת סינון: תצוגה שמורה (conds מפורש, כולל ריק=נקה) גוברת; אחרת — שחזור
-      //  הסינון האחרון מ-localStorage (שורד רענון), פר-ארגון.
+      //  החלת סינון: תצוגה הוחלה (conds מפורש) → נטענת; ניווט (fresh) → נקי; אחרת → שחזור רענון.
       if (opts && opts.conds !== undefined) { leadFilter.setState(opts.conds || []); saveLF(); }
-      else if (opts && opts.fresh) { leadFilter.setState([]); curViewName = null; saveLF(); }   // ניווט = התחלה נקייה
+      else if (opts && opts.fresh) { leadFilter.setState([]); curViewName = null; curViewId = null; saveLF(); }
       else {
-        curViewName = null;   // ברענון משחזרים רק את הסינון, לא שם-תצוגה — כותרת לא מטעה
+        //  רענון — משחזר את המצב האחרון (כולל התצוגה שהיית עליה, אם הייתה).
         try {
           var _raw = JSON.parse(localStorage.getItem(LF_KEY) || 'null');
-          var _lf = Array.isArray(_raw) ? _raw : ((_raw && _raw.conds) || []);
-          if (_lf && _lf.length) leadFilter.setState(_lf);
+          if (_raw && !Array.isArray(_raw)) {
+            if (_raw.conds && _raw.conds.length) leadFilter.setState(_raw.conds);
+            curViewId = _raw.viewId || null; curViewName = _raw.viewName || null;
+          } else if (Array.isArray(_raw) && _raw.length) leadFilter.setState(_raw);
         } catch (e) {}
       }
       if (!leadCols) leadCols = C.colPicker('leads', LEAD_COLS, draw, { resizable: true, sortable: true });
@@ -708,12 +719,10 @@
         db.from('lead_views').insert({ name: name, filter: f }).select('*').single().then(function (r) {
           if (r.error) return alert('שגיאה: ' + r.error.message);
           if (window.C2B.reloadLeadViewsNav) window.C2B.reloadLeadViewsNav();
-          //  ניקוי הסינון הלייב — כל תצוגה נבנית נקייה (מונע הצטברות בין תצוגות).
-          if (leadFilter && leadFilter.setState) leadFilter.setState([]);
-          curViewName = null; saveLF();
-          var _t2 = C.$('lTitle'); if (_t2) _t2.textContent = baseTitle;
-          draw();
-          alert('✔ התצוגה "' + name + '" נשמרה (' + conds.length + ' תנאי סינון) — בתפריט הצד. הסינון נוקה, אפשר ליצור עוד.');
+          //  עוברים לתצוגה החדשה — מכאן כל שינוי-סינון יישמר אליה בלבד (עצמאית).
+          curViewId = (r.data && r.data.id) || null; curViewName = name; saveLF();
+          var _t2 = C.$('lTitle'); if (_t2) _t2.textContent = '📌 ' + name;
+          alert('✔ התצוגה "' + name + '" נשמרה (' + conds.length + ' תנאי סינון). מעכשיו עריכת-סינון תישמר לתצוגה הזו בלבד. ליצירת תצוגה נוספת — לחצו "כל הלידים" ואז סננו מחדש.');
         });
       });
       draw();
