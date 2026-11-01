@@ -1200,19 +1200,21 @@
   // ---- consolidated, role-tailored action set (all actions in ONE bar) ----
   //  מנהל סניף נשכח מכל הפעולות: הוא רואה את כל הלידים אבל סרגל
   //  הפעולות שלו יצא ריק — בלי חיוג, בלי הערה, בלי סגירת עסקה.
+  //  אותה מלכודת חזרה עם 'brand_manager' (מנהל מותג) שנוסף כתפקיד מאוחר
+  //  יותר ולא הוכנס לכאן → הסרגל שלו יצא ריק. כל תפקיד ניהולי חייב להופיע.
   var LEAD_ACTIONS = [
-    { k: 'call', icon: '📞', label: 'התקשר', roles: ['admin', 'branch', 'sales', 'files'] },
-    { k: 'wa', icon: '💬', label: 'WhatsApp', roles: ['admin', 'branch', 'sales', 'files'] },
-    { k: 'mail', icon: '📧', label: 'מייל', roles: ['admin', 'branch', 'sales', 'files', 'accounting'] },
-    { k: 'note', icon: '📝', label: 'הערה', roles: ['admin', 'branch', 'sales', 'files', 'accounting'] },
-    { k: 'task', icon: '✅', label: 'משימה', roles: ['admin', 'branch', 'sales', 'files', 'accounting'] },
-    { k: 'doc', icon: '📎', label: 'מסמך', roles: ['admin', 'branch', 'sales', 'files', 'accounting'] },
-    { k: 'meeting', icon: '📅', label: 'קבע פגישה', roles: ['admin', 'branch', 'sales', 'files'] },
-    { k: 'car', icon: '🚗', label: 'בחר רכב', roles: ['admin', 'branch', 'sales'] },
-    { k: 'deal', icon: '💰', label: 'סגירת עסקה', roles: ['admin', 'branch', 'sales', 'files'] },
+    { k: 'call', icon: '📞', label: 'התקשר', roles: ['admin', 'branch', 'brand_manager','sales', 'files'] },
+    { k: 'wa', icon: '💬', label: 'WhatsApp', roles: ['admin', 'branch', 'brand_manager','sales', 'files'] },
+    { k: 'mail', icon: '📧', label: 'מייל', roles: ['admin', 'branch', 'brand_manager','sales', 'files', 'accounting'] },
+    { k: 'note', icon: '📝', label: 'הערה', roles: ['admin', 'branch', 'brand_manager','sales', 'files', 'accounting'] },
+    { k: 'task', icon: '✅', label: 'משימה', roles: ['admin', 'branch', 'brand_manager','sales', 'files', 'accounting'] },
+    { k: 'doc', icon: '📎', label: 'מסמך', roles: ['admin', 'branch', 'brand_manager','sales', 'files', 'accounting'] },
+    { k: 'meeting', icon: '📅', label: 'קבע פגישה', roles: ['admin', 'branch', 'brand_manager','sales', 'files'] },
+    { k: 'car', icon: '🚗', label: 'בחר רכב', roles: ['admin', 'branch', 'brand_manager','sales'] },
+    { k: 'deal', icon: '💰', label: 'סגירת עסקה', roles: ['admin', 'branch', 'brand_manager','sales', 'files'] },
     // "הסכם" הוסר מכאן: הוא חי בכרטיס העסקה, שם רואים גם את מצבו
     // (טיוטה / נשלח לחתימה / נחתם). כאן הוא רק שכפל כפתור בלי הקשר.
-    { k: 'auto', icon: '⚡', label: 'הודעות מהירות', roles: ['admin', 'branch', 'sales', 'files'] }
+    { k: 'auto', icon: '⚡', label: 'הודעות מהירות', roles: ['admin', 'branch', 'brand_manager','sales', 'files'] }
   ];
   function roleShort(role) { return { sales: 'מכירות', files: 'תיקי לקוחות', accounting: 'הנה״ח' }[role] || ''; }
   // customizable action bar (order / labels / visibility) — stored per browser
