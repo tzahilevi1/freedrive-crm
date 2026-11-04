@@ -472,11 +472,23 @@
 
   // ---------- LEADS TABLE ----------
   var cache = [], profiles = {}, orderIds = [], curFilter = null, curDeals = [], leadFilter = null, selectedLeads = {};
+  var leadTasks = {};        // lead_id → {n, titles[], due} — משימות פתוחות לפעמון בשורת-הליד
+  //  פעמון קטן בתא-השם כשיש משימה פתוחה על הליד. tooltip = כותרות + המועד הקרוב;
+  //  ספירה אם יש כמה; מספר/נקודה באדום אם משימה כבר עברה את זמנה. data-open פותח את הכרטיס.
+  function taskBell(id) {
+    var t = leadTasks[id]; if (!t) return '';
+    var over = t.due && new Date(t.due) < new Date();
+    var tip = (t.n > 1 ? t.n + ' משימות פתוחות:\n' : 'משימה פתוחה:\n') + (t.titles || []).slice(0, 5).join('\n') + (t.due ? '\n⏰ הקרובה: ' + fmt(t.due) : '');
+    var badge = t.n > 1
+      ? '<span style="font-size:10px;font-weight:800;vertical-align:super;margin-inline-start:1px;color:' + (over ? 'var(--danger)' : 'var(--muted)') + '">' + t.n + '</span>'
+      : (over ? '<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--danger);vertical-align:top;margin-inline-start:1px"></span>' : '');
+    return '<span class="lead-task-bell" data-open="1" title="' + esc(tip) + '" style="margin-inline-start:6px;cursor:pointer;white-space:nowrap">🔔' + badge + '</span>';
+  }
   var distOwner = {};        // מנהל המכירות שאליו נוחתים לידים חדשים
   var mgrIds = {};           // user_id → true למנהלים (אדמין/מנהל-סניף) — "מחזיקים" שלידיהם עדיין לחלוקה
   // configurable columns for the leads table (show/hide/reorder via the column chooser)
   var LEAD_COLS = [
-    { key: 'name', label: 'שם לקוח', w: 200, cell: function (l) { return '<td style="cursor:pointer" data-open="1"><span class="avatar" style="margin-inline-end:8px">' + esc(initials(l.name)) + '</span><b>' + esc(l.name) + '</b></td>'; } },
+    { key: 'name', label: 'שם לקוח', w: 200, cell: function (l) { return '<td style="cursor:pointer" data-open="1"><span class="avatar" style="margin-inline-end:8px">' + esc(initials(l.name)) + '</span><b>' + esc(l.name) + '</b>' + taskBell(l.id) + '</td>'; } },
     { key: 'phone', label: 'טלפון ראשי', w: 160, cell: function (l) { return '<td title="' + esc(l.phone || '') + '">' + (l.phone ? '<a class="call-ic" data-call="' + esc(l.phone) + '" data-lead="' + l.id + '" title="חייג" style="cursor:pointer;margin-inline-end:6px;text-decoration:none">📞</a><bdi>' + esc(l.phone) + '</bdi>' : '—') + '</td>'; } },
     { key: 'whatsapp', label: 'וואטסאפ', w: 84, sortable: false, cell: function (l) { var wa = waLink(l.phone); return '<td>' + (wa ? '<a class="wa-ic" href="' + wa + '" target="fd-whatsapp" rel="noopener" title="פתח וואטסאפ (משתמש בלשונית קיימת)" onclick="event.stopPropagation();return window.C2B_openWa(this.href)">💬</a>' : '—') + '</td>'; } },
     { key: 'assigned', label: 'מנהל מכירות', w: 170, sort: function (l) { return profiles[l.assigned_to] || ''; }, cell: function (l) { return '<td>' + assignChip(l) + '</td>'; } },
@@ -568,11 +580,20 @@
       db.from('admin_config').select('value').eq('key', 'default_owner').maybeSingle(),
       //  רשימות-בחירה לשדות-הסינון (jsonb אחד): form_name(כולל מחוברים)/campaign/
       //  adset_name/ad_name/close_reason/city/utm_campaign — שלם, מכבד RLS.
-      db.rpc('lead_list_options')
+      db.rpc('lead_list_options'),
+      //  משימות פתוחות לפעמון בשורת-הליד (מכבד RLS; תקלה/מותג-ישן → בלי פעמונים, אין רגרסיה).
+      db.from('tasks').select('lead_id,title,due_at').eq('done', false).limit(5000)
     ]).then(function (res) {
       if (res[0].error) return errBox(res[0].error.message);
       distOwner = ((res[2] && res[2].data && res[2].data.value) || {});
       var rpcOpts = (res[3] && res[3].data) || {};
+      leadTasks = {};
+      ((res[4] && res[4].data) || []).forEach(function (t) {
+        if (t.lead_id == null) return;
+        var e = leadTasks[t.lead_id] || (leadTasks[t.lead_id] = { n: 0, titles: [], due: null });
+        e.n++; if (t.title) e.titles.push(t.title);
+        if (t.due_at && (!e.due || t.due_at < e.due)) e.due = t.due_at;
+      });
       cache = res[0].data || [];
       profiles = {}; mgrIds = {}; (res[1].data || []).forEach(function (p) { profiles[p.user_id] = p.full_name; if (p.role === 'admin' || p.role === 'branch') mgrIds[p.user_id] = true; });
       //  אפשרויות רשימה נפתחת לשדה מה-RPC (כל הערכים, מכבד RLS). ריק → טקסט חופשי.
