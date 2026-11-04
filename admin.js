@@ -387,10 +387,7 @@
           (DEFAULT_VIEWS.admin || []).forEach(function (v) { if (window.C2B.views.indexOf(v) < 0) window.C2B.views.push(v); });
         }
         if (r.data && r.data.full_name) { window.C2B.userName = r.data.full_name; $('whoami').textContent = r.data.full_name + ' · ' + roleLabel(window.C2B.role); }
-        //  מנהל-מותג: טוען את הסוכנים שתחתיו (manager_id) — בורר-השיוך מסנן אליהם.
-        if (window.C2B.role === 'brand_manager' && window.C2B.userId) {
-          db.from('profiles').select('user_id').eq('manager_id', window.C2B.userId).then(function (rp) { window.C2B.myReps = ((rp && rp.data) || []).map(function (x) { return x.user_id; }); }, function () { window.C2B.myReps = []; });
-        }
+        //  (בעבר: טעינת myReps לסינון בורר-השיוך למנהל-מותג. הוסר — כל המשתמשים זמינים לשיוך.)
         applyRole(window.C2B.role); refreshBadges(); go(lastView() || 'dashboard');
       }
       db.from('admin_config').select('value').eq('key', 'role_views').maybeSingle().then(function (rv) {
