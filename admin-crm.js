@@ -582,7 +582,10 @@
       //  adset_name/ad_name/close_reason/city/utm_campaign — שלם, מכבד RLS.
       db.rpc('lead_list_options'),
       //  משימות פתוחות לפעמון בשורת-הליד (מכבד RLS; תקלה/מותג-ישן → בלי פעמונים, אין רגרסיה).
-      db.from('tasks').select('lead_id,title,due_at').eq('done', false).limit(5000)
+      db.from('tasks').select('lead_id,title,due_at').eq('done', false).limit(5000),
+      //  שמות-משתמשים לשיוך (שם+מזהה בלבד, RPC least-privilege) — ממלא את מפת-השמות
+      //  למנהל-מותג שאינו קורא את כל טבלת profiles. ריק לסוכן (נשמרת כוונת P4).
+      db.rpc('list_assignable_users')
     ]).then(function (res) {
       if (res[0].error) return errBox(res[0].error.message);
       distOwner = ((res[2] && res[2].data && res[2].data.value) || {});
@@ -596,6 +599,8 @@
       });
       cache = res[0].data || [];
       profiles = {}; mgrIds = {}; (res[1].data || []).forEach(function (p) { profiles[p.user_id] = p.full_name; if (p.role === 'admin' || p.role === 'branch') mgrIds[p.user_id] = true; });
+      //  מיזוג שמות-השיוך (res[5], RPC) — מוסיף שמות שלא הגיעו מ-profiles (מנהל-מותג).
+      ((res[5] && res[5].data) || []).forEach(function (u) { if (u.user_id && !profiles[u.user_id]) profiles[u.user_id] = u.full_name; });
       //  אפשרויות רשימה נפתחת לשדה מה-RPC (כל הערכים, מכבד RLS). ריק → טקסט חופשי.
       function listFrom(field) { var a = rpcOpts[field] || []; return a.length ? [{ v: '', l: '— הכל —' }].concat(a) : null; }
       function formNameOpts() { return listFrom('form_name'); }
