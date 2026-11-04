@@ -238,7 +238,15 @@
   //  והוא מזין אותו (verify_login_otp). fail-closed: כשל בשליחת הקוד חוסם את
   //  הכניסה (לא נעקף) — עם שליחה חוזרת והתנתקות. אם מנוע ה-OTP נשבר לחלוטין,
   //  שחזור-חירום: פאנל Supabase (נטרול זמני של השער / איפוס). תמיד יש התנתקות.
-  var OTP_WINDOW_MS = 12 * 3600 * 1000;   // דילוג על קוד ברענון תוך 12 שעות (לא בכניסה חדשה)
+  var OTP_WINDOW_MS = 12 * 3600 * 1000;   // תוקף ברכת-ה-OTP לסשן בודד (fallback ל-localStorage למותג-ישן)
+  //  "זכור מכשיר זה": אחרי OTP ראשון נשמר אסימון-מכשיר שורד-logout ב-localStorage.
+  //  כניסה/רענון במכשיר מהימן → check_trusted_device מברך את הסשן בשקט (בלי קוד).
+  //  מכשיר אחר (אין אסימון תקף) → קוד כרגיל. אדמין יכול לבטל אמון (revoke_trusted_devices).
+  var DEVTOK_KEY = 'fdDeviceToken';
+  function getDeviceToken() { try { return localStorage.getItem(DEVTOK_KEY) || ''; } catch (e) { return ''; } }
+  function setDeviceToken(t) { try { if (t) localStorage.setItem(DEVTOK_KEY, t); } catch (e) { } }
+  function clearDeviceToken() { try { localStorage.removeItem(DEVTOK_KEY); } catch (e) { } }
+  function deviceLabel() { try { return (navigator.userAgent || '').slice(0, 180); } catch (e) { return ''; } }
   function mfaBody() {
     var el = document.getElementById('mfaGate');
     if (!el) {
@@ -259,7 +267,9 @@
         '<input id="mfaCode" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="000000" style="width:100%;box-sizing:border-box;text-align:center;font-size:22px;letter-spacing:6px;padding:10px;border:1px solid #ddd;border-radius:10px;direction:ltr">' +
         '<div id="mfaErr" style="color:#c0392b;font-size:13px;min-height:18px;margin:6px 0"></div>' +
         '<button id="mfaVerify" class="btn" style="width:100%">אימות כניסה</button>' +
-        '<div style="margin-top:10px;text-align:center;font-size:12px"><a href="#" id="mfaResend">שליחה חוזרת</a> · <a href="#" id="mfaOut">התנתקות</a></div>';
+        '<label for="mfaRemember" style="display:flex;align-items:center;gap:8px;justify-content:center;margin:12px 0 2px;font-size:13px;color:#444;cursor:pointer">' +
+          '<input type="checkbox" id="mfaRemember" checked style="width:16px;height:16px;margin:0"> זכור את המכשיר הזה (לא נבקש קוד שוב במכשיר זה)</label>' +
+        '<div style="margin-top:8px;text-align:center;font-size:12px"><a href="#" id="mfaResend">שליחה חוזרת</a> · <a href="#" id="mfaOut">התנתקות</a></div>';
       var run = function () {
         var code = (body.querySelector('#mfaCode').value || '').replace(/\D/g, '');
         if (code.length < 6) return;
@@ -267,7 +277,16 @@
         db.rpc('verify_login_otp', { p_code: code }).then(function (r) {
           if (r.error || r.data !== true) { body.querySelector('#mfaErr').textContent = 'קוד שגוי או שפג תוקף, נסו שוב'; return; }
           try { localStorage.setItem('otpOkUntil', String(Date.now() + OTP_WINDOW_MS)); } catch (e) { }
-          closeMfa(); onOk();
+          var finish = function () { closeMfa(); onOk(); };
+          //  "זכור מכשיר זה": רושמים אסימון-מכשיר (RPC מגודר-otp_ok) ושומרים ב-localStorage.
+          //  לא מסומן → מנקים אסימון קודם (מחשב משותף). כשל/RPC חסר (מותג-ישן) → ממשיכים רגיל.
+          var rememberEl = body.querySelector('#mfaRemember');
+          if (rememberEl && rememberEl.checked) {
+            db.rpc('trust_this_device', { p_label: deviceLabel() }).then(function (t) {
+              if (t && !t.error && t.data) setDeviceToken(t.data);
+              finish();
+            }, finish);
+          } else { clearDeviceToken(); finish(); }
         });
       };
       body.querySelector('#mfaVerify').addEventListener('click', run);
@@ -286,20 +305,27 @@
       body.querySelector('#mfaOut').addEventListener('click', function (e) { e.preventDefault(); db.auth.signOut().then(function () { closeMfa(); showLogin(); }); });
     });
   }
-  //  force=true (כניסה חדשה עם סיסמה) → תמיד קוד. force=false/undefined (רענון) →
-  //  דילוג אם כבר אומת ב-12 השעות האחרונות בדפדפן הזה (כדי לא לשלוח קוד בכל רענון).
+  //  שער ה-OTP (מקור-האמת = otp_ok() ב-DB; כל ה-RLS תלוי בו). סדר הבדיקה:
+  //   1) הסשן כבר אומת ב-DB → ממשיכים.
+  //   2) יש אסימון-מכשיר מהימן → check_trusted_device מברך את הסשן בשקט (בלי קוד).
+  //   3) אין → שולחים קוד למייל. (force נשמר לתאימות-קריאה; לא מכריח קוד במכשיר מהימן.)
+  //  מותג שטרם הוסב (otp_ok/RPC חסרים) → נפילה להתנהגות-ה-localStorage הישנה, בלי רגרסיה.
   function ensureMfa(session, onOk, force) {
-    //  מקור-האמת הוא ה-DB: otp_ok() בבסיס-הנתונים בודק שהסשן הנוכחי אימת קוד,
-    //  וה-RLS כולו תלוי בכך — כך שאי-אפשר לעקוף את הקוד בכניסה ישירה ל-API.
-    //  force (כניסה חדשה עם סיסמה) → תמיד מבקשים קוד. פרויקט שבו otp_ok עדיין
-    //  לא קיים (מותג שטרם הוסב) → נפילה להתנהגות-ה-localStorage הישנה, בלי רגרסיה.
-    if (force) { try { localStorage.removeItem('otpOkUntil'); } catch (e) { } otpSendAndPrompt(onOk); return; }
     var byLocal = function () { var u = 0; try { u = +localStorage.getItem('otpOkUntil') || 0; } catch (e) { } return Date.now() < u; };
+    var tryTrusted = function (afterFail) {
+      var tok = getDeviceToken();
+      if (!tok) { afterFail(); return; }
+      db.rpc('check_trusted_device', { p_token: tok }).then(function (c) {
+        if (c && !c.error && c.data === true) { onOk(); return; }   // מכשיר מהימן → ברכה שקטה, בלי קוד
+        if (c && c.error) { afterFail(); return; }                  // RPC חסר (מותג ישן) → זרימה רגילה
+        clearDeviceToken(); afterFail();                            // אסימון פג/בוטל/לא-תקף → קוד
+      }, function () { afterFail(); });
+    };
     db.rpc('otp_ok').then(function (r) {
-      if (r && !r.error && r.data === true) { onOk(); return; }           // הסשן אומת ב-DB
-      if (r && r.error && byLocal()) { onOk(); return; }                   // otp_ok חסר (מותג ישן) → מנגנון ישן
-      otpSendAndPrompt(onOk);
-    }, function () { if (byLocal()) onOk(); else otpSendAndPrompt(onOk); });
+      if (r && r.error && byLocal()) { onOk(); return; }            // otp_ok חסר (מותג ישן) → מנגנון ישן
+      if (r && !r.error && r.data === true) { onOk(); return; }     // הסשן אומת ב-DB
+      tryTrusted(function () { otpSendAndPrompt(onOk); });
+    }, function () { if (byLocal()) onOk(); else tryTrusted(function () { otpSendAndPrompt(onOk); }); });
   }
   //  showApp נקראה פעמיים: פעם מטופס ההתחברות, ופעם מ-getSession של טעינת
   //  העמוד שהבטחתו נפתרת אחרי ההתחברות ומוצאת סשן קיים. התוצאה הייתה 24
@@ -858,7 +884,7 @@
     e.preventDefault(); $('loginErr').textContent = '';
     db.auth.signInWithPassword({ email: $('email').value.trim(), password: $('password').value }).then(function (r) {
       if (r.error) { $('loginErr').textContent = 'התחברות נכשלה: ' + r.error.message; return; }
-      ensureMfa(r.data.session, function () { showApp(r.data.session); }, true);
+      ensureMfa(r.data.session, function () { showApp(r.data.session); });
     });
   });
   $('logout').addEventListener('click', function () { db.auth.signOut().then(showLogin); });
@@ -7399,11 +7425,25 @@
       '<div style="display:flex;align-items:center;gap:10px;margin-top:16px;padding-top:14px;border-top:1px solid var(--line)">' +
         '<button class="btn" id="ue_save">💾 שמור פרטים</button>' +
         '<button class="btn btn-ghost btn-sm" id="ue_close">✕ סגור</button>' +
+        //  ביטול-אמון: מבטל את כל המכשירים המהימנים של המשתמש (מכשיר אבוד/גנוב / עזיבה)
+        //  ומאלץ אימות-קוד מחדש. אדמין בלבד (ה-RPC גם מגודר is_admin בצד-DB).
+        ((window.C2B && window.C2B.role === 'admin') ?
+          '<button class="btn btn-ghost btn-sm" id="ue_revokeDev" style="color:var(--danger)" title="מבטל את כל המכשירים המהימנים של המשתמש ומאלץ קוד-כניסה מחדש">🔐 נתק מכל המכשירים</button>' : '') +
         '<span id="ue_msg" style="font-size:12.5px;margin-inline-start:4px"></span>' +
       '</div>' +
       '<p class="muted" style="font-size:11px;margin:10px 0 0">שדות אלו (שלוחת SIP, טלפון, סניף…) זמינים לחיבור אוטומציות, חיוג וניתוב בהמשך.</p>' +
     '</div>';
     $('ue_close').addEventListener('click', function () { tr.classList.add('hidden'); td.innerHTML = ''; });
+    if ($('ue_revokeDev')) $('ue_revokeDev').addEventListener('click', function () {
+      if (!confirm('לבטל אמון לכל המכשירים של ' + (p.full_name || '') + '?\nבכניסה הבאה (בכל מכשיר) יידרש קוד-כניסה למייל מחדש.')) return;
+      var b = this; b.disabled = true;
+      $('ue_msg').style.color = 'var(--muted)'; $('ue_msg').textContent = 'מבטל אמון…';
+      db.rpc('revoke_trusted_devices', { p_user_id: uid }).then(function (r) {
+        b.disabled = false;
+        if (r && r.error) { $('ue_msg').style.color = 'var(--danger)'; $('ue_msg').textContent = 'שגיאה: ' + r.error.message; return; }
+        $('ue_msg').style.color = 'var(--ok)'; $('ue_msg').textContent = 'בוטל אמון ל-' + (r && typeof r.data === 'number' ? r.data : 0) + ' מכשירים — יידרש קוד מחדש.';
+      }, function () { b.disabled = false; $('ue_msg').style.color = 'var(--danger)'; $('ue_msg').textContent = 'שגיאה בביטול האמון'; });
+    });
     function newRoleValue() { return ($('ue_role') && !isSelf) ? $('ue_role').value : p.role; }
     //  סנכרון שדה-המותג לתפקיד הנבחר: מכירות=יחיד, מנהל-מותג/תיקים/הנה״ח=רב, אדמין/סניף=מוסתר.
     function ueBrandSync() {
