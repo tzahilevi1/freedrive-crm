@@ -203,7 +203,7 @@
   //  ולא לפי סדר הכנסה — משימה באיחור היא הדבר היחיד שדורש פעולה עכשיו.
   var bellTab = 'late';
   function loadBell() {
-    db.from('tasks').select('id,title,due_at,done,lead_id').eq('done', false).order('due_at', { ascending: true }).then(function (r) {
+    db.from('tasks').select('id,title,due_at,done,lead_id').eq('done', false).is('deleted_at', null).order('due_at', { ascending: true }).then(function (r) {
       var tasks = r.data || [], now = Date.now();
       var isLate = function (t) { return t.due_at && new Date(t.due_at).getTime() < now; };
       var late = tasks.filter(isLate), soon = tasks.filter(function (t) { return !isLate(t); });
@@ -1184,7 +1184,7 @@
 
   function refreshBadges() {
     db.from('leads').select('id', { count: 'exact', head: true }).is('deleted_at', null).then(function (r) { if (r.count != null) $('bLeads').textContent = r.count; });
-    db.from('tasks').select('id', { count: 'exact', head: true }).eq('done', false).then(function (r) { if (r.count != null) $('bTasks').textContent = r.count; }).catch(function () {});
+    db.from('tasks').select('id', { count: 'exact', head: true }).eq('done', false).is('deleted_at', null).then(function (r) { if (r.count != null) $('bTasks').textContent = r.count; }).catch(function () {});
     loadBell();
     refreshAlertBadge();
   }
@@ -3722,7 +3722,7 @@
     loading();
     // שתי מנות: קודם המשימות, ואז רק הלידים שהן באמת מצביעות עליהם.
     // קודם ירדה כל טבלת הלידים לכל פתיחה של המסך.
-    db.from('tasks').select('*').order('due_at', { ascending: true }).limit(2000).then(function (tr) {
+    db.from('tasks').select('*').is('deleted_at', null).order('due_at', { ascending: true }).limit(2000).then(function (tr) {
       if (tr.error) return errBox(tr.error.message);
       var ids = [];
       (tr.data || []).forEach(function (t) { if (t.lead_id && ids.indexOf(t.lead_id) < 0) ids.push(t.lead_id); });
@@ -4037,7 +4037,7 @@
       repLeads(),
       db.from('appointments').select('status'),
       db.from('events').select('type,session_id,created_at'),
-      db.from('tasks').select('done'),
+      db.from('tasks').select('done').is('deleted_at', null),
       db.from('profiles').select('user_id,full_name'),
       repDeals(),
       db.from('payments').select('amount,kind,deal_id'),
@@ -7618,7 +7618,7 @@
       fetchAll(function () { return db.from('leads').select('id,name,status,source,created_at,first_response_at,status_changed_at,city,brand,car,assigned_to').is('deleted_at', null).gte('created_at', since).order('id', { ascending: true }); }).then(function (d) { return { data: d }; }, function (e) { return { data: [], error: e }; }),
       db.from('deals').select('id,lead_id,order_no,client_name,total,commission,stage,status,created_at,updated_at,car_make,car_model,has_signature,checklist'),
       db.from('payments').select('amount,kind,created_at,deal_id'),
-      db.from('tasks').select('done,due_at,title,lead_id'),
+      db.from('tasks').select('done,due_at,title,lead_id').is('deleted_at', null),
       db.from('appointments').select('status,appt_at'),
       db.from('profiles').select('user_id,full_name'),
       //  ההיסטוריה שלי בלבד — RLS מסנן, ולכן אין צורך בתנאי כאן

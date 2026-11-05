@@ -473,6 +473,7 @@
   // ---------- LEADS TABLE ----------
   var cache = [], profiles = {}, orderIds = [], curFilter = null, curDeals = [], leadFilter = null, selectedLeads = {};
   var noteHist = {};         // note activity id → history[] (גרסאות קודמות) לצפייה בכרטיס
+  var taskById = {}, docNameById = {};   // לעריכה דרך תפריט ⋮ בציר-הזמן (משימה/שינוי-שם מסמך)
   var leadTasks = {};        // lead_id → {n, titles[], due} — משימות פתוחות לפעמון בשורת-הליד
   //  פעמון קטן בתא-השם כשיש משימה פתוחה על הליד. tooltip = כותרות + המועד הקרוב;
   //  ספירה אם יש כמה; מספר/נקודה באדום אם משימה כבר עברה את זמנה. data-open פותח את הכרטיס.
@@ -583,7 +584,7 @@
       //  adset_name/ad_name/close_reason/city/utm_campaign — שלם, מכבד RLS.
       db.rpc('lead_list_options'),
       //  משימות פתוחות לפעמון בשורת-הליד (מכבד RLS; תקלה/מותג-ישן → בלי פעמונים, אין רגרסיה).
-      db.from('tasks').select('lead_id,title,due_at').eq('done', false).limit(5000),
+      db.from('tasks').select('lead_id,title,due_at').eq('done', false).is('deleted_at', null).limit(5000),
       //  שמות-משתמשים לשיוך (שם+מזהה בלבד, RPC least-privilege) — ממלא את מפת-השמות
       //  למנהל-מותג שאינו קורא את כל טבלת profiles. ריק לסוכן (נשמרת כוונת P4).
       db.rpc('list_assignable_users')
@@ -1343,7 +1344,7 @@
       var path = safeStoragePath(leadId, file.name);
       db.storage.from('lead-docs').upload(path, file, { contentType: file.type || undefined, upsert: false }).then(function (u) {
         if (u.error) { errs.push(file.name + ': ' + u.error.message); done++; return step(); }
-        db.from('lead_documents').insert({ lead_id: leadId, name: file.name, storage_path: path }).then(function (ir) {
+        db.from('lead_documents').insert({ lead_id: leadId, name: file.name, storage_path: path, created_by: C.userId || null }).then(function (ir) {
           if (ir.error) errs.push(file.name + ' (רשומה): ' + ir.error.message); else ok++;
           done++; step();
         });
@@ -1423,7 +1424,7 @@
     Promise.all([
       db.from('leads').select('*').eq('id', id).single(),
       db.from('activities').select('id,created_at,lead_id,type,body,meta,created_by,org_id,edited_at').eq('lead_id', id).is('deleted_at', null).order('created_at', { ascending: false }),
-      db.from('tasks').select('*').eq('lead_id', id).order('due_at', { ascending: true }),
+      db.from('tasks').select('*').eq('lead_id', id).is('deleted_at', null).order('due_at', { ascending: true }),
       db.from('lead_documents').select('*').eq('lead_id', id).is('deleted_at', null).order('created_at', { ascending: false }),
       db.from('deals').select('*').eq('lead_id', id).order('created_at', { ascending: false }),
       db.from('profiles').select('user_id,full_name'),
@@ -1483,7 +1484,7 @@
             '<div class="qa2">' + actBtns + '</div><div id="lpForm" style="margin-top:10px"></div>' +
             '<h3 style="margin:18px 0 4px">ציר זמן — הכל במקום אחד</h3><p class="muted" style="font-size:12px;margin:0 0 10px">הערות · שיחות · WhatsApp · מיילים · משימות · מסמכים · עסקאות · תשלומים</p>' +
             '<div class="tl" id="lpTimeline">' + feedHtml(feed) + '</div>' +
-            '<div style="margin-top:10px"><a href="#" id="lpShowDeleted" class="muted" style="font-size:12px;text-decoration:none">🗑 הצג הערות שנמחקו</a><div id="lpDeletedNotes" style="margin-top:8px"></div></div>' +
+            '<div style="margin-top:10px"><a href="#" id="lpShowDeleted" class="muted" style="font-size:12px;text-decoration:none">🗑 הצג פריטים שנמחקו</a><div id="lpDeletedNotes" style="margin-top:8px"></div></div>' +
           '</div>' +
         '</div>' +
       '</div>'
@@ -1687,16 +1688,16 @@
         body = '<div style="white-space:pre-wrap;line-height:1.7">' + body + '</div>' +
           '<a href="#" data-opencall="' + esc(a.meta.call_id) + '" class="btn btn-ghost btn-sm" style="margin-top:7px">🎧 פתח את השיחה המלאה</a>';
       }
-      //  הערה: עריכה/מחיקה (מי שכתב + אדמין) + סימון "נערך" עם צפייה בגרסאות קודמות.
+      //  הערה: ניהול (עריכה/מחיקה) דרך תפריט ⋮ ל"מי שכתב + אדמין"; "נערך" עם צפייה בגרסאות.
+      var noteManage = false;
       if (a.type === 'note') {
-        var canEdit = (a.created_by === C.userId) || (C.role === 'admin');
-        //  "נערך" מוצג לכולם (מטא-דאטה); הגרסאות הקודמות עצמן נפתחות רק לכותב/אדמין דרך RPC note_history.
-        var edited = a.edited_at ? (canEdit ? ' <a href="#" class="muted" data-notehist="' + a.id + '" style="font-size:11px;text-decoration:none" title="הצג גרסאות קודמות">· נערך ✎</a>' : ' <span class="muted" style="font-size:11px">· נערך</span>') : '';
-        var ctrls = canEdit ? '<span style="float:inline-start;display:inline-flex;gap:8px;margin-inline-start:8px"><a href="#" data-editnote="' + a.id + '" title="ערוך הערה" style="text-decoration:none;font-size:13px">✏️</a><a href="#" data-delnote="' + a.id + '" title="מחק הערה" style="text-decoration:none;font-size:13px">🗑️</a></span>' : '';
-        body = '<div class="note-wrap" data-noteid="' + a.id + '">' + ctrls + '<span class="note-body" style="white-space:pre-wrap">' + (a.body ? esc(a.body) : '') + '</span>' + edited + '</div>';
+        noteManage = (a.created_by === C.userId) || (C.role === 'admin');
+        var edited = a.edited_at ? (noteManage ? ' <a href="#" class="muted" data-notehist="' + a.id + '" style="font-size:11px;text-decoration:none" title="הצג גרסאות קודמות">· נערך ✎</a>' : ' <span class="muted" style="font-size:11px">· נערך</span>') : '';
+        body = '<div class="note-wrap" data-noteid="' + a.id + '"><span class="note-body" style="white-space:pre-wrap">' + (a.body ? esc(a.body) : '') + '</span>' + edited + '</div>';
       }
       items.push({ ts: a.created_at, icon: isCall ? '📞' : (ACT_ICON[a.type] || '•'), who: profiles[a.created_by],
-        html: body, tag: isCall ? 'ניתוח שיחה' : (FEED_TAG[a.type] || a.type) });
+        html: body, tag: isCall ? 'ניתוח שיחה' : (FEED_TAG[a.type] || a.type),
+        kind: a.type === 'note' ? 'note' : null, mid: a.id, canManage: noteManage });
     });
     docs.forEach(function (d) {
       var u = urls[d.storage_path], body, isPdf = /\.pdf$/i.test(d.name || '') || /\.pdf$/i.test(d.storage_path || '');
@@ -1704,7 +1705,9 @@
       else if (u && isPdf) body = '<div style="margin:2px 0 6px">📄 ' + esc(d.name) + ' · <a href="' + u + '" target="_blank" rel="noopener noreferrer">פתח במסך מלא »</a></div><iframe src="' + u + '" title="' + esc(d.name) + '" style="width:100%;height:360px;border:1px solid var(--line);border-radius:10px"></iframe>';
       else if (u && !/\.html?$/i.test(d.storage_path || '')) body = '<a href="' + u + '" target="_blank" rel="noopener">📎 ' + esc(d.name) + '</a>';
       else body = '<a href="#" data-doc="' + esc(d.storage_path) + '" data-docname="' + esc(d.name || '') + '">📎 ' + esc(d.name) + '</a>';   // HTML (הסכם חתום) → viewDoc: Supabase מגיש text/plain, קישור ישיר שבור
-      items.push({ ts: d.created_at, icon: isPdf ? '📄' : '📎', who: profiles[d.created_by], html: body, tag: isPdf ? 'PDF' : 'מסמך' });
+      docNameById[d.id] = d.name || '';
+      items.push({ ts: d.created_at, icon: isPdf ? '📄' : '📎', who: profiles[d.created_by], html: body, tag: isPdf ? 'PDF' : 'מסמך',
+        kind: 'document', mid: d.id, canManage: (d.created_by === C.userId) || (C.role === 'admin') });
     });
     tasks.forEach(function (t) {
       var over = !t.done && t.due_at && new Date(t.due_at) < new Date();
@@ -1712,8 +1715,10 @@
       var created = t.created_at ? '<span class="muted" style="font-size:11px"> · נוצרה ' + fmt(t.created_at) + '</span>' : '';
       var flag = t.done ? '<span class="done-badge">✓ בוצע</span>' : '<span class="task-open">● פתוחה</span>';
       var title = '<span' + (t.done ? ' style="text-decoration:line-through;color:var(--muted)"' : '') + '>' + esc(t.title) + '</span>';
+      taskById[t.id] = { title: t.title || '', notes: t.notes || '', due_at: t.due_at || '' };
       items.push({ ts: t.created_at || t.due_at, icon: t.done ? '✅' : '🔲', who: profiles[t.created_by], cls: t.done ? 'done' : '', tag: 'משימה',
-        html: '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;flex-wrap:wrap"><input type="checkbox" data-task="' + t.id + '"' + (t.done ? ' checked' : '') + '>' + title + ' ' + flag + due + created + '</label>' + (t.notes ? '<div class="muted" style="font-size:12.5px;margin-top:3px">🗒️ ' + esc(t.notes) + '</div>' : '') });
+        html: '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;flex-wrap:wrap"><input type="checkbox" data-task="' + t.id + '"' + (t.done ? ' checked' : '') + '>' + title + ' ' + flag + due + created + '</label>' + (t.notes ? '<div class="muted" style="font-size:12.5px;margin-top:3px">🗒️ ' + esc(t.notes) + '</div>' : ''),
+        kind: 'task', mid: t.id, canManage: (t.created_by === C.userId) || (C.role === 'admin') });
     });
     deals.forEach(function (d) { items.push({ ts: d.created_at, icon: '💰', who: profiles[d.created_by], html: 'עסקה #' + esc(d.order_no || String(d.id).slice(0, 6)) + (d.car_make ? ' · ' + esc(d.car_make + ' ' + (d.car_model || '')) : '') + (d.total ? ' · ' + nis(d.total) : '') + ' — <a href="#" data-open-deal="' + d.id + '">פתח</a>', tag: 'עסקה' }); });
     pays.forEach(function (p) { items.push({ ts: p.created_at, icon: '🧾', who: profiles[p.created_by], html: ({ invoice: 'חשבונית', receipt: 'קבלה', payment: 'תשלום' }[p.kind] || 'תשלום') + ' · ' + nis(p.amount) + (p.method ? ' · ' + esc(p.method) : '') + (p.ref_no ? ' · ' + esc(p.ref_no) : ''), tag: 'כספים' }); });
@@ -1722,7 +1727,9 @@
   }
   function feedHtml(items) {
     return items.length ? items.map(function (a) {
-      return '<div class="ev' + (a.cls ? ' ' + a.cls : '') + '"><div class="dot">' + a.icon + '</div><div style="flex:1"><div class="tm">' + fmt(a.ts) + (a.tag ? ' · ' + esc(a.tag) : '') + (a.who ? ' · ' + esc(a.who) : '') + '</div>' + (a.html ? '<div>' + a.html + '</div>' : '') + '</div></div>';
+      //  תפריט ⋮ (עריכה/מחיקה) בצד שמאל של הפריט — רק למי שיצר הערה/משימה/מסמך (או אדמין).
+      var menu = (a.canManage && a.mid && a.kind) ? '<button class="ev-menu" data-rowmenu="' + a.kind + ':' + a.mid + '" title="פעולות" aria-label="פעולות" style="flex:none;align-self:flex-start;background:none;border:none;cursor:pointer;color:var(--muted);font-size:18px;line-height:1;padding:0 6px">⋮</button>' : '';
+      return '<div class="ev' + (a.cls ? ' ' + a.cls : '') + '"><div class="dot">' + a.icon + '</div><div style="flex:1"><div class="tm">' + fmt(a.ts) + (a.tag ? ' · ' + esc(a.tag) : '') + (a.who ? ' · ' + esc(a.who) : '') + '</div>' + (a.html ? '<div>' + a.html + '</div>' : '') + '</div>' + menu + '</div>';
     }).join('') : '<p class="empty">אין עדיין פעילות</p>';
   }
   //  עריכת הערה במקום (inline) בתוך ציר-הזמן → edit_note (שומר גרסה קודמת).
@@ -1753,20 +1760,88 @@
       alert('גרסאות קודמות של ההערה:\n\n' + txt);
     });
   }
-  //  הערות שנמחקו (רך) של הליד — מי שכתב רואה את שלו, אדמין את כולן — עם שחזור.
+  //  פריטים שנמחקו (רך) של הליד — הערות/משימות/מסמכים; היוצר רואה את שלו, אדמין את הכול — עם שחזור.
   function loadDeletedNotes(lead) {
     var box = C.$('lpDeletedNotes'); if (!box) return;
     box.innerHTML = '<span class="muted" style="font-size:12px">טוען…</span>';
-    db.from('activities').select('id,body,created_at,deleted_at,created_by')
-      .eq('lead_id', lead.id).eq('type', 'note').not('deleted_at', 'is', null)
-      .order('deleted_at', { ascending: false }).limit(50).then(function (r) {
-        var list = ((r && r.data) || []).filter(function (a) { return C.role === 'admin' || a.created_by === C.userId; });
-        if (!list.length) { box.innerHTML = '<span class="muted" style="font-size:12px">אין הערות שנמחקו.</span>'; return; }
-        box.innerHTML = list.map(function (a) {
-          return '<div style="display:flex;gap:8px;align-items:flex-start;padding:6px 9px;margin-bottom:6px;background:var(--surface-2);border-radius:8px"><div style="flex:1;min-width:0"><div style="font-size:13px;white-space:pre-wrap;text-decoration:line-through;color:var(--muted)">' + esc(a.body || '') + '</div><div class="muted" style="font-size:11px">נמחק ' + fmt(a.deleted_at) + '</div></div><button class="btn btn-ghost btn-sm" data-restnote="' + a.id + '">↩ שחזר</button></div>';
-        }).join('');
-        box.querySelectorAll('[data-restnote]').forEach(function (b) { b.addEventListener('click', function () { b.disabled = true; db.rpc('restore_note', { p_id: b.dataset.restnote }).then(function (rr) { if (rr.error || (rr.data && rr.data.ok === false)) { b.disabled = false; return alert('שגיאה: ' + (rr.error ? rr.error.message : rr.data.error)); } window.C2B_openLeadCard(lead.id); }); }); });
+    var mine = function (x) { return C.role === 'admin' || x.created_by === C.userId; };
+    Promise.all([
+      db.from('activities').select('id,body,deleted_at,created_by').eq('lead_id', lead.id).eq('type', 'note').not('deleted_at', 'is', null).order('deleted_at', { ascending: false }).limit(50),
+      db.from('tasks').select('id,title,deleted_at,created_by').eq('lead_id', lead.id).not('deleted_at', 'is', null).order('deleted_at', { ascending: false }).limit(50),
+      db.from('lead_documents').select('id,name,deleted_at,created_by').eq('lead_id', lead.id).not('deleted_at', 'is', null).order('deleted_at', { ascending: false }).limit(50)
+    ]).then(function (res) {
+      var notes = ((((res[0] || {}).data) || []).filter(mine)).map(function (a) { return { label: a.body || '(הערה)', at: a.deleted_at, rpc: 'restore_note', param: 'p_id', id: a.id }; });
+      var tasks = ((((res[1] || {}).data) || []).filter(mine)).map(function (t) { return { label: '🔲 ' + (t.title || '(משימה)'), at: t.deleted_at, rpc: 'restore_task', param: 'p_id', id: t.id }; });
+      var docs = ((((res[2] || {}).data) || []).filter(mine)).map(function (d) { return { label: '📎 ' + (d.name || '(מסמך)'), at: d.deleted_at, rpc: 'restore_document', param: 'p_doc', id: d.id }; });
+      var all = notes.concat(tasks).concat(docs).sort(function (a, b) { return new Date(b.at || 0) - new Date(a.at || 0); });
+      if (!all.length) { box.innerHTML = '<span class="muted" style="font-size:12px">אין פריטים שנמחקו.</span>'; return; }
+      box.innerHTML = all.map(function (x, i) {
+        return '<div style="display:flex;gap:8px;align-items:flex-start;padding:6px 9px;margin-bottom:6px;background:var(--surface-2);border-radius:8px"><div style="flex:1;min-width:0"><div style="font-size:13px;white-space:pre-wrap;text-decoration:line-through;color:var(--muted)">' + esc(x.label) + '</div><div class="muted" style="font-size:11px">נמחק ' + fmt(x.at) + '</div></div><button class="btn btn-ghost btn-sm" data-restidx="' + i + '">↩ שחזר</button></div>';
+      }).join('');
+      box.querySelectorAll('[data-restidx]').forEach(function (b) { b.addEventListener('click', function () { var x = all[+b.dataset.restidx]; if (!x) return; b.disabled = true; var p = {}; p[x.param] = x.id; db.rpc(x.rpc, p).then(function (rr) { if (rr.error || (rr.data && rr.data.ok === false)) { b.disabled = false; return alert('שגיאה: ' + (rr.error ? rr.error.message : rr.data.error)); } window.C2B_openLeadCard(lead.id); }); }); });
+    });
+  }
+  // ---------- תפריט ⋮ בציר-הזמן (ניהול הערה/משימה/מסמך שהמשתמש יצר) ----------
+  function closeRowMenu() { var m = document.getElementById('rowmenu'); if (m) m.remove(); }
+  function openRowMenu(anchor, kind, id, lead) {
+    closeRowMenu();
+    var defs = { note: [['edit', '✏️ ערוך הערה'], ['del', '🗑️ מחק הערה']],
+                 task: [['edit', '✏️ ערוך משימה'], ['del', '🗑️ מחק משימה']],
+                 document: [['rename', '✏️ שנה שם'], ['del', '🗑️ מחק מסמך']] };
+    var items = defs[kind] || []; if (!items.length) return;
+    var m = document.createElement('div'); m.className = 'stmenu'; m.id = 'rowmenu'; m.style.minWidth = '150px';
+    m.innerHTML = items.map(function (it) { return '<div class="si" data-rm="' + it[0] + '"' + (it[0] === 'del' ? ' style="color:var(--danger)"' : '') + '>' + it[1] + '</div>'; }).join('');
+    document.body.appendChild(m);
+    var r = anchor.getBoundingClientRect();
+    m.style.top = (r.bottom + window.scrollY + 4) + 'px';
+    m.style.left = Math.max(8, r.left + window.scrollX - 20) + 'px';
+    m.querySelectorAll('[data-rm]').forEach(function (si) { si.addEventListener('click', function (e) { e.stopPropagation(); closeRowMenu(); rowAction(kind, id, si.dataset.rm, lead); }); });
+    setTimeout(function () { document.addEventListener('click', closeRowMenu, { once: true }); }, 0);
+  }
+  function rpcReload(rpc, params, lead, confirmMsg) {
+    if (confirmMsg && !confirm(confirmMsg)) return;
+    db.rpc(rpc, params).then(function (r) {
+      if (r.error || (r.data && r.data.ok === false)) return alert('שגיאה: ' + (r.error ? r.error.message : r.data.error));
+      window.C2B_openLeadCard(lead.id);
+    });
+  }
+  function rowAction(kind, id, action, lead) {
+    if (kind === 'note' && action === 'edit') return startNoteEdit(id, lead);
+    if (kind === 'note' && action === 'del') return rpcReload('delete_note', { p_id: id }, lead, 'למחוק את ההערה?\nאפשר לשחזר מ"פריטים שנמחקו".');
+    if (kind === 'task' && action === 'edit') return startTaskEdit(id, lead);
+    if (kind === 'task' && action === 'del') return rpcReload('delete_task', { p_id: id }, lead, 'למחוק את המשימה?\nאפשר לשחזר מ"פריטים שנמחקו".');
+    if (kind === 'document' && action === 'rename') return renameDoc(id, lead);
+    if (kind === 'document' && action === 'del') return rpcReload('trash_document', { p_doc: id }, lead, 'להעביר את המסמך לסל?\nהקובץ נשמר וניתן לשחזר.');
+  }
+  function renameDoc(id, lead) {
+    var nn = prompt('שם חדש למסמך:', docNameById[id] || ''); if (nn == null) return;
+    nn = (nn || '').trim(); if (!nn) return;
+    db.rpc('rename_document', { p_doc: id, p_name: nn }).then(function (r) {
+      if (r.error || (r.data && r.data.ok === false)) return alert('שגיאה: ' + (r.error ? r.error.message : r.data.error));
+      window.C2B_openLeadCard(lead.id);
+    });
+  }
+  //  עריכת משימה במקום — כותרת/הערות/יעד → edit_task.
+  function startTaskEdit(id, lead) {
+    var t = taskById[id] || { title: '', notes: '', due_at: '' };
+    var box = C.$('lpForm'); if (!box) return;
+    var d = t.due_at ? new Date(t.due_at) : null;
+    var dueVal = d ? (d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2) + 'T' + ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2)) : '';
+    box.innerHTML = '<div class="card" style="padding:12px;margin:0"><b style="font-size:13px">✏️ עריכת משימה</b>' +
+      '<input class="inp" id="teTitle" placeholder="כותרת" style="width:100%;margin:6px 0" value="' + esc(t.title) + '">' +
+      '<textarea class="inp" id="teNotes" rows="2" placeholder="הערות (אופציונלי)" style="width:100%;margin-bottom:6px">' + esc(t.notes) + '</textarea>' +
+      '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><input class="inp" id="teDue" type="datetime-local" value="' + dueVal + '" style="flex:1">' +
+      '<button class="btn btn-sm" id="teSave">💾 שמור</button><button class="btn btn-ghost btn-sm" id="teCancel">בטל</button><span class="muted" id="teMsg" style="font-size:12px"></span></div></div>';
+    C.$('teCancel').addEventListener('click', function () { box.innerHTML = ''; });
+    C.$('teSave').addEventListener('click', function () {
+      var ti = (C.$('teTitle').value || '').trim(); if (!ti) { C.$('teMsg').textContent = 'כותרת חובה'; return; }
+      var dv = C.$('teDue').value ? new Date(C.$('teDue').value).toISOString() : null;
+      this.disabled = true;
+      db.rpc('edit_task', { p_id: id, p_title: ti, p_notes: (C.$('teNotes').value || '').trim() || null, p_due: dv }).then(function (r) {
+        if (r.error || (r.data && r.data.ok === false)) { var sv = C.$('teSave'); if (sv) sv.disabled = false; C.$('teMsg').textContent = 'שגיאה: ' + (r.error ? r.error.message : r.data.error); return; }
+        window.C2B_openLeadCard(lead.id);
       });
+    });
   }
   function row(k, v) { return '<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--line)"><span class="muted" style="font-size:13px">' + k + '</span><span>' + v + '</span></div>'; }
   function flowBar(cur) {
@@ -2042,13 +2117,9 @@
     tl.querySelectorAll('a[data-open-deal]').forEach(function (a) { a.addEventListener('click', function (e) { e.preventDefault(); var dd = curDeals.filter(function (x) { return x.id === a.dataset.openDeal; })[0]; if (dd) dealForm(lead, dd); }); });
     tl.querySelectorAll('a[data-doc]').forEach(function (a) { a.addEventListener('click', function (e) { e.preventDefault(); C.viewDoc(a.dataset.doc, a.dataset.docname); }); });
     tl.querySelectorAll('a[data-opencall]').forEach(function (a) { a.addEventListener('click', function (e) { e.preventDefault(); if (window.C2B_openCall) window.C2B_openCall(a.dataset.opencall); }); });
-    //  הערות: עריכה במקום, מחיקה רכה, צפייה בגרסאות קודמות (מי שכתב + אדמין).
-    tl.querySelectorAll('[data-editnote]').forEach(function (el) { el.addEventListener('click', function (e) { e.preventDefault(); startNoteEdit(el.dataset.editnote, lead); }); });
+    //  תפריט ⋮ (צד שמאל של הפריט): עריכה/מחיקה להערה/משימה/מסמך שהמשתמש יצר.
+    tl.querySelectorAll('[data-rowmenu]').forEach(function (el) { el.addEventListener('click', function (e) { e.preventDefault(); e.stopPropagation(); var p = (el.dataset.rowmenu || '').split(':'); openRowMenu(el, p[0], p[1], lead); }); });
     tl.querySelectorAll('[data-notehist]').forEach(function (el) { el.addEventListener('click', function (e) { e.preventDefault(); showNoteHist(el.dataset.notehist); }); });
-    tl.querySelectorAll('[data-delnote]').forEach(function (el) { el.addEventListener('click', function (e) { e.preventDefault();
-      if (!confirm('למחוק את ההערה?\nאפשר לשחזר מ"הערות שנמחקו" בתחתית ציר-הזמן.')) return;
-      db.rpc('delete_note', { p_id: el.dataset.delnote }).then(function (r) { if (r.error || (r.data && r.data.ok === false)) return alert('שגיאה: ' + (r.error ? r.error.message : r.data.error)); window.C2B_openLeadCard(lead.id); });
-    }); });
     if ($('lpShowDeleted')) $('lpShowDeleted').addEventListener('click', function (e) { e.preventDefault(); this.style.display = 'none'; loadDeletedNotes(lead); });
     // consolidated action bar (role-tailored)
     $('view').querySelectorAll('button[data-act2]').forEach(function (b) { b.addEventListener('click', function () { leadAction(lead, b.dataset.act2); }); });
@@ -2076,7 +2147,7 @@
       $('lpTaskForm').addEventListener('submit', function (e) {
         e.preventDefault(); var title = this.title.value.trim(); if (!title) return;
         var due = this.due.value ? new Date(this.due.value).toISOString() : null, notes = this.notes.value.trim() || null;
-        db.from('tasks').insert({ lead_id: lead.id, title: title, due_at: due, notes: notes }).then(function () { logActivity(lead.id, 'task', 'נפתחה משימה: ' + title); C.refreshBadges && C.refreshBadges(); window.C2B_openLeadCard(lead.id); });
+        db.from('tasks').insert({ lead_id: lead.id, title: title, due_at: due, notes: notes, created_by: C.userId || null }).then(function () { logActivity(lead.id, 'task', 'נפתחה משימה: ' + title); C.refreshBadges && C.refreshBadges(); window.C2B_openLeadCard(lead.id); });
       });
       $('lpTaskForm').querySelector('[name=title]').focus();
       return;
@@ -2645,7 +2716,7 @@
           var path = safeStoragePath(lead.id, file.name);
           db.storage.from('lead-docs').upload(path, file, { contentType: file.type || undefined, upsert: false }).then(function (u) {
             if (u.error) { errs.push(file.name + ': ' + u.error.message); finish(); return; }
-            db.from('lead_documents').insert({ lead_id: lead.id, name: file.name, storage_path: path }).then(function (ir) {
+            db.from('lead_documents').insert({ lead_id: lead.id, name: file.name, storage_path: path, created_by: C.userId || null }).then(function (ir) {
               if (ir.error) errs.push(file.name + ' (רשומה): ' + ir.error.message); else ok++;
               finish();
             });
@@ -4545,7 +4616,7 @@
     var since = days ? new Date(Date.now() - days * 864e5).toISOString() : null;
     function leadsB() { var q = db.from('leads').select('id,name,phone,car,brand,status,source,created_at,first_response_at,assigned_to,marketing_company,city,utm_source,utm_campaign').is('deleted_at', null).order('id', { ascending: true }); if (since) q = q.gte('created_at', since); return q; }
     function dealsB() { var q = db.from('deals').select('id,lead_id,client_name,car_make,car_model,total,stage,status,created_at,signed_at,has_signature').order('id', { ascending: true }); if (since) q = q.gte('created_at', since); return q; }
-    function tasksB() { return db.from('tasks').select('id,title,due_at,done,lead_id,created_at').order('id', { ascending: true }); }
+    function tasksB() { return db.from('tasks').select('id,title,due_at,done,lead_id,created_at').is('deleted_at', null).order('id', { ascending: true }); }
     Promise.all([
       dashFetchAll(leadsB), dashFetchAll(tasksB), db.from('appointments').select('status'),
       dashFetchAll(dealsB), db.from('profiles').select('user_id,full_name')
