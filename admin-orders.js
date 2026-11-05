@@ -670,20 +670,30 @@
         '<button class="btn btn-ghost btn-sm" id="fClear">נקה סינון</button>' +
       '</div></div>' +
       '<div id="stkNew"></div>' +
-      '<div class="cards" style="grid-template-columns:repeat(auto-fill,minmax(250px,1fr))">' +
+      //  שורה-לרכב: כל רכב בכרטיס רוחב-מלא נפרד (תמונה בצד + פרטים + פעולות), לא רשת צפופה
+      '<div style="display:flex;flex-direction:column;gap:12px">' +
         (filt.map(function (it) {
           var a = alloc[it.id] || 0, av = it.qty - a, im = stkImg1(it);
-          var spec = [it.engine, (it.seats ? it.seats + ' מק\'' : ''), it.color].filter(Boolean).join(' · ');
-          var m = it.monthly_60 || it.monthly_50;
-          return '<div class="card" style="padding:10px;display:flex;flex-direction:column;gap:6px">' +
-            (im ? '<img src="' + esc(im) + '" alt="" loading="lazy" style="width:100%;height:120px;object-fit:contain;background:var(--surface-2);border-radius:8px" onerror="this.style.display=\'none\'">' : '<div style="height:120px;background:var(--surface-2);border-radius:8px;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:28px">🚗</div>') +
-            '<div style="font-weight:700;font-size:14px;line-height:1.25">' + stkLabel(it) + '</div>' +
-            (spec ? '<div class="muted" style="font-size:12px">' + esc(spec) + '</div>' : '') +
-            '<div style="font-size:12.5px">' + (m ? '💳 ' + nis(m) + ' לחודש' : '') + (it.list_price ? ' · מחירון ' + nis(it.list_price) : '') + '</div>' +
-            '<div class="muted" style="font-size:11.5px">' + esc(supName(it.supplier_id)) + ' · זמין ' + '<b style="color:' + (av > 0 ? 'var(--ok)' : 'var(--muted)') + '">' + av + '</b>/' + it.qty + (it.active ? '' : ' · <span style="color:var(--danger)">לא פעיל</span>') + '</div>' +
-            '<div style="display:flex;gap:6px;margin-top:2px"><button class="btn btn-sm" data-ske="' + it.id + '" style="flex:1">✏️ ערוך</button>' + (a ? '' : '<button class="btn btn-ghost btn-sm" data-skd="' + it.id + '">🗑</button>') + '</div>' +
+          var spec = [it.engine, (it.seats ? it.seats + ' מק\'' : ''), it.color, (it.horsepower ? it.horsepower + ' כ"ס' : '')].filter(Boolean).join(' · ');
+          return '<div class="card" style="padding:12px;display:flex;gap:14px;align-items:stretch;flex-wrap:wrap">' +
+            (im ? '<img src="' + esc(im) + '" alt="" loading="lazy" style="width:180px;height:120px;flex:none;object-fit:contain;background:var(--surface-2);border-radius:8px" onerror="this.onerror=null;this.style.display=\'none\'">' : '<div style="width:180px;height:120px;flex:none;background:var(--surface-2);border-radius:8px;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:34px">🚗</div>') +
+            '<div style="flex:1;min-width:180px;display:flex;flex-direction:column;gap:5px">' +
+              '<div style="font-weight:700;font-size:16px">' + stkLabel(it) + (it.active ? '' : ' <span style="color:var(--danger);font-size:12px">(לא פעיל)</span>') + '</div>' +
+              (spec ? '<div class="muted" style="font-size:12.5px">' + esc(spec) + '</div>' : '') +
+              '<div style="display:flex;gap:16px;flex-wrap:wrap;font-size:13px;margin-top:2px">' +
+                (it.monthly_60 ? '<span>💳 <b>' + nis(it.monthly_60) + '</b> <span class="muted">לחודש (60%)</span></span>' : '') +
+                (it.monthly_50 ? '<span class="muted">50%: ' + nis(it.monthly_50) + '</span>' : '') +
+                (it.list_price ? '<span class="muted">מחירון: ' + nis(it.list_price) + '</span>' : '') +
+                (it.finance_price ? '<span class="muted">מימון ישיר: ' + nis(it.finance_price) + '</span>' : '') +
+              '</div>' +
+              '<div class="muted" style="font-size:12px;margin-top:auto">' + esc(supName(it.supplier_id)) + ' · זמין <b style="color:' + (av > 0 ? 'var(--ok)' : 'var(--muted)') + '">' + av + '</b>/' + it.qty + (it.levi_code ? ' · קוד לוי יצחק: ' + esc(it.levi_code) : '') + '</div>' +
+            '</div>' +
+            '<div style="display:flex;flex-direction:column;gap:6px;flex:none;justify-content:center">' +
+              '<button class="btn btn-sm" data-ske="' + it.id + '">✏️ ערוך</button>' +
+              (a ? '' : '<button class="btn btn-ghost btn-sm" data-skd="' + it.id + '">🗑</button>') +
+            '</div>' +
           '</div>';
-        }).join('') || '<p class="muted" style="padding:24px;grid-column:1/-1;text-align:center">אין רכבים תואמים לסינון</p>') +
+        }).join('') || '<p class="muted" style="padding:24px;text-align:center">אין רכבים תואמים לסינון</p>') +
       '</div>';
     view(h);
     var bindF = function (id, key, ev) { var el = $(id); if (el) el.addEventListener(ev || 'input', function () { S.stkF[key] = el.value; paintStock(); }); };
