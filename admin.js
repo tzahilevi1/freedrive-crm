@@ -7353,8 +7353,9 @@
     var statusPill = p.active
       ? '<span style="display:inline-flex;align-items:center;gap:5px;padding:3px 11px;border-radius:999px;font-size:12px;font-weight:700;background:color-mix(in srgb,var(--ok) 14%,transparent);color:var(--ok)">● פעיל</span>'
       : '<span style="display:inline-flex;align-items:center;gap:5px;padding:3px 11px;border-radius:999px;font-size:12px;font-weight:700;background:color-mix(in srgb,var(--danger) 14%,transparent);color:var(--danger)">● לא פעיל</span>';
-    //  סעיף ההתראות/שיוך-לידים מוצג רק כשיש בו תוכן (אדמין/מנהל-סניף למתג-המייל, אדמין לבעל-הלידים).
-    var hasNotifSec = (p.role === 'admin' || p.role === 'branch') || (window.C2B && window.C2B.role === 'admin');
+    //  סעיף ההתראות/שיוך-לידים מוצג כשיש בו תוכן: מתג-המייל למשתמש admin/branch,
+    //  ומתג בעל-הלידים לעורך admin/מנהל-סניף (branch) — כך מנהל-סניף יכול לשייך לכל משתמש.
+    var hasNotifSec = (p.role === 'admin' || p.role === 'branch') || (window.C2B && (window.C2B.role === 'admin' || window.C2B.role === 'branch'));
     td.innerHTML = '<div class="card" style="box-shadow:none;border:1px solid var(--line);background:var(--surface-2);margin:8px 0;padding:18px">' +
       //  כותרת-זהות: אווטאר + שם + מייל, ולצד — תפקיד ומצב.
       '<div style="display:flex;align-items:center;gap:12px;padding-bottom:14px;border-bottom:1px solid var(--line)">' +
@@ -7409,8 +7410,8 @@
         : '') +
       // בעל-הלידים: כל ליד שנכנס בלי שיוך מפורש מוקצה אוטומטית למשתמש המסומן כאן
       // (admin_config.default_owner + טריגר leads_default_owner). ערך יחיד = בחירת-יחיד:
-      // סימון משתמש אחר פשוט מעביר את התפקיד אליו. אדמין בלבד (RLS על admin_config).
-      ((window.C2B && window.C2B.role === 'admin') ?
+      // סימון משתמש אחר פשוט מעביר את התפקיד אליו. אדמין/מנהל-סניף (RLS: policy ל-branch על המפתח).
+      ((window.C2B && (window.C2B.role === 'admin' || window.C2B.role === 'branch')) ?
         '<label style="display:flex;gap:8px;align-items:center;margin-top:12px;font-size:13px">' +
           '<input type="checkbox" id="ue_leadOwner"' + ((window.C2B._leadOwner && window.C2B._leadOwner.user_id === uid) ? ' checked' : '') + '> 📥 כל הלידים הנכנסים משויכים אליו (בעל-הלידים)' +
         '</label>' +
@@ -8767,12 +8768,14 @@
     function crmSel(id) { return '<select class="inp" id="' + id + '" style="width:120px;font-size:12px">' + CRMF.map(function (f) { return '<option value="' + f[0] + '">' + f[1] + '</option>'; }).join('') + '</select>'; }
     Promise.all([
       db.from('integrations').select('*').order('created_at'),
-      db.from('field_options').select('value').eq('field', 'brand').order('value')
+      db.from('field_options').select('value').eq('field', 'brand').order('value'),
+      db.from('field_options').select('value').eq('field', 'marketing_company').order('value')
     ]).then(function (_res) {
       var r = _res[0];
       if (r && r.error) { host.innerHTML = '<div class="card" style="border:1px solid var(--warn);background:rgba(245,158,11,.08)"><b style="color:var(--warn)">⚠️ מרכז חיבורים לא זמין</b> — הריצו את <b>supabase/integrations.sql</b> בבסיס הנתונים.</div>'; return; }
       var list = r.data || [];
       var brandOpts = ((_res[1] && _res[1].data) || []).map(function (x) { return x.value; });
+      var mcOpts = ((_res[2] && _res[2].data) || []).map(function (x) { return x.value; });
       //  סטטוס-פעילות: פעיל = ליד ב-14 יום ומתג דלוק; רדום = מתג דלוק בלי לידים לאחרונה; כבוי = מתג כבוי.
       var _now = Date.now();
       function statusOf(it) { if (!it.active) return 'off'; if (it.last_lead_at && (_now - new Date(it.last_lead_at).getTime()) < 14 * 86400000) return 'active'; return 'dormant'; }
@@ -8797,6 +8800,12 @@
             brandOpts.map(function (b) { return '<option' + (((it.config || {}).brand === b) ? ' selected' : '') + '>' + esc(b) + '</option>'; }).join('') +
             '<option value="__new__">➕ מותג חדש…</option></select>' +
             '<span class="muted" style="font-size:11.5px">הלידים מהחיבור ייכנסו תחת מותג זה</span></div>' +
+          //  חברת-שיווק לחיבור — נשמר ב-config.defaults.marketing_company; מוצב על כל ליד מהחיבור (ingest + yad2-connector).
+          '<div style="display:flex;gap:6px;align-items:center;margin-bottom:8px;flex-wrap:wrap"><span style="font-size:12.5px;color:var(--muted)">📣 חברת שיווק:</span>' +
+            '<select class="inp" data-itmc="' + esc(it.id) + '" style="width:200px;font-size:12.5px"><option value="">— ללא —</option>' +
+            mcOpts.map(function (m) { return '<option' + ((((it.config || {}).defaults || {}).marketing_company === m) ? ' selected' : '') + '>' + esc(m) + '</option>'; }).join('') +
+            '<option value="__new__">➕ חברה חדשה…</option></select>' +
+            '<span class="muted" style="font-size:11.5px">תיוחס לכל ליד מהחיבור</span></div>' +
           (it.platform === 'yad2'
             ? '<p class="muted" style="font-size:11.5px;margin:4px 0 0">🔐 אימות ב-header <code style="direction:ltr">x-yad2-token</code> (הערך מוגדר בשרת). המיפוי אוטומטי: שם מלא · טלפון · רכב · טרייד-אין · ערוץ. לרישום: בטופס הרישום של יד2 הדביקו את הכתובת שלמעלה + ה-Security Key.</p>'
             : '<details><summary style="cursor:pointer;font-size:12.5px;color:var(--brand)">מיפוי שדות (מתקדם — לרוב לא צריך)</summary><div style="margin-top:8px">' + maps +
@@ -8846,6 +8855,25 @@
             if (brandOpts.indexOf(nn) >= 0) afterOpt();
             else db.from('field_options').insert({ field: 'brand', value: nn }).then(afterOpt);
           } else saveBrand(val);
+        });
+      });
+      //  בחירת/הוספת חברת-שיווק לחיבור — נשמר ב-config.defaults.marketing_company; מוצב על כל ליד מהחיבור.
+      host.querySelectorAll('[data-itmc]').forEach(function (sel) {
+        sel.addEventListener('change', function () {
+          var id = sel.dataset.itmc, val = sel.value;
+          var it = list.filter(function (x) { return x.id === id; })[0]; if (!it) return;
+          function saveMc(mc) {
+            var cfg = Object.assign({}, it.config || {}), defs = Object.assign({}, cfg.defaults || {});
+            if (mc) defs.marketing_company = mc; else delete defs.marketing_company;
+            cfg.defaults = defs;
+            db.from('integrations').update({ config: cfg }).eq('id', id).then(function () { renderIntegrations(); });
+          }
+          if (val === '__new__') {
+            var nn = (prompt('שם חברת-השיווק החדשה (תיכנס לרשימה):') || '').trim();
+            if (!nn) { renderIntegrations(); return; }
+            if (mcOpts.indexOf(nn) >= 0) saveMc(nn);
+            else db.from('field_options').insert({ field: 'marketing_company', value: nn }).then(function () { saveMc(nn); });
+          } else saveMc(val);
         });
       });
       host.querySelectorAll('[data-fmadd]').forEach(function (b) { b.addEventListener('click', function () { var id = b.dataset.fmadd, k = ($('fmk_' + id).value || '').trim(), v = $('fmv_' + id).value; if (!k || !v) return; var it = list.filter(function (x) { return x.id === id; })[0]; var fm = Object.assign({}, it.field_map || {}); fm[k] = v; db.from('integrations').update({ field_map: fm }).eq('id', id).then(renderIntegrations); }); });
