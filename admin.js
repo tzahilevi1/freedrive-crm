@@ -8753,14 +8753,15 @@
     var host = $('integrationsCard'); if (!host) return;
     var FN = SUPABASE_URL + '/functions/v1/ingest';
     var PLAT = { google: ['🔍', 'Google Ads'], taboola: ['🟠', 'Taboola'], outbrain: ['🔵', 'Outbrain'], kishurit: ['🟢', 'קישורית'], webhook: ['🔗', 'Webhook כללי'], facebook: ['📘', 'פייסבוק'],
-                 website: ['🌐', 'אתר / דף נחיתה'] };
+                 website: ['🌐', 'אתר / דף נחיתה'], yad2: ['🚗', 'יד2'] };
     var HINT = {
       google: 'ב-Google Ads → טופס הליד → "Data integration / Webhook": הדביקו את ה-URL, ובשדה Key את המפתח (החלק שאחרי key= ב-URL).',
       taboola: 'ב-Taboola → Lead Generation → Webhook integration → הדביקו את ה-URL.',
       outbrain: 'ב-Outbrain → Lead generation → Webhook → הדביקו את ה-URL.',
       kishurit: 'בקישורית → הגדרת העברת לידים / postback → הדביקו את ה-URL (POST JSON).',
       webhook: 'כל מערכת (או Zapier / Make) — שלחו POST עם JSON של הליד ל-URL הזה.',
-      website: 'בטופס באתר: action="<הכתובת שלמעלה>" method="POST". שמות השדות בעברית או באנגלית — המערכת מזהה לבד (שם, טלפון, מייל, עיר, רכב). אפשר גם POST עם JSON.'
+      website: 'בטופס באתר: action="<הכתובת שלמעלה>" method="POST". שמות השדות בעברית או באנגלית — המערכת מזהה לבד (שם, טלפון, מייל, עיר, רכב). אפשר גם POST עם JSON.',
+      yad2: 'יד2 שולחת לידים ממודעות-הרכב ישירות לכתובת הזו (בטופס הרישום של יד2). האימות ב-header x-yad2-token. המיפוי אוטומטי כולל טרייד-אין.'
     };
     var CRMF = [['', '—'], ['name', 'שם'], ['phone', 'טלפון'], ['email', 'אימייל'], ['car', 'רכב'], ['city', 'עיר'], ['message', 'הודעה'], ['id_num', 'ת.ז/ח.פ'], ['marketing_company', 'חברת שיווק'], ['utm_source', 'utm_source'], ['utm_campaign', 'utm_campaign']];
     function crmSel(id) { return '<select class="inp" id="' + id + '" style="width:120px;font-size:12px">' + CRMF.map(function (f) { return '<option value="' + f[0] + '">' + f[1] + '</option>'; }).join('') + '</select>'; }
@@ -8780,7 +8781,9 @@
       var _cnt = { all: list.length, active: 0, dormant: 0, off: 0 };
       list.forEach(function (it) { _cnt[statusOf(it)]++; });
       var rows = list.filter(function (it) { return _intgFilter === 'all' || statusOf(it) === _intgFilter; }).map(function (it) {
-        var p = PLAT[it.platform] || ['🔗', it.platform], url = FN + '?key=' + it.ingest_key, fm = it.field_map || {};
+        var p = PLAT[it.platform] || ['🔗', it.platform], fm = it.field_map || {};
+        //  יד2: endpoint ייעודי (yad2-connector) עם אימות header — לא ingest?key=.
+        var url = it.platform === 'yad2' ? (SUPABASE_URL + '/functions/v1/yad2-connector') : (FN + '?key=' + it.ingest_key);
         var maps = Object.keys(fm).map(function (k) { return '<span class="tag" style="margin:2px">' + esc(k) + ' → ' + esc(fm[k]) + ' <b data-fmdel="' + esc(it.id) + '|' + esc(k) + '" style="cursor:pointer;color:var(--danger)">✕</b></span>'; }).join('') || '<span class="muted" style="font-size:12px">אין מיפוי ידני — זיהוי אוטומטי פעיל (שם/טלפון/מייל/עיר/רכב)</span>';
         return '<div class="card" style="box-shadow:none;border:1px solid var(--line);margin:0 0 10px;padding:14px">' +
           '<div class="row-between" style="margin-bottom:8px"><div style="display:flex;align-items:center;gap:8px;min-width:0;flex-wrap:wrap"><span style="font-size:20px">' + p[0] + '</span><b>' + esc(it.label || p[1]) + '</b>' + (it.source_label ? ' <span class="muted" style="font-size:12px">· ' + esc(it.source_label) + '</span>' : '') + '<span style="background:' + ST[statusOf(it)][1] + ';color:#fff;font-size:10.5px;padding:2px 8px;border-radius:999px;white-space:nowrap">' + ST[statusOf(it)][0] + '</span></div>' +
@@ -8794,9 +8797,11 @@
             brandOpts.map(function (b) { return '<option' + (((it.config || {}).brand === b) ? ' selected' : '') + '>' + esc(b) + '</option>'; }).join('') +
             '<option value="__new__">➕ מותג חדש…</option></select>' +
             '<span class="muted" style="font-size:11.5px">הלידים מהחיבור ייכנסו תחת מותג זה</span></div>' +
-          '<details><summary style="cursor:pointer;font-size:12.5px;color:var(--brand)">מיפוי שדות (מתקדם — לרוב לא צריך)</summary><div style="margin-top:8px">' + maps +
-            '<div style="display:flex;gap:6px;align-items:center;margin-top:8px;flex-wrap:wrap"><input class="inp" id="fmk_' + esc(it.id) + '" placeholder="שם השדה הנכנס (למשל FULL_NAME)" style="width:190px;font-size:12px"> → ' + crmSel('fmv_' + it.id) + ' <button class="btn btn-sm" data-fmadd="' + esc(it.id) + '">הוסף מיפוי</button></div>' +
-          '</div></details>' +
+          (it.platform === 'yad2'
+            ? '<p class="muted" style="font-size:11.5px;margin:4px 0 0">🔐 אימות ב-header <code style="direction:ltr">x-yad2-token</code> (הערך מוגדר בשרת). המיפוי אוטומטי: שם מלא · טלפון · רכב · טרייד-אין · ערוץ. לרישום: בטופס הרישום של יד2 הדביקו את הכתובת שלמעלה + ה-Security Key.</p>'
+            : '<details><summary style="cursor:pointer;font-size:12.5px;color:var(--brand)">מיפוי שדות (מתקדם — לרוב לא צריך)</summary><div style="margin-top:8px">' + maps +
+              '<div style="display:flex;gap:6px;align-items:center;margin-top:8px;flex-wrap:wrap"><input class="inp" id="fmk_' + esc(it.id) + '" placeholder="שם השדה הנכנס (למשל FULL_NAME)" style="width:190px;font-size:12px"> → ' + crmSel('fmv_' + it.id) + ' <button class="btn btn-sm" data-fmadd="' + esc(it.id) + '">הוסף מיפוי</button></div>' +
+            '</div></details>') +
         '</div>';
       }).join('') || '<p class="muted" style="font-size:13px">אין עדיין חיבורים. הוסיפו אחד למטה 👇</p>';
       var addBox = '<div style="border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin:0 0 16px;background:var(--surface-2)"><b style="font-size:13.5px">➕ הוספת חיבור</b>' +
