@@ -88,9 +88,11 @@
     view('<div class="loading">טוען מסמכים…</div>');
     Promise.all([
       db.from('deals').select('id,order_no,lead_id,client_name,brand,signed_at,created_at').not('signature', 'is', null).order('signed_at', { ascending: false }),
-      db.from('lead_documents').select('id,lead_id,name,storage_path,created_at').is('deleted_at', null).order('created_at', { ascending: false }).limit(300)
+      db.from('lead_documents').select('id,lead_id,name,storage_path,created_at').is('deleted_at', null).order('created_at', { ascending: false }).limit(300),
+      //  מסמכים שנמחקו (סל) — אדמין בלבד; לשחזור או מחיקה סופית.
+      isAdmin ? db.from('lead_documents').select('id,lead_id,name,deleted_at').not('deleted_at', 'is', null).order('deleted_at', { ascending: false }).limit(200) : Promise.resolve({ data: [] })
     ]).then(function (res) {
-      var contracts = (res[0] && res[0].data) || [], docs = (res[1] && res[1].data) || [];
+      var contracts = (res[0] && res[0].data) || [], docs = (res[1] && res[1].data) || [], trashed = (res[2] && res[2].data) || [];
       var cRows = contracts.length ? contracts.map(function (d) {
         return '<tr data-lead="' + esc(d.lead_id) + '" style="cursor:pointer"><td>✍️ הסכם חתום</td><td><b>#' + esc(d.order_no || '—') + '</b> · ' + esc(d.client_name || '') + (d.brand ? ' · ' + esc(d.brand) : '') + '</td><td><span class="tag" style="color:#1f8a4c;border-color:#1f8a4c">נחתם</span></td><td>' + when(d.signed_at || d.created_at) + '</td></tr>';
       }).join('') : '<tr><td colspan="4" class="empty">אין עדיין הסכמים חתומים.</td></tr>';
@@ -99,9 +101,19 @@
           (isAdmin ? ' <button class="btn btn-ghost btn-sm" data-ddel="' + esc(o.id) + '" data-dname="' + esc(o.name || '') + '" style="color:var(--danger)">🗑️</button>' : '') +
           '</td></tr>';
       }).join('') : '<tr><td colspan="3" class="empty">אין מסמכים שהועלו. אפשר להעלות מכרטיס ליד → "מסמכים".</td></tr>';
+      //  סל מסמכים שנמחקו — אדמין בלבד; שחזור מלא (הקובץ נשמר) או מחיקה סופית.
+      var trashCard = (isAdmin && trashed.length) ? ('<div class="card"><h3>🗑️ מסמכים שנמחקו (' + trashed.length + ')</h3>' +
+        '<p class="muted" style="font-size:12px;margin:-4px 0 10px">מסמכים שהועברו לסל. הקובץ נשמר במלואו — אפשר לשחזר. מחיקה סופית בלתי-הפיכה (הסכם חתום לא נמחק).</p>' +
+        '<div class="table-scroll"><table><thead><tr><th>מסמך</th><th>נמחק</th><th>פעולות</th></tr></thead><tbody>' +
+        trashed.map(function (o) { return '<tr><td>📎 ' + esc(o.name || 'מסמך') + '</td><td>' + when(o.deleted_at) + '</td><td style="white-space:nowrap">' +
+          '<button class="btn btn-sm" data-drestore="' + esc(o.id) + '">↩ שחזר</button> ' +
+          '<button class="btn btn-ghost btn-sm" data-dpurge="' + esc(o.id) + '" data-dname="' + esc(o.name || '') + '" style="color:var(--danger)">מחק סופית</button>' +
+          (o.lead_id ? ' <button class="btn btn-ghost btn-sm" data-lead="' + esc(o.lead_id) + '">לכרטיס</button>' : '') + '</td></tr>'; }).join('') +
+        '</tbody></table></div></div>') : '';
       view('<h2 style="margin:0 0 12px">✍️ מסמכים והסכמים</h2>' +
         '<div class="card"><h3>הסכמים חתומים (' + contracts.length + ')</h3><div class="table-scroll"><table><thead><tr><th>סוג</th><th>פרטים</th><th>סטטוס</th><th>תאריך</th></tr></thead><tbody>' + cRows + '</tbody></table></div></div>' +
-        '<div class="card"><h3>מסמכי לקוחות שהועלו (' + docs.length + ')</h3><p class="muted" style="font-size:12px;margin:-4px 0 10px">ת"ז · תלושים · דפי בנק · כל קובץ שהועלה לתיקי הלקוחות.</p><div class="table-scroll"><table><thead><tr><th>מסמך</th><th>תאריך</th><th>פעולות</th></tr></thead><tbody>' + dRows + '</tbody></table></div></div>');
+        '<div class="card"><h3>מסמכי לקוחות שהועלו (' + docs.length + ')</h3><p class="muted" style="font-size:12px;margin:-4px 0 10px">ת"ז · תלושים · דפי בנק · כל קובץ שהועלה לתיקי הלקוחות.</p><div class="table-scroll"><table><thead><tr><th>מסמך</th><th>תאריך</th><th>פעולות</th></tr></thead><tbody>' + dRows + '</tbody></table></div></div>' +
+        trashCard);
       $('view').querySelectorAll('tr[data-lead]').forEach(function (tr) { tr.addEventListener('click', function (e) { if (e.target.closest('[data-doc]')) return; openLead(tr.dataset.lead); }); });
       $('view').querySelectorAll('[data-lead]').forEach(function (b) { if (b.tagName === 'BUTTON') b.addEventListener('click', function (e) { e.stopPropagation(); openLead(b.dataset.lead); }); });
       $('view').querySelectorAll('[data-ddel]').forEach(function (b) {
@@ -117,6 +129,17 @@
         });
       });
       $('view').querySelectorAll('[data-doc]').forEach(function (b) { b.addEventListener('click', function (e) { e.stopPropagation(); var path = b.dataset.doc; if (!path) return; window.C2B.viewDoc(path, b.dataset.docname); }); });
+      //  שחזור / מחיקה-סופית של מסמך מהסל (אדמין).
+      $('view').querySelectorAll('[data-drestore]').forEach(function (b) { b.addEventListener('click', function () { b.disabled = true; db.rpc('restore_document', { p_doc: b.dataset.drestore }).then(function (r) { b.disabled = false; if (r.error || (r.data && r.data.ok === false)) return alert('שגיאה: ' + (r.error ? r.error.message : r.data.error)); window.C2B_renderDocuments(); }); }); });
+      $('view').querySelectorAll('[data-dpurge]').forEach(function (b) { b.addEventListener('click', function () {
+        if (!confirm('למחוק סופית את "' + (b.dataset.dname || 'המסמך') + '"?\nפעולה בלתי-הפיכה — הקובץ יימחק לצמיתות.')) return;
+        b.disabled = true;
+        db.rpc('purge_document', { p_doc: b.dataset.dpurge }).then(function (r) {
+          if (r.error || (r.data && r.data.ok === false)) { b.disabled = false; return alert('שגיאה: ' + (r.error ? r.error.message : r.data.error)); }
+          var sp = r.data && r.data.storage_path, done = function () { window.C2B_renderDocuments(); };
+          if (sp) db.storage.from('lead-docs').remove([sp]).then(done, done); else done();
+        });
+      }); });
     });
   };
 

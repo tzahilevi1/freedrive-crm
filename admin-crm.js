@@ -472,6 +472,7 @@
 
   // ---------- LEADS TABLE ----------
   var cache = [], profiles = {}, orderIds = [], curFilter = null, curDeals = [], leadFilter = null, selectedLeads = {};
+  var noteHist = {};         // note activity id → history[] (גרסאות קודמות) לצפייה בכרטיס
   var leadTasks = {};        // lead_id → {n, titles[], due} — משימות פתוחות לפעמון בשורת-הליד
   //  פעמון קטן בתא-השם כשיש משימה פתוחה על הליד. tooltip = כותרות + המועד הקרוב;
   //  ספירה אם יש כמה; מספר/נקודה באדום אם משימה כבר עברה את זמנה. data-open פותח את הכרטיס.
@@ -1421,9 +1422,9 @@
     loading();
     Promise.all([
       db.from('leads').select('*').eq('id', id).single(),
-      db.from('activities').select('*').eq('lead_id', id).order('created_at', { ascending: false }),
+      db.from('activities').select('*').eq('lead_id', id).is('deleted_at', null).order('created_at', { ascending: false }),
       db.from('tasks').select('*').eq('lead_id', id).order('due_at', { ascending: true }),
-      db.from('lead_documents').select('*').eq('lead_id', id).order('created_at', { ascending: false }),
+      db.from('lead_documents').select('*').eq('lead_id', id).is('deleted_at', null).order('created_at', { ascending: false }),
       db.from('deals').select('*').eq('lead_id', id).order('created_at', { ascending: false }),
       db.from('profiles').select('user_id,full_name'),
       db.from('payments').select('*').eq('lead_id', id).order('created_at', { ascending: false }),
@@ -1482,6 +1483,7 @@
             '<div class="qa2">' + actBtns + '</div><div id="lpForm" style="margin-top:10px"></div>' +
             '<h3 style="margin:18px 0 4px">ציר זמן — הכל במקום אחד</h3><p class="muted" style="font-size:12px;margin:0 0 10px">הערות · שיחות · WhatsApp · מיילים · משימות · מסמכים · עסקאות · תשלומים</p>' +
             '<div class="tl" id="lpTimeline">' + feedHtml(feed) + '</div>' +
+            '<div style="margin-top:10px"><a href="#" id="lpShowDeleted" class="muted" style="font-size:12px;text-decoration:none">🗑 הצג הערות שנמחקו</a><div id="lpDeletedNotes" style="margin-top:8px"></div></div>' +
           '</div>' +
         '</div>' +
       '</div>'
@@ -1685,6 +1687,14 @@
         body = '<div style="white-space:pre-wrap;line-height:1.7">' + body + '</div>' +
           '<a href="#" data-opencall="' + esc(a.meta.call_id) + '" class="btn btn-ghost btn-sm" style="margin-top:7px">🎧 פתח את השיחה המלאה</a>';
       }
+      //  הערה: עריכה/מחיקה (מי שכתב + אדמין) + סימון "נערך" עם צפייה בגרסאות קודמות.
+      if (a.type === 'note') {
+        noteHist[a.id] = a.history || [];
+        var canEdit = (a.created_by === C.userId) || (C.role === 'admin');
+        var edited = (a.edited_at && noteHist[a.id].length) ? ' <a href="#" class="muted" data-notehist="' + a.id + '" style="font-size:11px;text-decoration:none" title="הצג גרסאות קודמות">· נערך ✎</a>' : '';
+        var ctrls = canEdit ? '<span style="float:inline-start;display:inline-flex;gap:8px;margin-inline-start:8px"><a href="#" data-editnote="' + a.id + '" title="ערוך הערה" style="text-decoration:none;font-size:13px">✏️</a><a href="#" data-delnote="' + a.id + '" title="מחק הערה" style="text-decoration:none;font-size:13px">🗑️</a></span>' : '';
+        body = '<div class="note-wrap" data-noteid="' + a.id + '">' + ctrls + '<span class="note-body" style="white-space:pre-wrap">' + (a.body ? esc(a.body) : '') + '</span>' + edited + '</div>';
+      }
       items.push({ ts: a.created_at, icon: isCall ? '📞' : (ACT_ICON[a.type] || '•'), who: profiles[a.created_by],
         html: body, tag: isCall ? 'ניתוח שיחה' : (FEED_TAG[a.type] || a.type) });
     });
@@ -1714,6 +1724,45 @@
     return items.length ? items.map(function (a) {
       return '<div class="ev' + (a.cls ? ' ' + a.cls : '') + '"><div class="dot">' + a.icon + '</div><div style="flex:1"><div class="tm">' + fmt(a.ts) + (a.tag ? ' · ' + esc(a.tag) : '') + (a.who ? ' · ' + esc(a.who) : '') + '</div>' + (a.html ? '<div>' + a.html + '</div>' : '') + '</div></div>';
     }).join('') : '<p class="empty">אין עדיין פעילות</p>';
+  }
+  //  עריכת הערה במקום (inline) בתוך ציר-הזמן → edit_note (שומר גרסה קודמת).
+  function startNoteEdit(id, lead) {
+    var wrap = document.querySelector('.note-wrap[data-noteid="' + id + '"]'); if (!wrap || wrap.querySelector('textarea')) return;
+    var bodyEl = wrap.querySelector('.note-body'); var cur = bodyEl ? (bodyEl.textContent || '') : '';
+    wrap.innerHTML = '<textarea class="inp" dir="rtl" style="width:100%;min-height:64px">' + esc(cur) + '</textarea>' +
+      '<div style="display:flex;gap:6px;margin-top:5px;align-items:center"><button class="btn btn-sm" data-savenote="' + id + '">💾 שמור</button><button class="btn btn-ghost btn-sm" data-cancelnote="1">בטל</button><span class="muted" data-noteedmsg style="font-size:12px"></span></div>';
+    var ta = wrap.querySelector('textarea'); ta.focus();
+    wrap.querySelector('[data-cancelnote]').addEventListener('click', function () { window.C2B_openLeadCard(lead.id); });
+    wrap.querySelector('[data-savenote]').addEventListener('click', function () {
+      var nb = (ta.value || '').trim(); var msg = wrap.querySelector('[data-noteedmsg]');
+      if (!nb) { msg.textContent = 'הערה ריקה'; return; }
+      this.disabled = true;
+      db.rpc('edit_note', { p_id: id, p_body: nb }).then(function (r) {
+        if (r.error || (r.data && r.data.ok === false)) { var sv = wrap.querySelector('[data-savenote]'); if (sv) sv.disabled = false; msg.textContent = 'שגיאה: ' + (r.error ? r.error.message : r.data.error); return; }
+        window.C2B_openLeadCard(lead.id);
+      });
+    });
+  }
+  //  צפייה בגרסאות קודמות של הערה שנערכה (היסטוריה נשמרת ב-edit_note).
+  function showNoteHist(id) {
+    var h = noteHist[id] || []; if (!h.length) { alert('אין גרסאות קודמות.'); return; }
+    var txt = h.slice().reverse().map(function (v, i) { return '— נוסח ' + (h.length - i) + (v.at ? ' (' + fmt(v.at) + ')' : '') + ':\n' + (v.body || ''); }).join('\n\n');
+    alert('גרסאות קודמות של ההערה:\n\n' + txt);
+  }
+  //  הערות שנמחקו (רך) של הליד — מי שכתב רואה את שלו, אדמין את כולן — עם שחזור.
+  function loadDeletedNotes(lead) {
+    var box = C.$('lpDeletedNotes'); if (!box) return;
+    box.innerHTML = '<span class="muted" style="font-size:12px">טוען…</span>';
+    db.from('activities').select('id,body,created_at,deleted_at,created_by')
+      .eq('lead_id', lead.id).eq('type', 'note').not('deleted_at', 'is', null)
+      .order('deleted_at', { ascending: false }).limit(50).then(function (r) {
+        var list = ((r && r.data) || []).filter(function (a) { return C.role === 'admin' || a.created_by === C.userId; });
+        if (!list.length) { box.innerHTML = '<span class="muted" style="font-size:12px">אין הערות שנמחקו.</span>'; return; }
+        box.innerHTML = list.map(function (a) {
+          return '<div style="display:flex;gap:8px;align-items:flex-start;padding:6px 9px;margin-bottom:6px;background:var(--surface-2);border-radius:8px"><div style="flex:1;min-width:0"><div style="font-size:13px;white-space:pre-wrap;text-decoration:line-through;color:var(--muted)">' + esc(a.body || '') + '</div><div class="muted" style="font-size:11px">נמחק ' + fmt(a.deleted_at) + '</div></div><button class="btn btn-ghost btn-sm" data-restnote="' + a.id + '">↩ שחזר</button></div>';
+        }).join('');
+        box.querySelectorAll('[data-restnote]').forEach(function (b) { b.addEventListener('click', function () { b.disabled = true; db.rpc('restore_note', { p_id: b.dataset.restnote }).then(function (rr) { if (rr.error || (rr.data && rr.data.ok === false)) { b.disabled = false; return alert('שגיאה: ' + (rr.error ? rr.error.message : rr.data.error)); } window.C2B_openLeadCard(lead.id); }); }); });
+      });
   }
   function row(k, v) { return '<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--line)"><span class="muted" style="font-size:13px">' + k + '</span><span>' + v + '</span></div>'; }
   function flowBar(cur) {
@@ -1878,7 +1927,7 @@
   window.C2B_renderActivity = function () {
     loading();
     Promise.all([
-      db.from('activities').select('*').order('created_at', { ascending: false }).limit(300),
+      db.from('activities').select('*').is('deleted_at', null).order('created_at', { ascending: false }).limit(300),
       db.from('leads').select('id,name').is('deleted_at', null),
       db.from('profiles').select('user_id,full_name')
     ]).then(function (res) {
@@ -1989,6 +2038,14 @@
     tl.querySelectorAll('a[data-open-deal]').forEach(function (a) { a.addEventListener('click', function (e) { e.preventDefault(); var dd = curDeals.filter(function (x) { return x.id === a.dataset.openDeal; })[0]; if (dd) dealForm(lead, dd); }); });
     tl.querySelectorAll('a[data-doc]').forEach(function (a) { a.addEventListener('click', function (e) { e.preventDefault(); C.viewDoc(a.dataset.doc, a.dataset.docname); }); });
     tl.querySelectorAll('a[data-opencall]').forEach(function (a) { a.addEventListener('click', function (e) { e.preventDefault(); if (window.C2B_openCall) window.C2B_openCall(a.dataset.opencall); }); });
+    //  הערות: עריכה במקום, מחיקה רכה, צפייה בגרסאות קודמות (מי שכתב + אדמין).
+    tl.querySelectorAll('[data-editnote]').forEach(function (el) { el.addEventListener('click', function (e) { e.preventDefault(); startNoteEdit(el.dataset.editnote, lead); }); });
+    tl.querySelectorAll('[data-notehist]').forEach(function (el) { el.addEventListener('click', function (e) { e.preventDefault(); showNoteHist(el.dataset.notehist); }); });
+    tl.querySelectorAll('[data-delnote]').forEach(function (el) { el.addEventListener('click', function (e) { e.preventDefault();
+      if (!confirm('למחוק את ההערה?\nאפשר לשחזר מ"הערות שנמחקו" בתחתית ציר-הזמן.')) return;
+      db.rpc('delete_note', { p_id: el.dataset.delnote }).then(function (r) { if (r.error || (r.data && r.data.ok === false)) return alert('שגיאה: ' + (r.error ? r.error.message : r.data.error)); window.C2B_openLeadCard(lead.id); });
+    }); });
+    if ($('lpShowDeleted')) $('lpShowDeleted').addEventListener('click', function (e) { e.preventDefault(); this.style.display = 'none'; loadDeletedNotes(lead); });
     // consolidated action bar (role-tailored)
     $('view').querySelectorAll('button[data-act2]').forEach(function (b) { b.addEventListener('click', function () { leadAction(lead, b.dataset.act2); }); });
   }
@@ -2501,7 +2558,7 @@
     // client notes (file manager) — timestamped, saved as note activities
     if ($('dlAddNote')) {
       var loadNotes = function () {
-        db.from('activities').select('body,created_at').eq('lead_id', lead.id).eq('type', 'note').order('created_at', { ascending: false }).limit(30).then(function (r) {
+        db.from('activities').select('body,created_at').eq('lead_id', lead.id).eq('type', 'note').is('deleted_at', null).order('created_at', { ascending: false }).limit(30).then(function (r) {
           var list = r.data || [];
           $('dlNotesList').innerHTML = list.length ? list.map(function (a) { return '<div style="border-inline-start:3px solid var(--brand);padding:7px 11px;margin-bottom:8px;background:var(--surface-2);border-radius:8px"><div style="font-size:13px;white-space:pre-wrap">' + esc(a.body || '') + '</div><div class="muted" style="font-size:11px;margin-top:3px">' + (a.created_at ? fmt(a.created_at) : '') + '</div></div>'; }).join('') : '<div class="muted" style="font-size:12.5px">אין הערות עדיין.</div>';
         });
@@ -2516,7 +2573,7 @@
     // client documents in the record tab: view / upload (any format) / delete
     if (lead.id) {
       var loadDocs = function () {
-        db.from('lead_documents').select('*').eq('lead_id', lead.id).order('created_at', { ascending: false }).then(function (dr) {
+        db.from('lead_documents').select('*').eq('lead_id', lead.id).is('deleted_at', null).order('created_at', { ascending: false }).then(function (dr) {
           var docs = (dr && dr.data) || [];
           if (!$('dlDocs')) return;
           var cRow = '';
@@ -2540,16 +2597,18 @@
             if (!$('dlDocs')) return;
             $('dlDocs').innerHTML = cRow + docs.map(function (x) {
               var u = urls[x.storage_path], ic = /\.pdf$/i.test(x.name || '') ? '📄' : (/\.(png|jpe?g|gif|webp)$/i.test(x.name || '') ? '🖼️' : '📎');
-              return '<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--line)"><div style="flex:1;min-width:0">' + ic + ' <a href="#" data-opendoc="' + esc(x.storage_path) + '" data-docname="' + esc(x.name || '') + '" style="cursor:pointer">' + esc(x.name) + '</a> <span class="muted" style="font-size:11px">· ' + fmt(x.created_at) + '</span></div><button class="btn btn-ghost btn-sm" data-dldoc="' + esc(x.storage_path) + '" data-docname="' + esc(x.name || '') + '" title="הורד למחשב" aria-label="הורד למחשב" style="padding-inline:9px">⬇</button><button class="btn btn-ghost btn-sm" data-opendoc="' + esc(x.storage_path) + '" data-docname="' + esc(x.name || '') + '" title="פתח לצפייה בלי להוריד">👁 פתח</button><button class="btn btn-ghost btn-sm" data-deldoc="' + x.id + '" data-delpath="' + esc(x.storage_path) + '" title="מחק">🗑️</button></div>';
+              return '<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--line)"><div style="flex:1;min-width:0">' + ic + ' <a href="#" data-opendoc="' + esc(x.storage_path) + '" data-docname="' + esc(x.name || '') + '" style="cursor:pointer">' + esc(x.name) + '</a> <span class="muted" style="font-size:11px">· ' + fmt(x.created_at) + '</span></div><button class="btn btn-ghost btn-sm" data-dldoc="' + esc(x.storage_path) + '" data-docname="' + esc(x.name || '') + '" title="הורד למחשב" aria-label="הורד למחשב" style="padding-inline:9px">⬇</button><button class="btn btn-ghost btn-sm" data-opendoc="' + esc(x.storage_path) + '" data-docname="' + esc(x.name || '') + '" title="פתח לצפייה בלי להוריד">👁 פתח</button>' + (C.role === 'admin' ? '<button class="btn btn-ghost btn-sm" data-deldoc="' + x.id + '" title="העבר לסל המיחזור">🗑️</button>' : '') + '</div>';
             }).join('');
             wireContractRow();
             $('dlDocs').querySelectorAll('[data-opendoc]').forEach(function (b) { b.addEventListener('click', function (e) { e.preventDefault(); C.viewDoc(b.dataset.opendoc, b.dataset.docname); }); });
             $('dlDocs').querySelectorAll('[data-dldoc]').forEach(function (b) { b.addEventListener('click', function (e) { e.preventDefault(); C.downloadDoc(b.dataset.dldoc, b.dataset.docname); }); });
             $('dlDocs').querySelectorAll('[data-deldoc]').forEach(function (b) {
               b.addEventListener('click', function () {
-                if (!confirm('למחוק את המסמך?')) return;
-                db.storage.from('lead-docs').remove([b.dataset.delpath]).then(function () {
-                  db.from('lead_documents').delete().eq('id', b.dataset.deldoc).then(function () { logActivity(lead.id, 'document', 'נמחק מסמך'); loadDocs(); });
+                if (!confirm('להעביר את המסמך לסל המיחזור?\nהקובץ נשמר וניתן לשחזר ממסך "מסמכים והסכמים".')) return;
+                b.disabled = true;
+                db.rpc('trash_document', { p_doc: b.dataset.deldoc }).then(function (r) {
+                  if (r.error || (r.data && r.data.ok === false)) { b.disabled = false; return alert('שגיאה: ' + (r.error ? r.error.message : r.data.error)); }
+                  loadDocs();
                 });
               });
             });
