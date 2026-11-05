@@ -1422,7 +1422,7 @@
     loading();
     Promise.all([
       db.from('leads').select('*').eq('id', id).single(),
-      db.from('activities').select('*').eq('lead_id', id).is('deleted_at', null).order('created_at', { ascending: false }),
+      db.from('activities').select('id,created_at,lead_id,type,body,meta,created_by,org_id,edited_at').eq('lead_id', id).is('deleted_at', null).order('created_at', { ascending: false }),
       db.from('tasks').select('*').eq('lead_id', id).order('due_at', { ascending: true }),
       db.from('lead_documents').select('*').eq('lead_id', id).is('deleted_at', null).order('created_at', { ascending: false }),
       db.from('deals').select('*').eq('lead_id', id).order('created_at', { ascending: false }),
@@ -1689,9 +1689,9 @@
       }
       //  הערה: עריכה/מחיקה (מי שכתב + אדמין) + סימון "נערך" עם צפייה בגרסאות קודמות.
       if (a.type === 'note') {
-        noteHist[a.id] = a.history || [];
         var canEdit = (a.created_by === C.userId) || (C.role === 'admin');
-        var edited = (a.edited_at && noteHist[a.id].length) ? ' <a href="#" class="muted" data-notehist="' + a.id + '" style="font-size:11px;text-decoration:none" title="הצג גרסאות קודמות">· נערך ✎</a>' : '';
+        //  "נערך" מוצג לכולם (מטא-דאטה); הגרסאות הקודמות עצמן נפתחות רק לכותב/אדמין דרך RPC note_history.
+        var edited = a.edited_at ? (canEdit ? ' <a href="#" class="muted" data-notehist="' + a.id + '" style="font-size:11px;text-decoration:none" title="הצג גרסאות קודמות">· נערך ✎</a>' : ' <span class="muted" style="font-size:11px">· נערך</span>') : '';
         var ctrls = canEdit ? '<span style="float:inline-start;display:inline-flex;gap:8px;margin-inline-start:8px"><a href="#" data-editnote="' + a.id + '" title="ערוך הערה" style="text-decoration:none;font-size:13px">✏️</a><a href="#" data-delnote="' + a.id + '" title="מחק הערה" style="text-decoration:none;font-size:13px">🗑️</a></span>' : '';
         body = '<div class="note-wrap" data-noteid="' + a.id + '">' + ctrls + '<span class="note-body" style="white-space:pre-wrap">' + (a.body ? esc(a.body) : '') + '</span>' + edited + '</div>';
       }
@@ -1745,9 +1745,13 @@
   }
   //  צפייה בגרסאות קודמות של הערה שנערכה (היסטוריה נשמרת ב-edit_note).
   function showNoteHist(id) {
-    var h = noteHist[id] || []; if (!h.length) { alert('אין גרסאות קודמות.'); return; }
-    var txt = h.slice().reverse().map(function (v, i) { return '— נוסח ' + (h.length - i) + (v.at ? ' (' + fmt(v.at) + ')' : '') + ':\n' + (v.body || ''); }).join('\n\n');
-    alert('גרסאות קודמות של ההערה:\n\n' + txt);
+    //  הגרסאות הקודמות מגיעות דרך RPC מגודר (כותב/אדמין) — לא בשליפה הרחבה.
+    db.rpc('note_history', { p_id: id }).then(function (r) {
+      var h = (r && !r.error && Array.isArray(r.data)) ? r.data : [];
+      if (!h.length) { alert('אין גרסאות קודמות.'); return; }
+      var txt = h.slice().reverse().map(function (v, i) { return '— נוסח ' + (h.length - i) + (v.at ? ' (' + fmt(v.at) + ')' : '') + ':\n' + (v.body || ''); }).join('\n\n');
+      alert('גרסאות קודמות של ההערה:\n\n' + txt);
+    });
   }
   //  הערות שנמחקו (רך) של הליד — מי שכתב רואה את שלו, אדמין את כולן — עם שחזור.
   function loadDeletedNotes(lead) {
@@ -3133,7 +3137,7 @@
       db.from('deals').select('id,created_at,lead_id,order_no,form_type,status,salesperson,client_name,client_phone,client_email,client_address,client_id,invoice_name,car_make,car_model,car_year,car_trim,car_engine,car_gearbox,car_color,car_price,down_total,down_initial,down_balance,monthly,delivery_days,balance_to_pay,addons,vat_included,discount_pct,discount_amt,total,paid,spec,notes,stage,checklist,financing,tradein,charge_amount,acct_status,acct_notes,commission,brand,signed_at,cancel_reason,contract_type,updated_at,has_contract,has_signature,purchase_price').in('stage', ['signed', 'collection', 'ordered', 'delivered', 'cancelled']).is('deleted_at', null).order('created_at', { ascending: false }).limit(3000),   // הנהלת חשבונות — כל שדות העסקה (למעט כבדים/פנימיים)
       db.from('payments').select('*'),
       db.from('profiles').select('user_id,full_name'),
-      db.from('lead_documents').select('*').order('created_at', { ascending: false }).limit(500),
+      db.from('lead_documents').select('*').is('deleted_at', null).order('created_at', { ascending: false }).limit(500),
       db.from('leads').select('id,name').is('deleted_at', null)
     ]).then(function (res) {
       if (res[0].error) return errBox(res[0].error.message);
@@ -3283,7 +3287,7 @@
       db.from('leads').select('*').eq('id', id).single(),
       db.from('deals').select('*').eq('lead_id', id).order('created_at', { ascending: false }),
       db.from('payments').select('*').eq('lead_id', id).order('created_at', { ascending: false }),
-      db.from('lead_documents').select('*').eq('lead_id', id).order('created_at', { ascending: false })
+      db.from('lead_documents').select('*').eq('lead_id', id).is('deleted_at', null).order('created_at', { ascending: false })
     ]).then(function (r) {
       if (r[0].error) return errBox(r[0].error.message);
       var lead = r[0].data, deals = (r[1] && r[1].data) || [], pays = (r[2] && r[2].data) || [], docs = (r[3] && r[3].data) || [];
