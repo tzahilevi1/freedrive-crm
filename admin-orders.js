@@ -618,79 +618,148 @@
   }
 
   // ================= מלאי רכש =================
+  var STK_ENGINES = ['חשמלי', 'פלאג אין', 'פלאג אין היברידי', 'היברידי', 'בנזין', 'דיזל'];
   function renderStock() {
     loading(); var tk = S.token;
     loadAll(function () {   // S.byId (סטטוסי-עסקאות) לחישוב "משויך"
       if (tk !== S.token) return;
       Promise.all([
-        db.from('stock_items').select('*').order('created_at', { ascending: false }),
+        db.from('stock_items').select('*').order('make', { ascending: true }).order('model', { ascending: true }),
         db.from('vehicle_orders').select('deal_id,stock_item_id')
       ]).then(function (r) {
         if (r[0].error) return errBox(r[0].error.message);
-        var items = r[0].data || [];
-        //  משויך = עסקאות לא-מבוטלות שקושרו ללוט (נמסר עדיין "צורך" יחידה)
-        var alloc = {};
+        S._stk = r[0].data || [];
+        S._alloc = {};
         (r[1].data || []).forEach(function (v) {
           if (!v.stock_item_id) return;
           var d = S.byId[v.deal_id], s = d && stById(d.global_status_id);
           if (s && s.key === 'cancelled') return;
-          alloc[v.stock_item_id] = (alloc[v.stock_item_id] || 0) + 1;
+          S._alloc[v.stock_item_id] = (S._alloc[v.stock_item_id] || 0) + 1;
         });
-        var totUnits = 0, totAvail = 0, totVal = 0;
-        items.forEach(function (it) { var a = alloc[it.id] || 0; totUnits += it.qty; totAvail += Math.max(0, it.qty - a); totVal += (+it.unit_cost || 0) * it.qty; });
-        var label = function (it) { return esc([it.make, it.model, it.trim, it.year, it.color].filter(Boolean).join(' ')); };
-
-        var h = '<div class="row-between" style="margin-bottom:12px"><h2 style="margin:0">🏬 מלאי רכש <span class="muted onum" style="font-size:15px">(' + totAvail + ' זמין מתוך ' + totUnits + ')</span></h2><button class="btn btn-ghost btn-sm" id="stX">📥 ייצוא Excel</button></div>' +
-          '<p class="muted" style="margin:-4px 0 14px;font-size:13px">כל לוט = רכבים שרכשנו מראש. "זמין" = כמה שנרכש פחות כמה ששויכו לעסקאות (עסקה שבוטלה משחררת יחידה). שיוך נעשה בכרטיס העסקה → "הזמנת רכב".</p>' +
-          '<div class="cards">' + C.stat('סה"כ יחידות', totUnits) + C.stat('זמינות', totAvail, null, null, (totUnits - totAvail) + ' שויכו') + C.stat('שווי מלאי (עלות)', nis(totVal)) + '</div>';
-        h += '<div class="card"><h3>לוט חדש</h3><div class="oform">' +
-          fld('יצרן', 'nkMake', '') + fld('דגם *', 'nkModel', '') + fld('גימור', 'nkTrim', '') + fld('שנה', 'nkYear', '', 'number') + fld('צבע', 'nkColor', '') +
-          '<div><label>ספק</label><select class="inp" id="nkSup">' + opt('', '— ללא —', '') + S.suppliers.map(function (s) { return opt(s.id, s.name, ''); }).join('') + '</select></div>' +
-          fld('עלות ליחידה ₪', 'nkCost', '', 'number') + fld('כמות שנרכשה', 'nkQty', '1', 'number') +
-          '<div style="align-self:end"><button class="btn btn-sm" id="nkAdd">➕ הוסף לוט</button></div></div></div>';
-        h += '<div class="card" style="padding:0"><div class="table-scroll"><table><thead><tr><th>פריט</th><th>ספק</th><th>עלות ליחידה</th><th>נרכש</th><th>שויך</th><th>זמין</th><th>שווי לוט</th><th></th></tr></thead><tbody>' +
-          (items.map(function (it) {
-            var a = alloc[it.id] || 0, av = it.qty - a;
-            return '<tr><td><b>' + label(it) + '</b>' + (it.active ? '' : ' <span class="muted">(לא פעיל)</span>') + '</td>' +
-              '<td>' + esc(supName(it.supplier_id)) + '</td>' +
-              '<td><input class="inp onum" type="number" data-cost="' + it.id + '" value="' + (it.unit_cost == null ? '' : it.unit_cost) + '" style="width:110px"></td>' +
-              '<td><input class="inp onum" type="number" data-qty="' + it.id + '" value="' + it.qty + '" style="width:80px"></td>' +
-              '<td class="onum">' + a + '</td>' +
-              '<td class="onum" style="font-weight:700;color:' + (av > 0 ? 'var(--ok)' : 'var(--danger)') + '">' + av + '</td>' +
-              '<td class="onum">' + nis((+it.unit_cost || 0) * it.qty) + '</td>' +
-              '<td><button class="btn btn-sm" data-sk="' + it.id + '">💾</button> ' + (a ? '' : '<button class="btn btn-ghost btn-sm" data-skd="' + it.id + '">🗑</button>') + '</td></tr>';
-          }).join('') || '<tr><td colspan="8" class="muted" style="padding:24px;text-align:center">אין מלאי עדיין — הוסף לוט ראשון למעלה</td></tr>') + '</tbody></table></div></div>';
-        view(h);
-        var q = function (a, i) { return $('view').querySelector('[' + a + '="' + i + '"]'); };
-        $('nkAdd').addEventListener('click', function () {
-          var model = val('nkModel').trim(); if (!model) return toast('הזן דגם', true);
-          db.from('stock_items').insert({ make: val('nkMake').trim() || null, model: model, trim: val('nkTrim').trim() || null,
-            year: num(val('nkYear')), color: val('nkColor').trim() || null, supplier_id: val('nkSup') ? +val('nkSup') : null,
-            unit_cost: num(val('nkCost')), qty: parseInt(val('nkQty'), 10) || 1, created_by: S.uid }).then(function (r) {
-            if (r.error) return toast('שגיאה: ' + r.error.message, true); toast('הלוט נוסף'); renderStock();
-          });
-        });
-        $('view').querySelectorAll('[data-sk]').forEach(function (b) {
-          b.addEventListener('click', function () {
-            var i = b.dataset.sk;
-            db.from('stock_items').update({ unit_cost: q('data-cost', i).value === '' ? null : (parseFloat(q('data-cost', i).value) || 0), qty: parseInt(q('data-qty', i).value, 10) || 0 }).eq('id', i).then(function (r) {
-              if (r.error) return toast('שגיאה: ' + r.error.message, true); toast('נשמר (מחיר-הרכישה בעסקאות המשויכות יתעדכן בשיוך הבא)');
-            });
-          });
-        });
-        $('view').querySelectorAll('[data-skd]').forEach(function (b) {
-          b.addEventListener('click', function () {
-            db.from('stock_items').delete().eq('id', b.dataset.skd).then(function (r) {
-              if (r.error) return toast('לא ניתן למחוק (לוט משויך לעסקה): ' + r.error.message, true); toast('נמחק'); renderStock();
-            });
-          });
-        });
-        $('stX').addEventListener('click', function () {
-          C.exportXlsx(items.map(function (it) { var a = alloc[it.id] || 0; return { item: [it.make, it.model, it.trim, it.year, it.color].filter(Boolean).join(' '), supplier: supName(it.supplier_id), unit_cost: it.unit_cost, qty: it.qty, allocated: a, available: it.qty - a, value: (+it.unit_cost || 0) * it.qty }; }),
-            ['item', 'supplier', 'unit_cost', 'qty', 'allocated', 'available', 'value'], 'stock',
-            { item: 'פריט', supplier: 'ספק', unit_cost: 'עלות ליחידה', qty: 'נרכש', allocated: 'שויך', available: 'זמין', value: 'שווי לוט' });
-        });
+        if (!S.stkF) S.stkF = { make: '', model: '', trim: '', seats: '', monthly: '' };
+        paintStock();
       });
+    });
+  }
+  function stkImg1(it) { var a = it.images; return (Array.isArray(a) && a.length) ? a[0] : null; }
+  function stkLabel(it) { return esc([it.make, it.model, it.trim, it.year].filter(Boolean).join(' ')); }
+  function paintStock() {
+    var items = S._stk || [], alloc = S._alloc || {}, F = S.stkF;
+    var makes = {}; items.forEach(function (it) { if (it.make) makes[it.make] = 1; });
+    var seats = {}; items.forEach(function (it) { if (it.seats) seats[it.seats] = 1; });
+    var filt = items.filter(function (it) {
+      if (F.make && (it.make || '') !== F.make) return false;
+      if (F.model && (it.model || '').toLowerCase().indexOf(F.model.toLowerCase()) < 0) return false;
+      if (F.trim && (it.trim || '').toLowerCase().indexOf(F.trim.toLowerCase()) < 0) return false;
+      if (F.seats && String(it.seats || '') !== String(F.seats)) return false;
+      if (F.monthly && !((+it.monthly_60 || +it.monthly_50 || 0) <= +F.monthly && (+it.monthly_60 || +it.monthly_50 || 0) > 0)) return false;
+      return true;
+    });
+    var totUnits = 0, totAvail = 0, totVal = 0;
+    items.forEach(function (it) { var a = alloc[it.id] || 0; totUnits += it.qty; totAvail += Math.max(0, it.qty - a); totVal += (+it.unit_cost || 0) * it.qty; });
+    var selOpt = function (cur, list, blank) { return '<option value="">' + blank + '</option>' + list.map(function (v) { return '<option value="' + esc(v) + '"' + (String(cur) === String(v) ? ' selected' : '') + '>' + esc(v) + '</option>'; }).join(''); };
+    var h = '<div class="row-between" style="margin-bottom:12px"><h2 style="margin:0">🏬 מלאי רכש <span class="muted onum" style="font-size:15px">(' + filt.length + ' מתוך ' + items.length + ')</span></h2><div style="display:flex;gap:6px"><button class="btn btn-sm" id="stkNewBtn">➕ רכב חדש</button><button class="btn btn-ghost btn-sm" id="stX">📥 ייצוא Excel</button></div></div>' +
+      '<div class="cards">' + C.stat('דגמים', items.length) + C.stat('יחידות זמינות', totAvail, null, null, (totUnits - totAvail) + ' שויכו') + C.stat('שווי מלאי (עלות)', nis(totVal)) + '</div>' +
+      //  סינון: יצרן · דגם · רמת גימור · מושבים · החזר חודשי (עד)
+      '<div class="card" style="padding:12px"><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:end">' +
+        '<div><label>יצרן</label><select class="inp" id="fMake" style="min-width:130px">' + selOpt(F.make, Object.keys(makes).sort(), 'כל היצרנים') + '</select></div>' +
+        '<div><label>דגם</label><input class="inp" id="fModel" value="' + esc(F.model) + '" placeholder="חיפוש דגם…" style="width:150px"></div>' +
+        '<div><label>רמת גימור</label><input class="inp" id="fTrim" value="' + esc(F.trim) + '" placeholder="חיפוש גימור…" style="width:150px"></div>' +
+        '<div><label>מושבים</label><select class="inp" id="fSeats" style="width:100px">' + selOpt(F.seats, Object.keys(seats).sort(function (a, b) { return a - b; }), 'הכל') + '</select></div>' +
+        '<div><label>החזר חודשי עד ₪</label><input class="inp onum" id="fMonthly" type="number" value="' + esc(F.monthly) + '" placeholder="למשל 2000" style="width:120px"></div>' +
+        '<button class="btn btn-ghost btn-sm" id="fClear">נקה סינון</button>' +
+      '</div></div>' +
+      '<div id="stkNew"></div>' +
+      '<div class="cards" style="grid-template-columns:repeat(auto-fill,minmax(250px,1fr))">' +
+        (filt.map(function (it) {
+          var a = alloc[it.id] || 0, av = it.qty - a, im = stkImg1(it);
+          var spec = [it.engine, (it.seats ? it.seats + ' מק\'' : ''), it.color].filter(Boolean).join(' · ');
+          var m = it.monthly_60 || it.monthly_50;
+          return '<div class="card" style="padding:10px;display:flex;flex-direction:column;gap:6px">' +
+            (im ? '<img src="' + esc(im) + '" alt="" loading="lazy" style="width:100%;height:120px;object-fit:contain;background:var(--surface-2);border-radius:8px" onerror="this.style.display=\'none\'">' : '<div style="height:120px;background:var(--surface-2);border-radius:8px;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:28px">🚗</div>') +
+            '<div style="font-weight:700;font-size:14px;line-height:1.25">' + stkLabel(it) + '</div>' +
+            (spec ? '<div class="muted" style="font-size:12px">' + esc(spec) + '</div>' : '') +
+            '<div style="font-size:12.5px">' + (m ? '💳 ' + nis(m) + ' לחודש' : '') + (it.list_price ? ' · מחירון ' + nis(it.list_price) : '') + '</div>' +
+            '<div class="muted" style="font-size:11.5px">' + esc(supName(it.supplier_id)) + ' · זמין ' + '<b style="color:' + (av > 0 ? 'var(--ok)' : 'var(--muted)') + '">' + av + '</b>/' + it.qty + (it.active ? '' : ' · <span style="color:var(--danger)">לא פעיל</span>') + '</div>' +
+            '<div style="display:flex;gap:6px;margin-top:2px"><button class="btn btn-sm" data-ske="' + it.id + '" style="flex:1">✏️ ערוך</button>' + (a ? '' : '<button class="btn btn-ghost btn-sm" data-skd="' + it.id + '">🗑</button>') + '</div>' +
+          '</div>';
+        }).join('') || '<p class="muted" style="padding:24px;grid-column:1/-1;text-align:center">אין רכבים תואמים לסינון</p>') +
+      '</div>';
+    view(h);
+    var bindF = function (id, key, ev) { var el = $(id); if (el) el.addEventListener(ev || 'input', function () { S.stkF[key] = el.value; paintStock(); }); };
+    bindF('fMake', 'make', 'change'); bindF('fModel', 'model'); bindF('fTrim', 'trim'); bindF('fSeats', 'seats', 'change'); bindF('fMonthly', 'monthly');
+    if ($('fClear')) $('fClear').addEventListener('click', function () { S.stkF = { make: '', model: '', trim: '', seats: '', monthly: '' }; paintStock(); });
+    if ($('stkNewBtn')) $('stkNewBtn').addEventListener('click', function () { stkForm(null); });
+    $('view').querySelectorAll('[data-ske]').forEach(function (b) { b.addEventListener('click', function () { stkForm(b.dataset.ske); }); });
+    $('view').querySelectorAll('[data-skd]').forEach(function (b) { b.addEventListener('click', function () { if (!confirm('למחוק את הרכב מהמלאי?')) return; db.from('stock_items').delete().eq('id', b.dataset.skd).then(function (r) { if (r.error) return toast('לא ניתן למחוק (לוט משויך לעסקה): ' + r.error.message, true); toast('נמחק'); renderStock(); }); }); });
+    if ($('stX')) $('stX').addEventListener('click', function () {
+      C.exportXlsx((S._stk || []).map(function (it) { var a = (S._alloc || {})[it.id] || 0; return { item: [it.make, it.model, it.trim, it.year].filter(Boolean).join(' '), engine: it.engine, seats: it.seats, color: it.color, monthly_60: it.monthly_60, list_price: it.list_price, finance_price: it.finance_price, down_payment: it.down_payment, agent_commission: it.agent_commission, levi_code: it.levi_code, supplier: supName(it.supplier_id), unit_cost: it.unit_cost, qty: it.qty, allocated: a, available: it.qty - a }; }),
+        ['item', 'engine', 'seats', 'color', 'monthly_60', 'list_price', 'finance_price', 'down_payment', 'agent_commission', 'levi_code', 'supplier', 'unit_cost', 'qty', 'allocated', 'available'], 'stock',
+        { item: 'רכב', engine: 'מנוע', seats: 'מושבים', color: 'צבע', monthly_60: 'החזר 60%', list_price: 'מחירון', finance_price: 'מימון ישיר', down_payment: 'מקדמה', agent_commission: 'עמלת סוכן', levi_code: 'קוד לוי יצחק', supplier: 'ספק', unit_cost: 'עלות ליחידה', qty: 'נרכש', allocated: 'שויך', available: 'זמין' });
+    });
+  }
+  //  העלאת תמונת-רכב לדלי הציבורי stock-images → URL ציבורי
+  function stkUpload(file, cb) {
+    var ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+    var p = 'veh/' + Date.now() + '-' + Math.random().toString(36).slice(2, 8) + '.' + ext;
+    db.storage.from('stock-images').upload(p, file, { upsert: false, contentType: file.type || undefined }).then(function (r) {
+      if (r.error) { toast('העלאת תמונה נכשלה: ' + r.error.message, true); return; }
+      var u = db.storage.from('stock-images').getPublicUrl(p); cb(u.data.publicUrl);
+    });
+  }
+  //  טופס הוספה/עריכה מלא (כל השדות + תמונות) כחלונית צפה.
+  function stkForm(id) {
+    var it = id ? (S._stk || []).filter(function (x) { return x.id === id; })[0] : null; if (id && !it) return;
+    it = it || { images: [] };
+    var imgs = Array.isArray(it.images) ? it.images.slice() : [];
+    var ov = document.createElement('div'); ov.id = 'stkOv';
+    ov.style.cssText = 'position:fixed;inset:0;z-index:99998;background:rgba(15,20,25,.6);display:flex;align-items:flex-start;justify-content:center;overflow:auto;padding:24px';
+    var f = function (lbl, k, val, type) { return '<div><label>' + lbl + '</label><input class="inp" id="sf_' + k + '" type="' + (type || 'text') + '" value="' + esc(val == null ? '' : val) + '" style="width:100%"></div>'; };
+    var supSel = '<div><label>ספק</label><select class="inp" id="sf_supplier_id" style="width:100%"><option value="">— ללא —</option>' + S.suppliers.map(function (s) { return '<option value="' + s.id + '"' + (String(it.supplier_id) === String(s.id) ? ' selected' : '') + '>' + esc(s.name) + '</option>'; }).join('') + '</select></div>';
+    var engSel = '<div><label>מנוע</label><select class="inp" id="sf_engine" style="width:100%"><option value="">—</option>' + STK_ENGINES.concat((it.engine && STK_ENGINES.indexOf(it.engine) < 0) ? [it.engine] : []).map(function (e) { return '<option' + (it.engine === e ? ' selected' : '') + '>' + esc(e) + '</option>'; }).join('') + '</select></div>';
+    ov.innerHTML = '<div dir="rtl" class="card" style="max-width:720px;width:100%;margin:0"><div class="row-between"><h3 style="margin:0">' + (id ? '✏️ עריכת רכב' : '➕ רכב חדש') + '</h3><button class="btn btn-ghost btn-sm" id="sfX">✕</button></div>' +
+      '<div class="oform" style="margin-top:10px">' +
+        f('יצרן', 'make', it.make) + f('דגם *', 'model', it.model) + f('רמת גימור', 'trim', it.trim) + f('שנה', 'year', it.year, 'number') + f('צבע', 'color', it.color) +
+        engSel + f('מספר מושבים', 'seats', it.seats, 'number') + f('כוח סוס', 'horsepower', it.horsepower) + f('קוד לוי יצחק', 'levi_code', it.levi_code) +
+        f('החזר חודשי 50% ₪', 'monthly_50', it.monthly_50, 'number') + f('החזר חודשי 60% ₪', 'monthly_60', it.monthly_60, 'number') +
+        f('מקדמה ₪', 'down_payment', it.down_payment, 'number') + f('עמלת סוכן ₪', 'agent_commission', it.agent_commission, 'number') +
+        f('מחירון ₪', 'list_price', it.list_price, 'number') + f('מחיר מבצע ₪', 'sale_price', it.sale_price, 'number') + f('מימון ישיר ₪', 'finance_price', it.finance_price, 'number') +
+        supSel + f('עלות ליחידה ₪', 'unit_cost', it.unit_cost, 'number') + f('כמות שנרכשה', 'qty', (it.qty == null ? 0 : it.qty), 'number') +
+        '<div><label>פעיל</label><select class="inp" id="sf_active" style="width:100%"><option value="1"' + (it.active !== false ? ' selected' : '') + '>כן</option><option value="0"' + (it.active === false ? ' selected' : '') + '>לא</option></select></div>' +
+      '</div>' +
+      '<div style="margin-top:8px"><label>הערות</label><textarea class="inp" id="sf_notes" style="width:100%;height:50px">' + esc(it.notes || '') + '</textarea></div>' +
+      '<div style="margin-top:10px"><label>תמונות הרכב</label><div id="sfImgs" style="display:flex;gap:8px;flex-wrap:wrap;margin:6px 0"></div>' +
+        '<div style="display:flex;gap:6px;align-items:center"><input type="file" id="sfFile" accept="image/*" multiple style="font-size:12px"><input class="inp" id="sfUrl" placeholder="או הדבק קישור-תמונה" style="flex:1"><button class="btn btn-ghost btn-sm" id="sfUrlAdd">הוסף קישור</button></div></div>' +
+      '<div style="display:flex;gap:8px;margin-top:14px;align-items:center;border-top:1px solid var(--line);padding-top:12px"><button class="btn" id="sfSave">💾 שמור</button><button class="btn btn-ghost btn-sm" id="sfCancel">בטל</button><span class="muted" id="sfMsg" style="font-size:12.5px"></span></div></div>';
+    document.body.appendChild(ov);
+    var paintImgs = function () {
+      $('sfImgs').innerHTML = imgs.map(function (u, i) { return '<div style="position:relative;width:88px;height:66px"><img src="' + esc(u) + '" style="width:88px;height:66px;object-fit:cover;border-radius:6px;border:1px solid var(--line)" onerror="this.style.opacity=.3"><button data-rimg="' + i + '" title="הסר" style="position:absolute;top:-7px;inset-inline-start:-7px;background:var(--danger);color:#fff;border:none;border-radius:50%;width:20px;height:20px;cursor:pointer;font-size:12px;line-height:1">✕</button></div>'; }).join('') || '<span class="muted" style="font-size:12px">אין תמונות עדיין</span>';
+      $('sfImgs').querySelectorAll('[data-rimg]').forEach(function (b) { b.addEventListener('click', function () { imgs.splice(+b.dataset.rimg, 1); paintImgs(); }); });
+    };
+    paintImgs();
+    var close = function () { ov.remove(); };
+    $('sfX').addEventListener('click', close); $('sfCancel').addEventListener('click', close);
+    ov.addEventListener('click', function (e) { if (e.target === ov) close(); });
+    $('sfUrlAdd').addEventListener('click', function () { var u = ($('sfUrl').value || '').trim(); if (u) { imgs.push(u); $('sfUrl').value = ''; paintImgs(); } });
+    $('sfFile').addEventListener('change', function () {
+      var files = Array.prototype.slice.call(this.files || []); if (!files.length) return;
+      $('sfMsg').textContent = 'מעלה ' + files.length + ' תמונות…'; var done = 0;
+      files.forEach(function (file) { stkUpload(file, function (url) { imgs.push(url); done++; paintImgs(); if (done === files.length) $('sfMsg').textContent = ''; }); });
+    });
+    $('sfSave').addEventListener('click', function () {
+      var g = function (k) { var e = $('sf_' + k); return e ? e.value : ''; };
+      var model = (g('model') || '').trim(); if (!model) { $('sfMsg').textContent = 'דגם חובה'; return; }
+      var N = function (k) { var v = g(k); return v === '' ? null : (parseFloat(v) || 0); };
+      var rec = { make: (g('make') || '').trim() || null, model: model, trim: (g('trim') || '').trim() || null, year: N('year'), color: (g('color') || '').trim() || null,
+        engine: g('engine') || null, seats: N('seats'), horsepower: (g('horsepower') || '').trim() || null, levi_code: (g('levi_code') || '').trim() || null,
+        monthly_50: N('monthly_50'), monthly_60: N('monthly_60'), down_payment: N('down_payment'), agent_commission: N('agent_commission'),
+        list_price: N('list_price'), sale_price: N('sale_price'), finance_price: N('finance_price'),
+        supplier_id: g('supplier_id') ? +g('supplier_id') : null, unit_cost: N('unit_cost'), qty: parseInt(g('qty'), 10) || 0,
+        active: g('active') === '1', notes: (g('notes') || '').trim() || null, images: imgs };
+      this.disabled = true;
+      var done = function (r) { if (r && r.error) { $('sfSave').disabled = false; $('sfMsg').textContent = 'שגיאה: ' + r.error.message; return; } toast('נשמר'); close(); renderStock(); };
+      if (id) db.from('stock_items').update(rec).eq('id', id).then(done);
+      else { rec.created_by = S.uid; db.from('stock_items').insert(rec).then(done); }
     });
   }
 
