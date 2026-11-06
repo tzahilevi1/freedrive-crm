@@ -1373,6 +1373,22 @@
       deals.forEach(function (dd) { if (dd.signature) ensureSignedDoc(lead, dd, function () { openFileView(id); }); });   // עסקה חתומה → עותק HTML לתיק + ציר זמן
     });
   }
+  //  תצוגת הנהלת-החשבונות ככרטיס-עסקה אחיד (פיילוט electric-lease): אותם מקטעים כמו הסוכן/התיקים
+  //  (קריאה-בלבד) + הטאבים הכספיים + טאב „חשבונות". זהה ל-openFileView אך acctMode=true.
+  function openAcctCardView(id) {
+    loading();
+    Promise.all([
+      db.from('leads').select('*').eq('id', id).single(),
+      db.from('deals').select('*').eq('lead_id', id).order('created_at', { ascending: false }),
+      db.from('profiles').select('user_id,full_name')
+    ]).then(function (r) {
+      if (r[0].error) return errBox(r[0].error.message);
+      var lead = r[0].data, deals = (r[1] && r[1].data) || [];
+      if (r[2] && r[2].data) { profiles = {}; r[2].data.forEach(function (p) { profiles[p.user_id] = p.full_name; }); }
+      curDeals = deals;
+      dealForm(lead, deals[0] || null, false, true);   // fileMode=false, acctMode=true
+    });
+  }
   // open a specific deal's file view (used from the file-manager list)
   window.C2B_openDeal = function (dealId) {
     loading();
@@ -1419,7 +1435,7 @@
     //  בלי השמירה, '' נשלח ל-.eq() על עמודת-uuid ומפיל 7 שגיאות "invalid input syntax for type uuid".
     if (!id) return;
     if ((C.role || '') === 'files') return openFileView(id);        // file manager → file view
-    if ((C.role || '') === 'accounting') return openAcctLeadView(id); // accountant → accounting file
+    if ((C.role || '') === 'accounting') return ((window.__fleetCfg && window.__fleetCfg.slug) === 'electric-lease') ? openAcctCardView(id) : openAcctLeadView(id); // accountant → כרטיס אחיד (פיילוט EL) או תיק-חשבונות
     loading();
     Promise.all([
       db.from('leads').select('*').eq('id', id).single(),
@@ -2296,7 +2312,7 @@
   }
   window.C2B_plateLookup = plateLookup;
 
-  function dealForm(lead, deal, fileMode) {
+  function dealForm(lead, deal, fileMode, acctMode) {
     deal = deal || {}; var ad = deal.addons || {};
     var curStage = deal.stage || 'awaiting';
     var checklist = {}; CHECKLIST_ITEMS.forEach(function (it) { checklist[it] = !!(deal.checklist || {})[it]; });
@@ -2461,19 +2477,50 @@
     var payCard = !pilotPay ? '' : '<div class="card"><h3>🏦 פירוק תשלומים</h3>' +
       '<p class="muted" style="font-size:12px;margin:-4px 0 10px">פירוק העסקה לפי מקור-הכסף (נטלי / מימון ישיר / MAX / מזרחי / ...).</p>' +
       (deal.id ? '<div id="dlPayBody">טוען…</div>' : '<p class="muted" style="font-size:13px">שמרו את העסקה קודם.</p>') + '</div>';
+    //  ===== פיילוט electric-lease: טאב „חשבונות" להנהלת-החשבונות (acctMode) =====
+    //  פרטי-חשבונית/קבלה לעריכה + סיכום כספי (קריאה) + סטטוס-חשבונות + הפקת קבלה/חשבונית.
+    //  מזהי-השדות הם acctf_* (לא dl_*) בכוונה — כדי לא להדליק את ה-auto-save של העסקה.
+    var acctCard = !acctMode ? '' : (function () {
+      var af = function (lbl, name, val, ph) { return '<label class="lf" style="align-items:center"><span class="k">' + lbl + '</span><input class="inp" id="acctf_' + name + '" value="' + esc(val == null ? '' : val) + '" placeholder="' + (ph || '') + '" style="max-width:220px"></label>'; };
+      var al = function (k, v) { return '<div class="lf"><span class="k">' + k + '</span><span class="v">' + (v == null || v === '' ? '—' : v) + '</span></div>'; };
+      return '<div class="card"><div class="row-between"><h3 style="margin:0">🧾 חשבונות</h3>' + acctStatusSel(deal.id, deal.acct_status) + '</div>' +
+        '<div class="grid2" style="margin-top:8px">' +
+          '<div class="lead-fields"><div class="muted" style="font-size:12px;font-weight:700;margin-bottom:4px">🧾 פרטים לחשבונית / קבלה</div>' +
+            af('שם על החשבונית', 'invoice_name', deal.invoice_name || deal.client_name, 'שם מלא / חברה') +
+            af('ת.ז / ח.פ', 'client_id', deal.client_id, 'מספר מזהה') +
+            af('טלפון', 'client_phone', deal.client_phone || lead.phone) +
+            af('דוא"ל', 'client_email', deal.client_email || lead.email) +
+            af('כתובת לחיוב', 'client_address', deal.client_address, 'רחוב, עיר') +
+            af('סכום לחיוב ₪', 'charge_amount', (deal.charge_amount != null ? deal.charge_amount : ''), 'ברירת מחדל: היתרה') +
+            af('מחיר קניית רכב ₪ (עלות)', 'purchase_price', (deal.purchase_price != null ? deal.purchase_price : ''), 'עלות הרכב') +
+            '<div style="margin-top:8px"><button class="btn btn-sm" id="dlAcctSave">💾 שמור פרטי חשבונית</button> <span id="dlAcctMsg" class="muted" style="font-size:12.5px;margin-inline-start:6px"></span></div></div>' +
+          '<div class="lead-fields"><div class="muted" style="font-size:12px;font-weight:700;margin-bottom:4px">💰 סיכום כספי</div>' +
+            al('מה נקנה', esc(((deal.car_make || '') + ' ' + (deal.car_model || '')).trim())) +
+            al('מחיר הרכב', nis(deal.car_price)) +
+            al('עלות קנייה', deal.purchase_price != null ? nis(deal.purchase_price) : '<span class="muted">— למילוי</span>') +
+            al('מקדמה', nis(deal.down_total)) +
+            al('סכום העסקה', '<b>' + nis(deal.total) + '</b>') +
+            al('עמלת סוכן', '<b style="color:var(--ok)">' + nis(deal.commission) + '</b>') +
+            al('סוכן מכירות', esc(deal.salesperson)) +
+          '</div></div>' +
+        '<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn" id="dlRcpt">📄 הפק קבלה</button><button class="btn btn-ghost" id="dlInv">🧾 הפק חשבונית</button></div>' +
+        '<p class="muted" style="font-size:11.5px;margin-top:10px">💡 רישום התשלומים בפועל נמצא בטאב <b>"תשלומים"</b>.</p>' +
+        '</div>';
+    })();
     function dTab(k, label, active) { return '<button data-dtab="' + k + '"' + (active ? ' class="active"' : '') + '>' + label + '</button>'; }
     function dPanel(k, active, inner) { return '<div class="dl-panel' + (active ? '' : ' hidden') + '" data-dpanel="' + k + '">' + inner + '</div>'; }
     view(
-      '<div class="lead-top"><div style="display:flex;align-items:center;gap:8px"><button class="btn btn-ghost btn-sm" id="dlBack">' + ((C.role || '') === 'files' ? '→ לרשימת התיקים' : '→ לכרטיס') + '</button><h3 style="margin:0">' + (deal.id ? 'עסקה #' + esc(deal.order_no) : 'עסקה חדשה') + '</h3></div>' +
+      '<div class="lead-top"><div style="display:flex;align-items:center;gap:8px"><button class="btn btn-ghost btn-sm" id="dlBack">' + (acctMode ? '→ לרשימת החשבונות' : ((C.role || '') === 'files' ? '→ לרשימת התיקים' : '→ לכרטיס')) + '</button><h3 style="margin:0">' + (deal.id ? 'עסקה #' + esc(deal.order_no) : 'עסקה חדשה') + '</h3></div>' +
         '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">' +
           '' +
-          '<button class="btn btn-sm" id="dlContract">' + (deal.signature ? '📄 צפה בהסכם החתום' : (deal.contract_html ? '📤 שלח לחתימה' : '✍ יצירת הסכם לחתימה')) + '</button><span id="dlSaveState" style="display:none"></span></div></div>' +
-      (fileMode ? '<div class="card" style="padding:12px"><h3 style="margin:0 0 8px;font-size:13px">שלב התיק (מנהלת תיקי לקוחות)</h3><div class="flow" id="dlStageBar">' + stageBar(curStage) + '</div></div>' : '') +
+          (acctMode ? '' : '<button class="btn btn-sm" id="dlContract">' + (deal.signature ? '📄 צפה בהסכם החתום' : (deal.contract_html ? '📤 שלח לחתימה' : '✍ יצירת הסכם לחתימה')) + '</button>') + '<span id="dlSaveState" style="display:none"></span></div></div>' +
+      ((fileMode || acctMode) ? '<div class="card" style="padding:12px"><h3 style="margin:0 0 8px;font-size:13px">שלב התיק' + (acctMode ? ' <span class="muted" style="font-weight:400">(נשלט ע״י מנהלת תיקי לקוחות)</span>' : ' (מנהלת תיקי לקוחות)') + '</h3><div class="flow" id="dlStageBar">' + stageBar(curStage) + '</div></div>' : '') +
       '<nav class="tabs" id="dlTabs" style="margin-bottom:14px;flex-wrap:wrap">' +
         dTab('client', '👤 פרטי הלקוח', true) + dTab('deal', '📋 פרטי העסקה') + dTab('car', '🚗 פרטי הרכב המוזמן') + dTab('fin', '🏦 מקטע מימון') + dTab('trade', '🔁 מקטע טרייד-אין') + dTab('record', '🗂️ סיכום ומסמכים') +
         (isELpilot ? dTab('team', '👥 צוות') : '') +
         (pilotFin ? dTab('expenses', '💸 הוצאות') + dTab('profit', '📊 רווחיות') + dTab('comm', '🧮 עמלות') : '') +
         (pilotPay ? dTab('pay', '🏦 תשלומים') : '') +
+        (acctMode ? dTab('acct', '🧾 חשבונות') : '') +
       '</nav>' +
       dPanel('client', true, '<div class="grid2">' + clientCard + formCard + '</div>') +
       dPanel('deal', false, '<div class="grid2">' + pricingCard + addonsCard + '</div>' + summaryCard) +
@@ -2486,11 +2533,34 @@
       (isELpilot ? dPanel('team', false, teamCard) : '') +
       (pilotFin ? dPanel('expenses', false, expensesCard) + dPanel('profit', false, profitCard) + dPanel('comm', false, commCard) : '') +
       (pilotPay ? dPanel('pay', false, payCard) : '') +
+      (acctMode ? dPanel('acct', false, acctCard) : '') +
       fileNotesCard   // הערות על הלקוח — הכי למטה, מתחת להכל (מנהלת תיקי לקוחות)
     );
     var $ = C.$;
-    $('dlBack').addEventListener('click', function () { if ((C.role || '') === 'files') return window.C2B_renderFiles(); window.C2B_openLeadCard(lead.id); });
+    $('dlBack').addEventListener('click', function () { if (acctMode) return window.C2B_renderAccounting(); if ((C.role || '') === 'files') return window.C2B_renderFiles(); window.C2B_openLeadCard(lead.id); });
     $('dlTabs').addEventListener('click', function (e) { var b = e.target.closest('[data-dtab]'); if (!b) return; $('dlTabs').querySelectorAll('button').forEach(function (x) { x.classList.toggle('active', x === b); }); C.$('view').querySelectorAll('[data-dpanel]').forEach(function (p) { p.classList.toggle('hidden', p.dataset.dpanel !== b.dataset.dtab); }); });
+    //  ===== acctMode (הנהלת-חשבונות, electric-lease): המקטעים שמולאו = קריאה-בלבד; חיווט טאב-חשבונות =====
+    if (acctMode) {
+      ['client', 'deal', 'car', 'fin', 'trade', 'record', 'team'].forEach(function (k) {
+        var p = C.$('view').querySelector('[data-dpanel="' + k + '"]');
+        if (p) p.querySelectorAll('input, select, textarea, button').forEach(function (el) { el.disabled = true; });
+      });
+      if ($('dlAcctSave')) $('dlAcctSave').addEventListener('click', function () {
+        if (!deal.id) { if ($('dlAcctMsg')) { $('dlAcctMsg').style.color = 'var(--danger)'; $('dlAcctMsg').textContent = 'אין עסקה לשמירה'; } return; }
+        var gv = function (n) { var e = $('acctf_' + n); return e ? e.value.trim() : ''; };
+        var N = function (n) { var v = gv(n); return v === '' ? null : (parseFloat(v) || 0); };
+        var upd = { invoice_name: gv('invoice_name') || null, client_id: gv('client_id') || null, client_phone: gv('client_phone') || null, client_email: gv('client_email') || null, client_address: gv('client_address') || null, charge_amount: N('charge_amount'), purchase_price: N('purchase_price') };
+        if ($('dlAcctMsg')) { $('dlAcctMsg').style.color = 'var(--muted)'; $('dlAcctMsg').textContent = 'שומר…'; }
+        db.from('deals').update(upd).eq('id', deal.id).then(function (r) {
+          if (!$('dlAcctMsg')) return;
+          if (r.error) { $('dlAcctMsg').style.color = 'var(--danger)'; $('dlAcctMsg').textContent = 'שגיאה: ' + r.error.message; return; }
+          Object.assign(deal, upd); $('dlAcctMsg').style.color = 'var(--ok)'; $('dlAcctMsg').textContent = '✔ נשמר';
+        });
+      });
+      C.$('view').querySelectorAll('.acct-st').forEach(function (s) { s.addEventListener('change', function () { db.from('deals').update({ acct_status: s.value }).eq('id', s.dataset.acct).then(function () { deal.acct_status = s.value; }); }); });
+      if ($('dlRcpt')) $('dlRcpt').addEventListener('click', function () { if (!deal.id) return; db.from('deals').update({ acct_status: 'receipt' }).eq('id', deal.id).then(function () { deal.acct_status = 'receipt'; var sel = C.$('view').querySelector('.acct-st'); if (sel) sel.value = 'receipt'; alert('סומן "הופקה קבלה". חיבור לחשבונית ירוקה יאפשר הפקה אוטומטית. 🧾'); }); });
+      if ($('dlInv')) $('dlInv').addEventListener('click', function () { if (!deal.id) return; db.from('deals').update({ acct_status: 'invoice' }).eq('id', deal.id).then(function () { deal.acct_status = 'invoice'; var sel = C.$('view').querySelector('.acct-st'); if (sel) sel.value = 'invoice'; alert('סומן "הופקה חשבונית". חיבור לחשבונית ירוקה יאפשר הפקה אוטומטית. 🧾'); }); });
+    }
     //  ===== פיילוט electric-lease: טעינת+עריכת הוצאות ורווחיות (RLS חוסם לשאר) =====
     function pilotNumOrNull(id) { var v = $(id); if (!v || v.value === '') return null; var n = Number(v.value); return isNaN(n) ? null : n; }
     function loadPilotFin() {
@@ -2611,7 +2681,7 @@
     }
     loadPilotFin();
     // stage bar (shown to file manager / admin only) — persist first, re-render only on success so it never silently drifts
-    if ($('dlStageBar')) $('dlStageBar').addEventListener('click', function (e) {
+    if (!acctMode && $('dlStageBar')) $('dlStageBar').addEventListener('click', function (e) {
       var st = e.target.closest('[data-stage]'); if (!st) return;
       var stg = st.dataset.stage; if ((deal.stage || 'initial') === stg) return;
       if (!deal.id) { alert('שמרו את התיק תחילה (הזינו פרט כלשהו) לפני שינוי השלב.'); return; }
@@ -2880,7 +2950,7 @@
       });
     }
     function autoSave() { clearTimeout(saveTimer); setState('…'); saveTimer = setTimeout(doSave, 700); }
-    _activeAutoSave = autoSave;   // this form is now the active one
+    _activeAutoSave = acctMode ? null : autoSave;   // this form is now the active one (acctMode: אין auto-save לעסקה — קריאה-בלבד)
     // סוג הטופס עוקב אחרי המותג שנבחר; בעלות 00/01 נשמרת ל-checklist
     (function () {
       var be = $('dl_brand'), fe = $('dl_form_type'), oe = $('dl_ownership');
@@ -2893,7 +2963,7 @@
       C.$('view').addEventListener('input', onFieldEdit);
       C.$('view').addEventListener('change', onFieldEdit);
     }
-    $('dlContract').addEventListener('click', function () {
+    if ($('dlContract')) $('dlContract').addEventListener('click', function () {
       function openContract() { contractView(lead, Object.assign({ id: deal.id, order_no: deal.order_no }, readForm())); }
       if (deal.id) { openContract(); return; }
       //  עסקה חדשה שטרם נשמרה (מרוץ מול ה-auto-save בן 700ms) — שומרים קודם, אחרת
